@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { gerarPkce, montarUrlAutorizacao } from '@/conectores/marketplace/mercadolivre/oauth';
 import { ARQUIVO_PKCE, exigirEnv } from './comum';
 
@@ -13,6 +13,9 @@ async function main() {
     const pkce = gerarPkce();
     codeChallenge = pkce.challenge;
     await writeFile(ARQUIVO_PKCE, JSON.stringify({ verifier: pkce.verifier, state }), 'utf8');
+  } else {
+    // Um verifier antigo faria o trocar-codigo enviar PKCE sem o app exigir.
+    await rm(ARQUIVO_PKCE, { force: true });
   }
 
   console.log('1) Abra este endereço logado na CONTA PRINCIPAL do Mercado Livre (não use conta de colaborador) e autorize:\n');
