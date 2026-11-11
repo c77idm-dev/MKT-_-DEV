@@ -479,7 +479,7 @@ As respostas reais desse teste viram exemplos gravados para os testes automatiza
   - tradução dos status e motivos do ML
   - montagem dos dados das NF (devolução e remessa) para cada regime
   - importação de planilhas (linhas válidas e inválidas)
-- **Integração com banco:** PostgreSQL real (Docker), conectores falsos e respostas gravadas do ML (§7.6).
+- **Integração com banco:** PostgreSQL real (instalado no Windows no PC de desenvolvimento), conectores falsos e respostas gravadas do ML (§7.6).
 - **Ponta a ponta** (Playwright): recebimento → conferência (com upload de arquivos de teste) → NF (com o emissor falso) → lote → lista consolidada.
 - **Fiscal:** toda NF passa pela homologação da SEFAZ antes da produção.
 
@@ -509,7 +509,7 @@ As respostas reais desse teste viram exemplos gravados para os testes automatiza
 
 | Quando | Item |
 |---|---|
-| Fase 0 | VPS (§13), subdomínio, PostgreSQL 17 no PC de desenvolvimento (instalado em 2026-11-11) |
+| Fase 0 | VPS (§13), subdomínio, PostgreSQL 17 no PC de desenvolvimento (instalado em 2026-11-11), app no ML Developers (para o teste real da API) |
 | Fase 1 | Planilha de produtos (SKU, EAN, fornecedor, NCM, custo) e de fornecedores (CNPJ, IE, endereço, SAC) |
 | Fase 3 | App no ML Developers (client_id e secret; URL de retorno e permissões indicadas na fase), acesso à conta administradora principal |
 | Fase 4 | Conta na Focus NFe com o certificado A1, dados fiscais da empresa e validação dos CFOPs e CSTs pelo contador |

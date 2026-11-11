@@ -3545,10 +3545,10 @@ Esperado: uma tabela com cada chamada e o status dela, e arquivos em `tests/fixt
 - [ ] **Passo 5: Conferir que não há dados pessoais**
 
 ```bash
-grep -rniE '"(first_name|last_name|email|doc_number|street_name|zip_code|receiver_name)": "[^[]' tests/fixtures/ml/ || echo "ok: nenhum dado pessoal encontrado"
+grep -rnE '@|[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}|"name": "' tests/fixtures/ml/ || echo "ok: nada suspeito"
 ```
 
-Esperado: `ok: nenhum dado pessoal encontrado`.
+Cada ocorrência de `"name"` deve ser conferida à mão: nomes de pessoas não podem aparecer; `destination.name`, `carrier.name` e nomes de cidade podem.
 
 Abra também 2 ou 3 arquivos e procure nomes, CPF, telefones ou endereços. Se aparecer algum, acrescente a chave em `CHAVES_PESSOAIS` (`src/lib/redigir.ts`), com um caso novo em `redigir.test.ts`, e rode o `ml:spike` de novo.
 
@@ -3556,14 +3556,22 @@ Abra também 2 ou 3 arquivos e procure nomes, CPF, telefones ou endereços. Se a
 
 ```bash
 curl -s -o /dev/null -w '%{http_code} %{time_total}\n' -X POST https://<subdominio>/api/ml/notificacoes \
-  -H 'content-type: application/json' -d '{"topic":"teste"}'
+  -H 'content-type: application/json' -d '{"topic":"teste","application_id":<ML_CLIENT_ID>}'
 ```
+
+O `application_id` precisa ser o `ML_CLIENT_ID` configurado: sem ele o aviso é ignorado depois que o `ML_CLIENT_ID` é definido, e a gravação no banco não é medida.
 
 Esperado: `200` com tempo **abaixo de 0.5**. Quando houver movimento em alguma reclamação, confira se o aviso real chegou:
 
 ```bash
 docker compose --env-file .env.producao -f docker-compose.prod.yml exec postgres \
   psql -U devolucoes -d devolucoes -c "select id, topico, recurso, recebida_em from notificacoes_recebidas order by id desc limit 10"
+```
+
+Depois, apague a linha de teste:
+
+```bash
+docker compose --env-file .env.producao -f docker-compose.prod.yml exec postgres   psql -U devolucoes -d devolucoes -c "delete from notificacoes_recebidas where topico = 'teste'"
 ```
 
 - [ ] **Passo 7: Registrar os resultados na spec**
