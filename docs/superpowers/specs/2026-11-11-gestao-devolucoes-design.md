@@ -47,6 +47,7 @@ Controlar o ciclo físico e fiscal das devoluções vindas dos marketplaces (Mer
 | Contestação no ML | Se tudo estiver Bom, o aviso ao ML é automático. Se houver Problema, a contestação vai para revisão do Gestor, que envia com 1 clique |
 | Evidências | Fotos 1 e 2 por pacote; Fotos 3 e 4 por item; um Vídeo de Prova contínuo por pacote |
 | Tecnologia | Abordagem A: um sistema único em TypeScript (Next.js, PostgreSQL e um processo separado para as tarefas de fundo) |
+| Visual | Direção **C · Quadro de Fluxo**, escolhida entre 3 opções (§6.0) |
 
 ## 4. Arquitetura
 
@@ -219,10 +220,32 @@ PROCESSANDO → AUTORIZADA → CANCELADA (dentro do prazo legal)
 
 ## 6. Telas e fluxo operacional
 
-O menu repete o organograma do PDF.
+As etapas e os nomes na tela seguem o organograma do PDF.
 
-### 6.0 Painel
-- Um cartão por etapa, com a contagem.
+### 6.0 Direção visual (aprovada em 2026-11-11): C · Quadro de Fluxo
+- **Referência:** canvas "Devoluções — Direções de Design" (https://claude.ai/artifact/J5pwH39nQ2fEqNTNwcsjzK), telas `C-Painel` e `C-Conferencia`.
+- **Tipografia:** IBM Plex Sans no texto. IBM Plex Mono em códigos (DEV, LOT, rastreio, pedido, EAN e S/N).
+- **Cores:**
+  - fundo #F2F4F3, superfícies #FFFFFF, bordas #DDE3E0, texto #13201D, texto secundário #3A4A46
+  - destaque verde-azulado #0F766E (fundo suave #E3F2EF)
+  - prazo vencendo e erro: #B42318 sobre #FEE4E2
+  - atenção: #93370D sobre #FEF0C7
+  - Estoque Bom: #166534 sobre #DCFCE7
+  - Estoque Problema: #9A3412 sobre #FFEDD5
+- **Navegação:** barra superior com abas: Fluxo, Contestações ML, Lotes e Remessas, Produtos e Fornecedores, Configurações.
+- **Painel = quadro de fluxo:** as 5 etapas do PDF são **colunas**, cada uma com a contagem.
+  - Cada devolução é um cartão com código, canal, produto, rastreio e um selo de situação (prazo, entregue pelo ML, aguardando NF etc.).
+  - A coluna 4 se divide em Estoque Bom e Estoque Problema.
+  - A coluna 5 mostra os lotes por fornecedor.
+  - A Busca Avançada fica acima do quadro.
+- **Conferência no celular:**
+  - cabeçalho com o progresso em segmentos
+  - cartão do produto, com a checagem do EAN
+  - **grade das Fotos 1 a 4** (miniaturas com ✓ e o próximo espaço tracejado) e o Vídeo de Prova logo abaixo
+  - campos S/N, Lote e Validade, e o botão "Continuar" fixo no rodapé
+- Áreas de toque com no mínimo 44 px. Contraste de texto de no mínimo 4,5:1.
+
+### 6.0.1 Painel: alertas
 - Alertas:
   - prazo do ML vencendo
   - NF rejeitada
