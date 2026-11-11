@@ -23,4 +23,4 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules/@node-rs ./node_modules/@node-rs
 USER app
 EXPOSE 3000
-CMD ["sh", "-c", "node dist/migrar.mjs && node server.js"]
+CMD ["sh", "-c", "node dist/migrar.mjs && exec node server.js"]

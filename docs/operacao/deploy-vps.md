@@ -25,12 +25,19 @@
    cp .env.producao.example .env.producao
    nano .env.producao   # troque DOMINIO, POSTGRES_PASSWORD e a senha dentro de DATABASE_URL
    ```
-4. Suba tudo:
+   Gere a senha do banco com `openssl rand -hex 32`. Use só hexadecimal: caracteres especiais quebram a `DATABASE_URL`, e `$` quebra a interpolação do compose. Use o mesmo valor em `POSTGRES_PASSWORD` e dentro da `DATABASE_URL`.
+
+   Atenção: `POSTGRES_PASSWORD` só vale quando o volume `pgdata` é criado pela primeira vez. Para trocar a senha depois, é preciso usar `ALTER USER` dentro do Postgres.
+4. Se a VPS tem 4 GB de RAM, crie 2 GB de swap antes do primeiro `--build`:
+   ```sh
+   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile && echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+   ```
+5. Suba tudo:
    ```sh
    docker compose --env-file .env.producao -f docker-compose.prod.yml up -d --build
    ```
-5. Confira em `https://SEU-DOMINIO/api/saude`. Deve aparecer `{"status":"ok","banco":"ok"}`.
-6. Crie o primeiro Gestor:
+6. Confira em `https://SEU-DOMINIO/api/saude`. Deve aparecer `{"status":"ok","banco":"ok"}`.
+7. Crie o primeiro Gestor:
    ```sh
    docker compose --env-file .env.producao -f docker-compose.prod.yml exec web \
      node dist/criar-usuario.mjs --nome "Seu Nome" --email voce@empresa.com --perfil GESTOR

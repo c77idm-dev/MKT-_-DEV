@@ -27,6 +27,8 @@ npm run dev                   # http://localhost:3000
 | `npm run test:e2e` | Navegador de ponta a ponta (login, abas, permissões) |
 | `npm run typecheck` / `npm run lint` | Tipos e estilo |
 
+Antes do primeiro `npm run test:e2e`, rode `npx playwright install chromium` (uma vez). Pare o `npm run dev` antes de rodar o e2e: o Next 16 usa um arquivo de trava no modo dev e não sobe dois servidores juntos.
+
 ## Teste real do Mercado Livre
 1. Preencha `ML_CLIENT_ID`, `ML_CLIENT_SECRET` e `ML_REDIRECT_URI` no `.env`.
 2. `npm run ml:autorizar` e abra o link com a **conta principal** do ML.
