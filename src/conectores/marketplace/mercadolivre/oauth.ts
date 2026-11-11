@@ -47,7 +47,12 @@ async function pedirToken(corpo: Record<string, string>, fetchFn: typeof fetch, 
   });
   const texto = await resposta.text();
   if (!resposta.ok) throw new ErroML(resposta.status, texto, '/oauth/token');
-  const d = JSON.parse(texto) as RespostaToken;
+  let d: RespostaToken;
+  try {
+    d = JSON.parse(texto) as RespostaToken;
+  } catch {
+    throw new ErroML(resposta.status, texto, '/oauth/token');
+  }
   return {
     accessToken: d.access_token,
     refreshToken: d.refresh_token,

@@ -20,4 +20,13 @@ describe('criarClienteML', () => {
     expect(erro).toBeInstanceOf(ErroML);
     expect(erro).toMatchObject({ status: 404, corpo: '{"message":"not_found"}', caminho: '/orders/1' });
   });
+
+  it('lança ErroML (e não SyntaxError) quando um 2xx não é JSON', async () => {
+    const fetchFn = vi.fn(async () => new Response('<html>x</html>', { status: 200 }));
+    const cliente = criarClienteML({ accessToken: 'TOKEN', fetchFn });
+
+    const erro = await cliente.get('/orders/1').catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroML);
+    expect(erro).toMatchObject({ status: 200, corpo: '<html>x</html>', caminho: '/orders/1' });
+  });
 });

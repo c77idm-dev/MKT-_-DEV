@@ -83,6 +83,13 @@ describe('trocarCodigo', () => {
       trocarCodigo({ clientId: '1', clientSecret: 's', code: 'c', redirectUri: 'https://x', fetchFn }),
     ).rejects.toBeInstanceOf(ErroML);
   });
+
+  it('lança ErroML quando um 200 não é JSON', async () => {
+    const fetchFn = vi.fn(async () => new Response('<html>x</html>', { status: 200 }));
+    await expect(
+      trocarCodigo({ clientId: '1', clientSecret: 's', code: 'c', redirectUri: 'https://x', fetchFn }),
+    ).rejects.toBeInstanceOf(ErroML);
+  });
 });
 
 describe('renovarTokens', () => {

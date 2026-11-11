@@ -27,7 +27,12 @@ export function criarClienteML(p: { accessToken: string; fetchFn?: typeof fetch 
       });
       const texto = await resposta.text();
       if (!resposta.ok) throw new ErroML(resposta.status, texto, caminho);
-      return (texto ? JSON.parse(texto) : null) as T;
+      if (!texto) return null as T;
+      try {
+        return JSON.parse(texto) as T;
+      } catch {
+        throw new ErroML(resposta.status, texto, caminho);
+      }
     },
   };
 }
