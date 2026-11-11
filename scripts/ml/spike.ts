@@ -3,7 +3,7 @@ import { criarClienteML, ErroML, type ClienteML } from '@/conectores/marketplace
 import { formatarDataML } from '@/conectores/marketplace/mercadolivre/datas';
 import { redigir } from '@/lib/redigir';
 import { obterTokensValidos } from './comum';
-import { idsDaDevolucao, reclamacoesComDevolucao, type DevolucaoML, type ReclamacaoResumo } from './selecao';
+import { idsDaDevolucao, reclamacoesComDevolucao, resumirCorpoErro, type DevolucaoML, type ReclamacaoResumo } from './selecao';
 
 const PASTA = 'tests/fixtures/ml';
 const DIAS = 60;
@@ -28,7 +28,7 @@ async function chamar(
     return dados;
   } catch (erro) {
     if (erro instanceof ErroML) {
-      relatorio.push({ passo, caminho, status: erro.status, observacao: erro.corpo.slice(0, 300) });
+      relatorio.push({ passo, caminho, status: erro.status, observacao: resumirCorpoErro(erro.corpo) });
     } else {
       relatorio.push({ passo, caminho, status: 'erro', observacao: String(erro) });
     }

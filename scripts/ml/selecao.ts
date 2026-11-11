@@ -1,3 +1,5 @@
+import { redigir } from '@/lib/redigir';
+
 export type ReclamacaoResumo = { id: number | string; related_entities?: string[]; type?: string };
 
 export function reclamacoesComDevolucao(reclamacoes: ReclamacaoResumo[], max: number): ReclamacaoResumo[] {
@@ -21,4 +23,13 @@ export function idsDaDevolucao(d: DevolucaoML): { pedidos: string[]; envios: str
     pedidos: paraTexto((d.orders ?? []).map((o) => o.order_id)),
     envios: paraTexto((d.shipments ?? []).map((s) => s.shipment_id)),
   };
+}
+
+/** Resume o corpo de um erro da API para o relatório, sem dados pessoais. */
+export function resumirCorpoErro(corpo: string, max = 300): string {
+  try {
+    return JSON.stringify(redigir(JSON.parse(corpo))).slice(0, max);
+  } catch {
+    return `[corpo não-JSON omitido: ${corpo.length} caracteres]`;
+  }
 }
