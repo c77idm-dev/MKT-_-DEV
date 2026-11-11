@@ -10,5 +10,6 @@ export default defineConfig({
     include: ['src/**/*.int.test.ts'],
     fileParallelism: false,
     testTimeout: 15_000,
+    globalSetup: ['tests/setup/int-global-setup.ts'],
   },
 });
