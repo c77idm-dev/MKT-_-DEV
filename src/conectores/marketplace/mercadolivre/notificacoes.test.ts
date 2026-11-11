@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aceitarNotificacaoML } from './notificacoes';
+import { aceitarNotificacaoML, LIMITE_AVISO_BYTES, lerAvisoML } from './notificacoes';
 
 const AVISO = {
   id: 'abc',
@@ -35,6 +35,27 @@ describe('aceitarNotificacaoML', () => {
   });
 
   it('guarda tópico e recurso nulos quando não vierem como texto', () => {
-    expect(aceitarNotificacaoML({ outro: 1 }, undefined)).toEqual({ topico: null, recurso: null, payload: { outro: 1 } });
+    expect(aceitarNotificacaoML({ outro: 1 }, undefined)).toEqual({ topico: null, recurso: null, payload: {} });
+  });
+
+  it('descarta campos desconhecidos do payload', () => {
+    const r = aceitarNotificacaoML({ ...AVISO, extra: 'x'.repeat(10) }, undefined);
+    expect(r?.payload).toEqual(AVISO);
+    expect(r?.payload).not.toHaveProperty('extra');
+  });
+});
+
+describe('lerAvisoML', () => {
+  it('aceita JSON válido', () => {
+    expect(lerAvisoML(JSON.stringify(AVISO))).toEqual({ ok: true, corpo: AVISO });
+  });
+
+  it('responde 400 para JSON inválido', () => {
+    expect(lerAvisoML('{nao json')).toEqual({ ok: false, status: 400 });
+  });
+
+  it('responde 413 acima de 64 KB', () => {
+    expect(LIMITE_AVISO_BYTES).toBe(64 * 1024);
+    expect(lerAvisoML('"' + 'x'.repeat(LIMITE_AVISO_BYTES) + '"')).toEqual({ ok: false, status: 413 });
   });
 });
