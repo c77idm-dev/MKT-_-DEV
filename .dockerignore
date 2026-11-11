@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+.git
+.env
+.env.*
+!.env.producao.example
+.ml-tokens.json
+.ml-pkce.json
+tests
+test-results
+playwright-report
