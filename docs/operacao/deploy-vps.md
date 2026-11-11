@@ -9,8 +9,10 @@
 1. Instale o Docker e libere o firewall:
    ```sh
    curl -fsSL https://get.docker.com | sh
+   sudo usermod -aG docker "$USER"   # permite rodar docker sem sudo (saia e entre de novo no SSH)
    sudo ufw allow OpenSSH && sudo ufw allow 80 && sudo ufw allow 443 && sudo ufw --force enable
    ```
+   Depois desse passo, saia do SSH e entre de novo para a permissão do grupo docker valer.
 2. Baixe o código em `/opt/devolucoes`:
    ```sh
    sudo mkdir -p /opt/devolucoes && sudo chown "$USER" /opt/devolucoes
