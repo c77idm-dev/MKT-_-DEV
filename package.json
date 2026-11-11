@@ -14,7 +14,10 @@
     "db:gerar": "drizzle-kit generate",
     "db:migrar": "node --env-file=.env --import tsx scripts/migrar.ts",
     "usuario:criar": "node --env-file=.env --import tsx scripts/criar-usuario.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "ml:autorizar": "node --env-file=.env --import tsx scripts/ml/autorizar.ts",
+    "ml:trocar-codigo": "node --env-file=.env --import tsx scripts/ml/trocar-codigo.ts",
+    "ml:spike": "node --env-file=.env --import tsx scripts/ml/spike.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",
