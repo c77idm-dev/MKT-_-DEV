@@ -45,4 +45,42 @@ describe('redigir', () => {
     expect(redigir('texto')).toBe('texto');
     expect(redigir(null)).toBeNull();
   });
+
+  it('redige as chaves pessoais de pedidos, reivindicações e envios, e preserva destination.name e city.name', () => {
+    const entrada = {
+      full_name: 'Ana Souza',
+      buyer_name: 'Ana',
+      comments: 'x',
+      address: { line: 'Rua A' },
+      receiver_address: { id: 1 },
+      street: 'Rua A',
+      apartment: '12',
+      floor: '3',
+      neighborhood: 'Centro',
+      document: '123',
+      cpf: '12345678900',
+      cnpj: '00000000000100',
+      tax_id: 'X',
+      destination: { name: 'seller_address' },
+      city: { name: 'São Paulo' },
+    };
+
+    expect(redigir(entrada)).toEqual({
+      full_name: MARCA_REDIGIDO,
+      buyer_name: MARCA_REDIGIDO,
+      comments: MARCA_REDIGIDO,
+      address: MARCA_REDIGIDO,
+      receiver_address: MARCA_REDIGIDO,
+      street: MARCA_REDIGIDO,
+      apartment: MARCA_REDIGIDO,
+      floor: MARCA_REDIGIDO,
+      neighborhood: MARCA_REDIGIDO,
+      document: MARCA_REDIGIDO,
+      cpf: MARCA_REDIGIDO,
+      cnpj: MARCA_REDIGIDO,
+      tax_id: MARCA_REDIGIDO,
+      destination: { name: 'seller_address' },
+      city: { name: 'São Paulo' },
+    });
+  });
 });

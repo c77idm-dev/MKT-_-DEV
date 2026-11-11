@@ -22,6 +22,19 @@ const CHAVES_PESSOAIS = new Set([
   'longitude',
   'comment',
   'billing_info',
+  'full_name',
+  'buyer_name',
+  'comments',
+  'address',
+  'receiver_address',
+  'street',
+  'apartment',
+  'floor',
+  'neighborhood',
+  'document',
+  'cpf',
+  'cnpj',
+  'tax_id',
 ]);
 
 export function redigir<T>(valor: T): T {
