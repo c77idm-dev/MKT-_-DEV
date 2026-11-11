@@ -35,14 +35,28 @@ const CHAVES_PESSOAIS = new Set([
   'cpf',
   'cnpj',
   'tax_id',
+  'identifications',
+  'invoice_key',
+  'access_key',
 ]);
 
-export function redigir<T>(valor: T): T {
-  if (Array.isArray(valor)) return valor.map((item) => redigir(item)) as T;
+/** Quando o objeto pai é uma pessoa, a chave `name` dele também é dado pessoal. */
+const PAIS_PESSOA = new Set(['buyer', 'recipient', 'receiver', 'payer', 'cardholder', 'contact', 'customer', 'destinatario']);
+
+function redigirComPai<T>(valor: T, pai?: string): T {
+  if (Array.isArray(valor)) return valor.map((item) => redigirComPai(item, pai)) as T;
   if (valor !== null && typeof valor === 'object') {
     return Object.fromEntries(
-      Object.entries(valor).map(([chave, v]) => [chave, CHAVES_PESSOAIS.has(chave.toLowerCase()) ? MARCA_REDIGIDO : redigir(v)]),
+      Object.entries(valor).map(([chave, v]) => {
+        const k = chave.toLowerCase();
+        const pessoal = CHAVES_PESSOAIS.has(k) || (k === 'name' && pai !== undefined && PAIS_PESSOA.has(pai));
+        return [chave, pessoal ? MARCA_REDIGIDO : redigirComPai(v, k)];
+      }),
     ) as T;
   }
   return valor;
+}
+
+export function redigir<T>(valor: T): T {
+  return redigirComPai(valor);
 }

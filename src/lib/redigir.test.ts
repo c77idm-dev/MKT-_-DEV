@@ -83,4 +83,27 @@ describe('redigir', () => {
       city: { name: 'São Paulo' },
     });
   });
+  it('redige name de pessoas, identifications e chave da NF-e, mas preserva names de lugares e transportadoras', () => {
+    const entrada = {
+      recipient: { name: 'Ana Souza', identifications: { cpf: '123' } },
+      buyer: { name: 'Ana' },
+      carrier: { name: 'Correios' },
+      destination: { name: 'seller_address' },
+      city: { name: 'São Paulo' },
+      invoice_key: '3526',
+      access_key: '3527',
+      items: [{ customer: { name: 'Bia' } }],
+    };
+
+    expect(redigir(entrada)).toEqual({
+      recipient: { name: MARCA_REDIGIDO, identifications: MARCA_REDIGIDO },
+      buyer: { name: MARCA_REDIGIDO },
+      carrier: { name: 'Correios' },
+      destination: { name: 'seller_address' },
+      city: { name: 'São Paulo' },
+      invoice_key: MARCA_REDIGIDO,
+      access_key: MARCA_REDIGIDO,
+      items: [{ customer: { name: MARCA_REDIGIDO } }],
+    });
+  });
 });
