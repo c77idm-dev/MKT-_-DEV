@@ -488,7 +488,7 @@ As respostas reais desse teste viram exemplos gravados para os testes automatiza
 - **Repositório:** git privado (GitHub). Imagens Docker do `web` e do `worker`.
 - **Deploy:** um comando (script, ou GitHub Actions via SSH) faz `docker compose pull && up -d`. As migrações do banco rodam automaticamente na subida.
 - **Desfazer:** voltar para a tag da imagem anterior.
-- **Desenvolvimento local:** Docker Desktop no PC (PostgreSQL e ffmpeg em contêiner) e `npm run dev`.
+- **Desenvolvimento local:** PostgreSQL 17 instalado direto no Windows (no PC de desenvolvimento a virtualização está desligada, então não há Docker) e `npm run dev`. O ffmpeg, quando for necessário (Fase 2), também é instalado direto no Windows. O Docker é usado só na VPS.
 - **VPS:** mínimo de 2 vCPU, 4 GB de RAM e 200 GB de disco. **Recomendado:** 4 vCPU e 8 GB, por causa do ffmpeg.
 
 ## 14. Fases de entrega
@@ -509,7 +509,7 @@ As respostas reais desse teste viram exemplos gravados para os testes automatiza
 
 | Quando | Item |
 |---|---|
-| Fase 0 | VPS (§13), subdomínio, Docker Desktop no PC de desenvolvimento |
+| Fase 0 | VPS (§13), subdomínio, PostgreSQL 17 no PC de desenvolvimento (instalado em 2026-11-11) |
 | Fase 1 | Planilha de produtos (SKU, EAN, fornecedor, NCM, custo) e de fornecedores (CNPJ, IE, endereço, SAC) |
 | Fase 3 | App no ML Developers (client_id e secret; URL de retorno e permissões indicadas na fase), acesso à conta administradora principal |
 | Fase 4 | Conta na Focus NFe com o certificado A1, dados fiscais da empresa e validação dos CFOPs e CSTs pelo contador |
