@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ResumoDevolucao } from '@/modules/devolucoes/busca';
 import { CartaoDevolucao } from './CartaoDevolucao';
+import { VAZIO } from './estilos';
 
 export type ColunaFluxo = {
   numero: number;
@@ -46,8 +47,8 @@ export function QuadroFluxo({ colunas }: { colunas: ColunaFluxo[] }) {
                 </span>
               </div>
               {coluna.total === 0 && (
-                <p className="rounded-lg border border-dashed border-borda-forte px-3 py-6 text-center text-[13px] text-texto-2">
-                  {coluna.nota ?? 'Nenhuma devolução nesta etapa'}
+                <p className={VAZIO}>
+                  {coluna.nota ?? 'Nenhuma devolução nesta etapa.'}
                 </p>
               )}
               {cartoes.length > 0 && (

@@ -1,6 +1,16 @@
 import { expect, test } from '@playwright/test';
 import { criarDevolucaoTeste } from '../helpers/fabricas';
-import { abrirBusca, codigoUnico, comBanco, ehCelular, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
+import {
+  abrirBusca,
+  codigoUnico,
+  comBanco,
+  ehCelular,
+  entrarComo,
+  naFrente,
+  paginaNaoEncontrada,
+  semRolagemLateral,
+  usuarioPorEmail,
+} from './apoio';
 import { USUARIOS_E2E } from './dados';
 
 async function devolucaoPendente(): Promise<string> {
@@ -61,7 +71,9 @@ test('gestor cancela uma devolução pendente e o histórico mostra o motivo', a
   await page.getByLabel('Cancelada').check();
   await page.getByLabel('Motivo').fill('Cliente desistiu da devolução');
   await page.getByRole('button', { name: 'Registrar' }).click();
-  await expect(page.getByText('Devolução cancelada')).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Devolução cancelada.');
+  await expect(page.getByRole('status')).toBeFocused();
+  await expect(page.getByRole('link', { name: '← Fluxo' })).toBeVisible();
   await expect(page.getByText('Motivo: Cliente desistiu da devolução')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Registrar' })).toHaveCount(0);
 });
@@ -72,8 +84,7 @@ test('o Fiscal vê o detalhe, sem as ações do Gestor, e não cadastra devoluç
   await page.goto(`/fluxo/devolucoes/${codigo}`);
   await expect(page.getByRole('heading', { level: 1, name: codigo })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Registrar' })).toHaveCount(0);
-  const resposta = await page.goto('/fluxo/devolucoes/nova');
-  expect(resposta?.status()).toBe(404);
+  await paginaNaoEncontrada(page, '/fluxo/devolucoes/nova');
 });
 
 test.describe('mobile-first (celular)', () => {
@@ -104,7 +115,7 @@ test.describe('mobile-first (celular)', () => {
     const etiqueta = page.getByRole('link', { name: /^Remover filtro: Rastreio/ });
     await expect(etiqueta).toBeVisible();
     await expect(page.getByRole('list').getByRole('link').first()).toBeVisible();
-    await expect(page.getByRole('table')).toHaveCount(0);
+    await expect(page.getByRole('list').getByRole('link', { name: /DEV-\d{6}/ }).first()).toBeVisible();
     await semRolagemLateral(page);
 
     await etiqueta.click();
@@ -117,7 +128,7 @@ test.describe('mobile-first (celular)', () => {
     await entrarComo(page, USUARIOS_E2E.operador);
     await page.goto('/fluxo/devolucoes/nova');
     const enviar = page.getByRole('button', { name: 'Cadastrar devolução' });
-    await expect(enviar).toBeInViewport();
+    await naFrente(enviar);
     await semRolagemLateral(page);
 
     const esquerdas = await page
@@ -136,14 +147,13 @@ test.describe('mobile-first (celular)', () => {
     const erro = page.locator('#erros-formulario');
     await expect(erro).toContainText('Informe pelo menos um item');
     await expect(erro).toBeFocused();
-    await expect(enviar).toBeInViewport();
+    await naFrente(enviar);
   });
 });
 
 test('a etapa 6 não existe (HTTP 404) e a etapa 5 mostra o aviso dos lotes', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.operador);
-  const inexistente = await page.goto('/fluxo/etapa/6');
-  expect(inexistente?.status()).toBe(404);
+  await paginaNaoEncontrada(page, '/fluxo/etapa/6');
   await page.goto('/fluxo/etapa/5');
   await expect(page.getByText('Os lotes por fornecedor aparecem aqui quando a conferência estiver pronta.')).toBeVisible();
   await semRolagemLateral(page);

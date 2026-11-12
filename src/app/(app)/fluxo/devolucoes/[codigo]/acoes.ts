@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { obterDb } from '@/db';
 import { textoDoForm } from '@/lib/formulario';
 import { exigirPermissao } from '@/modules/auth/servidor';
@@ -17,7 +18,7 @@ const NAO_ENCONTRADA: EstadoAcaoGestor = { erros: ['Devolução não encontrada.
 export async function encerrarAcao(id: string, codigo: string, _anterior: EstadoAcaoGestor, dados: FormData): Promise<EstadoAcaoGestor> {
   const usuario = await exigirPermissao('administrar');
   if (!CODIGO_VALIDO.test(codigo)) return NAO_ENCONTRADA;
-  const para =textoDoForm(dados, 'para');
+  const para = textoDoForm(dados, 'para');
   if (para !== 'CANCELADA' && para !== 'EXTRAVIADA') return { erros: ['Escolha o novo status.'] };
   try {
     await encerrarPendente(obterDb(), id, para, textoDoForm(dados, 'motivo'), usuario);
@@ -26,7 +27,8 @@ export async function encerrarAcao(id: string, codigo: string, _anterior: Estado
     throw erro;
   }
   revalidatePath(`/fluxo/devolucoes/${codigo}`);
-  return { erros: [] };
+  // Os formulários somem depois do sucesso: a página mostra a confirmação (?ok=) e o foco não cai no <body>.
+  redirect(`/fluxo/devolucoes/${codigo}?ok=${para === 'CANCELADA' ? 'cancelada' : 'extraviada'}`);
 }
 
 export async function identificarAcao(id: string, codigo: string, _anterior: EstadoAcaoGestor, dados: FormData): Promise<EstadoAcaoGestor> {
@@ -50,5 +52,5 @@ export async function identificarAcao(id: string, codigo: string, _anterior: Est
     throw erro;
   }
   revalidatePath(`/fluxo/devolucoes/${codigo}`);
-  return { erros: [] };
+  redirect(`/fluxo/devolucoes/${codigo}?ok=identificada`);
 }

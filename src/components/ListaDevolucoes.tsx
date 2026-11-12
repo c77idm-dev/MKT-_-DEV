@@ -1,10 +1,11 @@
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { ResumoDevolucao } from '@/modules/devolucoes/busca';
 import { filtrosParaQuery, POR_PAGINA_DEVOLUCOES, type FiltrosBusca } from '@/modules/devolucoes/filtros';
 import { BuscaAvancada } from './BuscaAvancada';
 import { CartaoDevolucao } from './CartaoDevolucao';
 import { Paginacao } from './Paginacao';
-import { VAZIO } from './estilos';
+import { LINK_VOLTAR, VAZIO } from './estilos';
 
 type Props = {
   titulo: string;
@@ -21,6 +22,9 @@ type Props = {
 export function ListaDevolucoes({ titulo, acaoBusca, filtros, devolucoes, total, pagina, acoes }: Props) {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+      <Link href="/fluxo" className={`${LINK_VOLTAR} -mb-2 self-start`}>
+        ← Fluxo
+      </Link>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">{titulo}</h1>
         {acoes && <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto">{acoes}</div>}

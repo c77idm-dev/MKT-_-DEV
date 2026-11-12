@@ -43,7 +43,7 @@ export function EtapasCelular({ colunas, selecionada }: { colunas: ColunaFluxo[]
           {atual.numero}. {atual.titulo}
         </h2>
         {cartoes.length === 0 ? (
-          <p className={VAZIO}>{atual.nota ?? 'Nenhuma devolução nesta etapa'}</p>
+          <p className={VAZIO}>{atual.nota ?? 'Nenhuma devolução nesta etapa.'}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {cartoes.map((d) => (

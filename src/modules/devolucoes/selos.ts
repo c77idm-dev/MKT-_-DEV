@@ -1,7 +1,7 @@
 import { formatarDiaMes } from '@/lib/formatar';
 import type { Canal, StatusDevolucao } from './dominio';
 
-export type TomSelo = 'erro' | 'atencao' | 'destaque' | 'neutro';
+export type TomSelo = 'erro' | 'atencao' | 'destaque' | 'bom' | 'neutro';
 export type DadosSelo = { texto: string; tom: TomSelo };
 
 type Entrada = {

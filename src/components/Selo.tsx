@@ -4,7 +4,9 @@ const CLASSES: Record<TomSelo, string> = {
   erro: 'bg-erro-suave text-erro',
   atencao: 'bg-atencao-suave text-atencao',
   destaque: 'bg-destaque-suave text-destaque',
-  neutro: 'bg-fundo text-texto-2',
+  bom: 'bg-bom-suave text-bom',
+  // Com borda: sem ela o selo neutro (cor do fundo da página) parece texto solto.
+  neutro: 'border border-borda bg-superficie text-texto-2',
 };
 
 export function Selo({ texto, tom }: { texto: string; tom: TomSelo }) {

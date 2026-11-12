@@ -1,11 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { entrarComo } from './apoio';
+import { entrarComo, paginaNaoEncontrada } from './apoio';
 import { USUARIOS_E2E } from './dados';
 
 test('operador não abre Produtos e Fornecedores (HTTP 404)', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.operador);
-  const resposta = await page.goto('/cadastros/produtos');
-  expect(resposta?.status()).toBe(404);
+  await paginaNaoEncontrada(page, '/cadastros/produtos');
   await expect(page.getByRole('heading', { name: 'Página não encontrada' })).toBeVisible();
 });
 
@@ -15,19 +14,16 @@ test('fiscal usa a barra de abas para chegar aos cadastros e não abre Contesta�
   await expect(nav.getByRole('link')).toHaveText(['Fluxo', 'Lotes e Remessas', 'Produtos e Fornecedores']);
   await nav.getByRole('link', { name: 'Produtos e Fornecedores' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Produtos e Fornecedores' })).toBeVisible();
-  const resposta = await page.goto('/contestacoes');
-  expect(resposta?.status()).toBe(404);
+  await paginaNaoEncontrada(page, '/contestacoes');
 });
 
 test('operador não abre a importação de produtos (HTTP 404)', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.operador);
-  const resposta = await page.goto('/importacoes/produtos');
-  expect(resposta?.status()).toBe(404);
+  await paginaNaoEncontrada(page, '/importacoes/produtos');
   await expect(page.getByRole('heading', { name: 'Página não encontrada' })).toBeVisible();
 });
 
 test('operador não abre a tela de Usuários (HTTP 404)', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.operador);
-  const resposta = await page.goto('/configuracoes/usuarios');
-  expect(resposta?.status()).toBe(404);
+  await paginaNaoEncontrada(page, '/configuracoes/usuarios');
 });

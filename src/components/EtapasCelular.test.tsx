@@ -44,13 +44,13 @@ describe('EtapasCelular', () => {
 
   it('etapa sem devoluções', () => {
     render(<EtapasCelular colunas={COLUNAS} selecionada={3} />);
-    expect(screen.getByText('Nenhuma devolução nesta etapa')).toBeTruthy();
+    expect(screen.getByText('Nenhuma devolução nesta etapa.')).toBeTruthy();
   });
 
   it('etapa com nota mostra a nota', () => {
     render(<EtapasCelular colunas={COLUNAS.map((c) => (c.numero === 5 ? { ...c, nota: 'Lotes chegam depois.' } : c))} selecionada={5} />);
     expect(screen.getByText('Lotes chegam depois.')).toBeTruthy();
-    expect(screen.queryByText('Nenhuma devolução nesta etapa')).toBeNull();
+    expect(screen.queryByText('Nenhuma devolução nesta etapa.')).toBeNull();
   });
 
   it('sem colunas, não renderiza nada (e não quebra)', () => {

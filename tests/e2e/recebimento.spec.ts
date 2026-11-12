@@ -2,7 +2,16 @@ import { expect, test } from '@playwright/test';
 import { eq } from 'drizzle-orm';
 import { devolucoes } from '../../src/db/schema';
 import { criarDevolucaoTeste } from '../helpers/fabricas';
-import { codigoUnico, comBanco, ehCelular, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
+import {
+  aguardarHidratacao,
+  codigoUnico,
+  comBanco,
+  ehCelular,
+  entrarComo,
+  paginaNaoEncontrada,
+  semRolagemLateral,
+  usuarioPorEmail,
+} from './apoio';
 import { USUARIOS_E2E } from './dados';
 
 async function criarComRastreio(rastreio: string, status?: 'CANCELADA'): Promise<string> {
@@ -82,12 +91,14 @@ test('em aparelho de toque o campo não rouba o foco (o teclado não cobre a câ
   const campo = page.getByLabel('Código de Rastreamento');
   await expect(campo).toBeVisible();
   const celular = ehCelular(testInfo);
-  if (celular) await expect(campo).not.toBeFocused();
+  if (celular) {
+    await aguardarHidratacao(campo);
+    await expect(campo).not.toBeFocused();
+  }
   else await expect(campo).toBeFocused();
 });
 
 test('o Fiscal não abre o Recebimento (HTTP 404)', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.fiscal);
-  const resposta = await page.goto('/fluxo/recebimento');
-  expect(resposta?.status()).toBe(404);
+  await paginaNaoEncontrada(page, '/fluxo/recebimento');
 });

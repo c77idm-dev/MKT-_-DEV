@@ -10,7 +10,7 @@ export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }
   return (
     <Link
       href={`/fluxo/devolucoes/${d.codigo}`}
-      className="flex min-h-11 flex-col gap-1.5 rounded-lg border border-borda bg-superficie p-3 hover:border-destaque"
+      className="flex min-h-11 flex-col gap-1.5 rounded-xl border border-borda bg-superficie p-3 hover:border-destaque"
     >
       <span className="flex items-center justify-between gap-2">
         <span className="font-mono text-[13px] font-semibold">{d.codigo}</span>

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ETAPAS } from '../../src/modules/devolucoes/etapas';
-import { ehCelular, entrar, entrarComo, semRolagemLateral } from './apoio';
+import { ehCelular, entrar, entrarComo, paginaNaoEncontrada, semRolagemLateral } from './apoio';
 import { USUARIOS_E2E } from './dados';
 
 test('manda para o login quem não está autenticado', async ({ page }) => {
@@ -45,7 +45,6 @@ test('operador vê só a aba Fluxo e não acessa Configurações', async ({ page
   await entrarComo(page, USUARIOS_E2E.operador);
   await expect(page.getByRole('navigation', { name: 'Seções' }).getByRole('link')).toHaveText(['Fluxo']);
 
-  const resposta = await page.goto('/configuracoes');
-  expect(resposta?.status()).toBe(404);
+  await paginaNaoEncontrada(page, '/configuracoes');
   await expect(page.getByRole('heading', { name: 'Página não encontrada' })).toBeVisible();
 });

@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { Selo } from '@/components/Selo';
 import type { LinhaPrevia } from '@/modules/importacao/definicao';
 import type { CampoImportacao } from '@/modules/importacao/mapeamento';
 
@@ -15,11 +16,7 @@ export function CartoesPrevia({ campos, linhas }: { campos: CampoImportacao[]; l
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-semibold">Linha {linha.numeroLinha}</span>
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${pronta ? 'bg-bom-suave text-bom' : 'bg-erro-suave text-erro'}`}
-              >
-                {pronta ? 'Pronta' : 'Com erro'}
-              </span>
+              <Selo texto={pronta ? 'Pronta' : 'Com erro'} tom={pronta ? 'bom' : 'erro'} />
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
               {campos.map((campo) => (

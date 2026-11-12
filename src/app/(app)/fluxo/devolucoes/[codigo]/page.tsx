@@ -2,10 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { MensagemSucesso } from '@/components/MensagemSucesso';
 import { Selo } from '@/components/Selo';
-import { CARTAO, LINK_VOLTAR, ROTULO } from '@/components/estilos';
+import { CARTAO, LINK_VOLTAR, ROTULO, VAZIO } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { formatarDataHora, formatarDataIso } from '@/lib/formatar';
+import { primeiroValor } from '@/lib/parametros';
 import { pode } from '@/modules/auth/permissoes';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { obterDetalhe } from '@/modules/devolucoes/detalhe';
@@ -24,7 +26,19 @@ import { rotuloDaAcao } from '@/modules/historico/eventos';
 import { encerrarAcao, identificarAcao } from './acoes';
 import { FormularioEncerrar, FormularioIdentificar } from './AcoesGestor';
 
-export const metadata: Metadata = { title: 'Devolução · Gestão de Devoluções' };
+/** Confirmações das ações do Gestor (o redirecionamento leva `?ok=`). */
+const MENSAGEM_OK: Record<string, string> = {
+  cancelada: 'Devolução cancelada.',
+  extraviada: 'Devolução marcada como extraviada.',
+  identificada: 'Pacote identificado.',
+};
+
+type Props = { params: Promise<{ codigo: string }>; searchParams: Promise<{ ok?: string | string[] }> };
+
+export async function generateMetadata({ params }: Pick<Props, 'params'>): Promise<Metadata> {
+  const { codigo } = await params;
+  return { title: `${codigo} · Gestão de Devoluções` };
+}
 
 function Dado({ rotulo, mono = false, children }: { rotulo: string; mono?: boolean; children: ReactNode }) {
   return (
@@ -40,9 +54,10 @@ function motivoDoEvento(dados: Record<string, unknown> | null): string | null {
   return typeof motivo === 'string' ? motivo : null;
 }
 
-export default async function PaginaDevolucao({ params }: { params: Promise<{ codigo: string }> }) {
+export default async function PaginaDevolucao({ params, searchParams }: Props) {
   const usuario = await exigirPermissao('ver_listas');
   const { codigo } = await params;
+  const ok = MENSAGEM_OK[primeiroValor((await searchParams).ok)];
   const d = await obterDetalhe(obterDb(), codigo);
   if (!d) notFound();
   const ehGestor = pode(usuario.perfil, 'administrar');
@@ -51,9 +66,13 @@ export default async function PaginaDevolucao({ params }: { params: Promise<{ co
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
       <div className="flex flex-col gap-1">
-        {etapa && (
+        {etapa ? (
           <Link href={`/fluxo/etapa/${etapa.numero}`} className={LINK_VOLTAR}>
             ← {etapa.titulo}
+          </Link>
+        ) : (
+          <Link href="/fluxo" className={LINK_VOLTAR}>
+            ← Fluxo
           </Link>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -62,6 +81,8 @@ export default async function PaginaDevolucao({ params }: { params: Promise<{ co
           {d.naoIdentificada && <Selo texto="Não identificada" tom="erro" />}
         </div>
       </div>
+
+      {ok && <MensagemSucesso texto={ok} />}
 
       <section aria-labelledby="titulo-dados" className={CARTAO}>
         <h2 id="titulo-dados" className="mb-3 text-base font-bold">
@@ -98,7 +119,7 @@ export default async function PaginaDevolucao({ params }: { params: Promise<{ co
           Itens ({d.itens.length} {d.itens.length === 1 ? 'unidade' : 'unidades'})
         </h2>
         {d.itens.length === 0 ? (
-          <p className="text-sm text-texto-2">Nenhum item cadastrado.</p>
+          <p className={VAZIO}>Nenhum item cadastrado.</p>
         ) : (
           <ol className="grid gap-2 md:grid-cols-2">
             {d.itens.map((item) => (

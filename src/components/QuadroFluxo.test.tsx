@@ -27,12 +27,12 @@ describe('QuadroFluxo', () => {
     for (const etapa of ETAPAS) {
       expect(screen.getByRole('heading', { level: 2, name: etapa.titulo })).toBeTruthy();
     }
-    expect(screen.getAllByText('Nenhuma devolução nesta etapa')).toHaveLength(5);
+    expect(screen.getAllByText('Nenhuma devolução nesta etapa.')).toHaveLength(5);
   });
 
   it('o total da coluna tem texto para o leitor de tela', () => {
     render(<QuadroFluxo colunas={[{ numero: 1, titulo: ETAPA_1, total: 3 }]} />);
-    expect(screen.queryByText('Nenhuma devolução nesta etapa')).toBeNull();
+    expect(screen.queryByText('Nenhuma devolução nesta etapa.')).toBeNull();
     expect(screen.getByText('3')).toBeTruthy();
     expect(screen.getByText('3 devoluções')).toBeTruthy();
   });
@@ -51,6 +51,6 @@ describe('QuadroFluxo', () => {
   it('a coluna com nota mostra a nota em vez do aviso de vazio', () => {
     render(<QuadroFluxo colunas={[{ numero: 5, titulo: 'Agrupamento por Fornecedor', total: 0, nota: 'Lotes chegam depois.' }]} />);
     expect(screen.getByText('Lotes chegam depois.')).toBeTruthy();
-    expect(screen.queryByText('Nenhuma devolução nesta etapa')).toBeNull();
+    expect(screen.queryByText('Nenhuma devolução nesta etapa.')).toBeNull();
   });
 });

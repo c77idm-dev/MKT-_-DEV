@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ehCelular, entrarComo, semRolagemLateral } from './apoio';
+import { aguardarHidratacao, ehCelular, entrarComo, naFrente, semRolagemLateral } from './apoio';
 import { USUARIOS_E2E } from './dados';
 
 test('fiscal cadastra um fornecedor e um produto pelo formulário', async ({ page }, testInfo) => {
@@ -104,19 +104,21 @@ test('fiscal importa fornecedores e produtos por planilha, ajustando uma coluna 
     expect(caixa!.width).toBeGreaterThan(secao!.width * 0.8);
   }
 
+  // Antes da hidratação o React ainda não escuta o select e reaplicaria o valor antigo.
+  await aguardarHidratacao(selectUnidade);
   await selectUnidade.selectOption('Und');
   await page.getByRole('button', { name: 'Atualizar prévia' }).click();
   await expect(page.getByLabel('Unidade')).toHaveValue('Und');
   await expect(page.getByText(`EAN inválido: ${c.eanRuim}`)).toBeVisible();
   await expect(page.getByText(/2 linhas prontas/)).toBeVisible();
-  await expect(page.locator('table')).toHaveCount(0);
+  await expect(page.getByText(/^Linha \d+$/).first()).toBeVisible();
   await semRolagemLateral(page);
 
   const confirmar = page.getByRole('button', { name: 'Confirmar importação' });
   if (celular) {
     // O botão fica preso acima da barra de abas, visível sem rolar até o fim.
     await page.evaluate(() => window.scrollTo(0, 0));
-    await expect(confirmar).toBeInViewport();
+    await naFrente(confirmar);
   }
   await confirmar.click();
   await expect(page.getByRole('status')).toContainText('Produtos novos: 2');

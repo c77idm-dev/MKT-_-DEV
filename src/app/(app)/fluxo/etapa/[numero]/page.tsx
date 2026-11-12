@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { ListaDevolucoes } from '@/components/ListaDevolucoes';
-import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, VAZIO } from '@/components/estilos';
+import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, LINK_VOLTAR, VAZIO } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { lerPagina, type ParametrosBusca } from '@/lib/parametros';
 import { pode } from '@/modules/auth/permissoes';
@@ -14,9 +14,13 @@ import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { lerFiltros } from '@/modules/devolucoes/filtros';
 import { NOTA_ETAPA_LOTES } from '@/modules/devolucoes/quadro';
 
-export const metadata: Metadata = { title: 'Etapa · Gestão de Devoluções' };
-
 type Props = { params: Promise<{ numero: string }>; searchParams: Promise<ParametrosBusca> };
+
+export async function generateMetadata({ params }: Pick<Props, 'params'>): Promise<Metadata> {
+  const { numero } = await params;
+  const etapa = ETAPAS.find((e) => String(e.numero) === numero);
+  return { title: `${etapa?.titulo ?? 'Etapa'} · Gestão de Devoluções` };
+}
 
 /** Botões do topo de cada etapa (só para quem opera devoluções). */
 function acoesDaEtapa(numero: number, podeOperar: boolean): ReactNode {
@@ -52,6 +56,9 @@ export default async function PaginaEtapa({ params, searchParams }: Props) {
   if (etapa.numero === 5) {
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+        <Link href="/fluxo" className={`${LINK_VOLTAR} -mb-2 self-start`}>
+          ← Fluxo
+        </Link>
         <h1 className="text-xl font-bold">{etapa.titulo}</h1>
         <p className={VAZIO}>{NOTA_ETAPA_LOTES}</p>
       </div>

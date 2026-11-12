@@ -146,6 +146,16 @@ export function FormularioRecebimento() {
   }, []);
   const { videoRef, situacao, erro: erroCamera, abrir, fechar } = useLeitorCamera(aoLer);
   const cameraAberta = situacao !== 'parada';
+  const botaoCameraRef = useRef<HTMLButtonElement>(null);
+  const primeiraRenderRef = useRef(true);
+  // Foco: ao abrir a câmera vai para "Fechar câmera"; ao fechar, volta para "Ler com a câmera" (o botão é remontado em outro lugar).
+  useEffect(() => {
+    if (primeiraRenderRef.current) {
+      primeiraRenderRef.current = false;
+      return;
+    }
+    botaoCameraRef.current?.focus();
+  }, [cameraAberta]);
 
   // Foco automático só onde há teclado físico ou leitor USB (ponteiro "fine"). No celular a câmera vem primeiro
   // e o teclado não pode subir por cima dela. Feito em efeito (e não com autoFocus) para não divergir na hidratação.
@@ -160,10 +170,11 @@ export function FormularioRecebimento() {
   // Com a câmera aberta o botão fica fixo no topo do painel (sticky), mesmo com um cartão alto; fechada, vai depois do formulário.
   const botaoCamera = (
     <button
+      ref={botaoCameraRef}
       type="button"
       onClick={cameraAberta ? fechar : abrir}
       className={`flex min-h-16 w-full items-center justify-center gap-2 rounded-2xl text-lg font-semibold ${
-        cameraAberta ? 'sticky top-0 z-10 mt-4 border border-borda-forte bg-superficie text-texto' : 'bg-texto text-white'
+        cameraAberta ? 'sticky top-0 z-10 mt-4 border border-borda-campo bg-superficie text-texto' : 'bg-texto text-white'
       }`}
     >
       <svg
@@ -184,7 +195,12 @@ export function FormularioRecebimento() {
   );
 
   return (
-    <div className={cameraAberta ? 'fixed inset-0 z-50 flex h-dvh flex-col bg-black' : 'flex flex-col gap-4'}>
+    <div
+      role={cameraAberta ? 'dialog' : undefined}
+      aria-modal={cameraAberta ? true : undefined}
+      aria-label={cameraAberta ? 'Leitor de código pela câmera' : undefined}
+      className={cameraAberta ? 'fixed inset-0 z-50 flex h-dvh flex-col bg-black' : 'flex flex-col gap-4'}
+    >
       <div className={cameraAberta ? 'relative min-h-0 flex-1' : 'hidden'}>
         <video ref={videoRef} playsInline muted aria-label="Imagem da câmera" className="h-full w-full object-cover" />
         <div aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-1/2 h-0.5 -translate-y-1/2 bg-white/80" />

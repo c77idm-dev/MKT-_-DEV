@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from 'react';
 import { ListaErros } from '@/components/ListaErros';
 import { OpcoesPerfil } from '@/components/OpcoesPerfil';
-import { ALERTA_OK, BOTAO_SECUNDARIO, CAMPO, ROTULO } from '@/components/estilos';
+import { ALERTA_OK, BOTAO_PERIGO, BOTAO_SECUNDARIO, CAMPO, ROTULO } from '@/components/estilos';
 import type { Perfil } from '@/modules/auth/perfis';
 import { alterarPerfilAcao, definirAtivoAcao, type EstadoAcaoUsuario } from './acoes';
 
@@ -12,8 +12,6 @@ type Props = { usuario: { id: string; nome: string; perfil: Perfil; ativo: boole
 const SEM_RESULTADO: EstadoAcaoUsuario = { erro: null, ok: null };
 /** Quanto tempo o segundo toque de "Desativar" continua valendo. */
 const TEMPO_CONFIRMACAO_MS = 5000;
-const BOTAO_PERIGO =
-  'inline-flex min-h-11 w-full items-center justify-center rounded-full border border-erro bg-superficie px-5 text-[15px] font-semibold text-erro hover:bg-erro-suave disabled:opacity-60';
 
 export function AcoesUsuario({ usuario }: Props) {
   const [estadoPerfil, enviarPerfil, mudandoPerfil] = useActionState(alterarPerfilAcao.bind(null, usuario.id), SEM_RESULTADO);
@@ -58,7 +56,7 @@ export function AcoesUsuario({ usuario }: Props) {
       <div role="status" className="flex flex-col gap-2 empty:hidden">
         {aviso && <p className={ALERTA_OK}>{aviso}</p>}
       </div>
-      <ListaErros erros={erros} />
+      <ListaErros erros={erros} id={`erros-usuario-${usuario.id}`} />
       {/* Linha própria, em vermelho e com segundo toque: no celular ninguém desativa sem querer. */}
       <form action={enviarAtivo} onSubmit={() => {
           setConfirmando(false);
