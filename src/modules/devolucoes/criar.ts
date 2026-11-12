@@ -12,7 +12,11 @@ import { ErroDevolucaoDuplicada } from './erros';
 import { normalizarRastreio } from './rastreio';
 import { exigirTransicao } from './transicoes';
 
-/** Uma devolução Cancelada, Extraviada ou Concluída não impede outra para o mesmo pedido. */
+/**
+ * Uma devolução Cancelada, Extraviada ou Concluída não impede outra para o mesmo pedido. Concluída conta como encerrada porque
+ * uma nova devolução do mesmo pedido depois de uma concluída é legítima (novo retorno do cliente). Se o cancelamento de uma NF
+ * reabrir uma Concluída (spec §5.2), um duplicado pode existir: aceito como raro e corrigível à mão (junto com a regra PF7 abaixo).
+ */
 const ENCERRADAS: StatusDevolucao[] = ['CANCELADA', 'EXTRAVIADA', 'CONCLUIDA'];
 
 export type ItemPedido = { sku: string; quantidade: number };

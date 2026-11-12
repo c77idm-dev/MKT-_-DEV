@@ -33,11 +33,15 @@ export function textoOpcional(valor: string | undefined, max: number, rotulo: st
   return s === '' ? null : s;
 }
 
-/** "3", "3.0" ou "3,0" → 3 (o Excel às vezes manda inteiros com ".0"). Outros textos → null. */
+/**
+ * Inteiro vindo de planilha ou formulário. "1.000" é mil (ponto de milhar, como no Brasil); "3.0" e "3,0" são 3 (o Excel
+ * manda inteiros com um ".0"). Qualquer outro texto (decimais, negativos, vazio) → null.
+ */
 export function interpretarInteiro(texto: string): number | null {
-  const s = texto.trim().replace(',', '.');
-  if (!/^\d+(\.0+)?$/.test(s)) return null;
-  return Number.parseInt(s, 10);
+  const s = texto.trim();
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) return Number.parseInt(s.replace(/\./g, ''), 10);
+  if (/^\d+([.,]0)?$/.test(s)) return Number.parseInt(s, 10);
+  return null;
 }
 
 /** "05/11/2026", "5/11/2026" ou "2026-11-05" → "2026-11-05". Datas que não existem → null. */

@@ -61,6 +61,8 @@ export const devolucoes = pgTable(
     uniqueIndex('devolucoes_canal_externa_uq').on(t.canal, t.devolucaoExternaId),
     index('devolucoes_status_idx').on(t.status),
     index('devolucoes_rastreio_idx').on(t.rastreio),
+    /** A sobreposição (&&) de codigosAtivosPorPedido roda a cada devolução criada ou linha importada. */
+    index('devolucoes_pedidos_externos_gin').using('gin', t.pedidosExternos),
     check('devolucoes_canal_obrigatorio', sql`"canal" is not null or "nao_identificada"`),
   ],
 );
@@ -84,6 +86,7 @@ export const itensDevolucao = pgTable(
   },
   (t) => [
     index('itens_devolucao_devolucao_idx').on(t.devolucaoId),
+    index('itens_devolucao_produto_esperado_idx').on(t.produtoEsperadoId),
     uniqueIndex('itens_devolucao_unidade_uq').on(t.devolucaoId, t.unidade),
   ],
 );

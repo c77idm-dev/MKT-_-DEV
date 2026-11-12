@@ -56,6 +56,14 @@ describe('validarNovaDevolucao', () => {
     expect(validarNovaDevolucao({ canal: 'SHOPEE', pedido: 'P1', itens: [] }).erros).toEqual(['Informe pelo menos um item (SKU e quantidade)']);
     expect(validarNovaDevolucao({ canal: 'SHOPEE', pedido: 'P1', itens: [] }, { exigirItens: false }).erros).toEqual([]);
   });
+
+  it('o limite de quantidade: 50 vale, 51 e 0 (número) são erro', () => {
+    const com = (quantidade: string | number) => validarNovaDevolucao({ canal: 'SHOPEE', pedido: 'P1', itens: [{ sku: 'A', quantidade }] }).erros;
+    expect(com(50)).toEqual([]);
+    expect(com('50')).toEqual([]);
+    expect(com(51)).toEqual(['Quantidade inválida: use um número de 1 a 50']);
+    expect(com(0)).toEqual(['Quantidade inválida: use um número de 1 a 50']);
+  });
 });
 
 describe('unidades e formulário', () => {

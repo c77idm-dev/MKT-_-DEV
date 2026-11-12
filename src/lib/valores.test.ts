@@ -42,11 +42,14 @@ describe('interpretarInteiro', () => {
     ['3', 3],
     ['3.0', 3],
     ['3,0', 3],
+    ['12.0', 12],
+    ['1.000', 1000],
+    ['1.234.567', 1234567],
   ])('%s → %d', (texto, n) => {
     expect(interpretarInteiro(texto)).toBe(n);
   });
 
-  it.each(['2.5', 'abc', '', '-1'])('recusa %j', (texto) => {
+  it.each(['2.5', 'abc', '', '-1', '10.00', '1,5', '1.0000', '12.5'])('recusa %j', (texto) => {
     expect(interpretarInteiro(texto)).toBeNull();
   });
 });
@@ -56,11 +59,12 @@ describe('interpretarData', () => {
     ['05/11/2026', '2026-11-05'],
     ['5/11/2026', '2026-11-05'],
     ['2026-11-05', '2026-11-05'],
+    ['29/02/2028', '2028-02-29'],
   ])('%s → %s', (texto, iso) => {
     expect(interpretarData(texto)).toBe(iso);
   });
 
-  it.each(['31/02/2026', '2026-13-01', 'ontem'])('recusa %j', (texto) => {
+  it.each(['31/02/2026', '2026-13-01', 'ontem', '2026-02-31', '29/02/2026', '2026/11/05'])('recusa %j', (texto) => {
     expect(interpretarData(texto)).toBeNull();
   });
 });

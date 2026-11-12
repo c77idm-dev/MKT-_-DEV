@@ -1,0 +1,2 @@
+CREATE INDEX "devolucoes_pedidos_externos_gin" ON "devolucoes" USING gin ("pedidos_externos");--> statement-breakpoint
+CREATE INDEX "itens_devolucao_produto_esperado_idx" ON "itens_devolucao" USING btree ("produto_esperado_id");
