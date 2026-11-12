@@ -28,7 +28,32 @@ Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, f
 - Cadastros de produtos e fornecedores, com importação por planilha (extra).
 - Usuários (só o Gestor): criar, mudar o perfil, desativar e reativar. Desativar encerra as sessões na hora, e o sistema nunca fica sem um Gestor ativo (extra).
 
-Ainda não existem: conferência, lotes e remessas, contestações, integração com o Mercado Livre e relatórios (fases seguintes).
+Ainda não existem: conferência, lotes e remessas, contestações, integração com o Mercado Livre e relatórios. Ficam para as próximas fases.
+
+## Andamento
+No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi publicada em 12/11/2026.
+
+| Fase | Entrega | Situação |
+|---|---|---|
+| 0. Fundação | Projeto, banco, login e perfis, visual, publicação na VPS com HTTPS | Pronta. Falta o teste real da API do ML, que vai para a etapa "Ligação das contas reais" |
+| 1. Cadastros e recebimento | Produtos e fornecedores, devolução manual e por planilha, etapas 1 e 2, Busca Avançada, Recebimento com câmera, usuários | Pronta e publicada |
+| 2. Conferência no celular | Fotos 1 a 4, Vídeo de Prova, leitura do código, destino, mídia (compressão, armazenamento e links) | Plano sendo escrito. Começa pela base comum (fila, armazenamento e tabelas novas) |
+| 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Plano sendo escrito. Roda em paralelo com as Fases 2 e 4 |
+| 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Plano sendo escrito. Roda em paralelo com as Fases 2 e 3 |
+| 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | Depois da Fase 4 |
+| Ligação das contas reais | ML real, Focus NFe em homologação, B2 para as mídias, domínio próprio | Depois da Fase 5 |
+| 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Por último |
+
+A ordem e as regras do trabalho em paralelo estão no [contrato entre as fases](docs/superpowers/plans/2026-11-12-contrato-fases-2-6.md).
+
+As Fases 3, 4 e 5 são construídas com versões simuladas do ML, da Focus NFe e do armazenamento. As contas reais entram na etapa "Ligação das contas reais". Até lá, as mídias ficam no disco da VPS, e isso serve só para testes na bancada.
+
+**O que você vai precisar no fim:**
+- o app no ML Developers;
+- uma conta na Focus NFe com o certificado A1;
+- a validação dos CFOP e CST pelo contador;
+- uma conta B2 (ou R2) para as mídias;
+- um domínio próprio, que é opcional (hoje o sistema usa o sslip.io).
 
 ## Testes
 | Comando | O que roda |
