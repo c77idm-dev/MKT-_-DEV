@@ -135,6 +135,12 @@ describe('identificarDevolucao (spec §5.2: o Gestor liga o pacote ao pedido)', 
     );
   });
 
+  it('id inexistente diz "Devolução não encontrada."', async () => {
+    await expect(
+      identificarDevolucao(db, '00000000-0000-4000-8000-000000000000', { canal: 'SHOPEE', pedido: 'P9', itens: [] }, gestor),
+    ).rejects.toThrow('Devolução não encontrada.');
+  });
+
   it('duas identificações ao mesmo tempo: uma vence e só um evento "identificada" é gravado', async () => {
     const gestor2 = await criarUsuarioTeste(db, 'GESTOR');
     const pacote = await criarNaoIdentificada(db, 'NI-4', operador);

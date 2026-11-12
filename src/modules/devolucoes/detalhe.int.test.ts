@@ -1,10 +1,10 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { itensDevolucao } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarFornecedorTeste, criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { obterDetalhe } from './detalhe';
-import { receberPorRastreio } from './recebimento';
+import { criarNaoIdentificada, receberPorRastreio } from './recebimento';
 
 const { db, sql } = criarDbTeste();
 beforeEach(async () => {
@@ -27,7 +27,7 @@ describe('obterDetalhe', () => {
         { sku: 'SEM-CADASTRO', quantidade: 1 },
       ],
     });
-    await db.update(itensDevolucao).set({ serial: 'SN-1' }).where(eq(itensDevolucao.unidade, 1));
+    await db.update(itensDevolucao).set({ serial: 'SN-1' }).where(and(eq(itensDevolucao.devolucaoId, d.id), eq(itensDevolucao.unidade, 1)));
     await receberPorRastreio(db, 'BR555', operador);
 
     const detalhe = await obterDetalhe(db, d.codigo.toLowerCase());
@@ -45,6 +45,13 @@ describe('obterDetalhe', () => {
       expect.objectContaining({ unidade: 2, sku: 'SEM-CADASTRO', descricao: null, ean: null, fornecedor: null }),
     ]);
     expect(detalhe?.eventos.map((e) => e.acao)).toEqual(['criada', 'recebida']);
+  });
+
+  it('pacote não identificado: sem canal, sem itens, com a marca e quem criou', async () => {
+    const operador = await criarUsuarioTeste(db, 'OPERADOR');
+    const criada = await criarNaoIdentificada(db, 'NN-9', operador);
+    const detalhe = await obterDetalhe(db, criada.codigo);
+    expect(detalhe).toMatchObject({ canal: null, itens: [], naoIdentificada: true, criadoPorNome: operador.nome });
   });
 
   it('devolve null para código desconhecido', async () => {

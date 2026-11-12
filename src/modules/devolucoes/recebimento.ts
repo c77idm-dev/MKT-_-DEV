@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
@@ -55,7 +55,8 @@ export async function receberPorRastreio(
   const pendentes = await db
     .select({ id: devolucoes.id })
     .from(devolucoes)
-    .where(and(eq(devolucoes.rastreio, rastreio), eq(devolucoes.status, 'PENDENTE_CHEGADA')));
+    .where(and(eq(devolucoes.rastreio, rastreio), eq(devolucoes.status, 'PENDENTE_CHEGADA')))
+    .orderBy(asc(devolucoes.numero)); // ordem fixa: duas transações travam as linhas na mesma ordem, sem deadlock
 
   if (pendentes.length > 0) {
     const codigos = await db.transaction(async (tx) => {
@@ -81,7 +82,7 @@ export async function receberPorRastreio(
       }
       return recebidas;
     });
-    if (codigos.length > 0) return { tipo: 'recebidas', codigos: codigos.sort(), em: agora };
+    if (codigos.length > 0) return { tipo: 'recebidas', codigos, em: agora };
   }
 
   const atual = await maisRecentePorRastreio(db, rastreio);
@@ -102,9 +103,12 @@ export async function criarNaoIdentificada(
     'Seu perfil não pode registrar um pacote não identificado.',
   );
   const rastreio = rastreioOuErro(rastreioBruto);
-  const existente = await maisRecentePorRastreio(db, rastreio);
-  if (existente) throw new ErroDevolucao(`Já existe a devolução ${existente.codigo} com este rastreio. Registre a chegada por ela.`);
   return db.transaction(async (tx) => {
+    // Trava por rastreio (sem índice único: várias devoluções podem dividir um rastreio). Serializa duas leituras
+    // simultâneas de um código novo: a segunda enxerga a linha da primeira e recusa.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${rastreio}))`);
+    const existente = await maisRecentePorRastreio(tx, rastreio);
+    if (existente) throw new ErroDevolucao(`Já existe a devolução ${existente.codigo} com este rastreio. Registre a chegada por ela.`);
     const [criada] = await tx
       .insert(devolucoes)
       .values({

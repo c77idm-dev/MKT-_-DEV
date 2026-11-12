@@ -67,6 +67,7 @@ export async function identificarDevolucao(
   if (!ehUuid(id)) throw new ErroDevolucao('Devolução não encontrada.');
   const { dados, erros } = validarNovaDevolucao(entrada, { exigirItens: false });
   if (!dados) throw new ErroDevolucao(erros.join('; '));
+  // Conferência de pedido duplicado fora da transação: padrão aceito (PF7), a corrida é estreita e o Gestor revê.
   const outra = (await codigosAtivosPorPedido(db, [{ canal: dados.canal, pedido: dados.pedido }])).get(chavePedido(dados.canal, dados.pedido));
   if (outra) {
     throw new ErroDevolucao(`O pedido já tem a devolução ${outra}. Se ela ainda está pendente de chegada, cancele-a e tente de novo.`);
@@ -87,7 +88,11 @@ export async function identificarDevolucao(
       })
       .where(and(eq(devolucoes.id, id), eq(devolucoes.naoIdentificada, true)))
       .returning({ id: devolucoes.id });
-    if (!atualizada) throw new ErroDevolucao('Esta devolução já foi identificada.');
+    if (!atualizada) {
+      const [existe] = await tx.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.id, id)).limit(1);
+      if (!existe) throw new ErroDevolucao('Devolução não encontrada.');
+      throw new ErroDevolucao('Esta devolução já foi identificada.');
+    }
     if (unidades.length > 0) {
       const [{ maior }] = await tx
         .select({ maior: sql<number>`coalesce(max(${itensDevolucao.unidade}), 0)::int` })

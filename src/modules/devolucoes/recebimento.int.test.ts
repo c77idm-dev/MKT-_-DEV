@@ -67,6 +67,12 @@ describe('receberPorRastreio (spec §6.2)', () => {
     expect(await receberPorRastreio(db, 'BR333', operador)).toEqual({ tipo: 'bloqueada', codigo: d.codigo, status: 'CANCELADA' });
   });
 
+  it('devolução extraviada também fica bloqueada', async () => {
+    const d = await criarDevolucaoTeste(db, operador, { rastreio: 'BR334' });
+    await db.update(devolucoes).set({ status: 'EXTRAVIADA' }).where(eq(devolucoes.id, d.id));
+    expect(await receberPorRastreio(db, 'BR334', operador)).toEqual({ tipo: 'bloqueada', codigo: d.codigo, status: 'EXTRAVIADA' });
+  });
+
   it('rastreio desconhecido', async () => {
     expect(await receberPorRastreio(db, 'xyz 9', operador)).toEqual({ tipo: 'nao_encontrada', rastreio: 'XYZ9' });
   });
@@ -104,6 +110,16 @@ describe('criarNaoIdentificada (spec §5.2 e §6.2)', () => {
     await expect(criarNaoIdentificada(db, 'BR444', operador)).rejects.toThrow(
       new ErroDevolucao(`Já existe a devolução ${d.codigo} com este rastreio. Registre a chegada por ela.`),
     );
+  });
+
+  it('duas leituras ao mesmo tempo de um rastreio novo: uma cria, a outra recusa, e existe uma linha só', async () => {
+    const outro = await criarUsuarioTeste(db, 'OPERADOR');
+    const resultados = await Promise.allSettled([criarNaoIdentificada(db, 'NN-RACE', operador), criarNaoIdentificada(db, 'NN-RACE', outro)]);
+    expect(resultados.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const rejeitada = resultados.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(rejeitada.reason).toBeInstanceOf(ErroDevolucao);
+    const linhas = await db.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.rastreio, 'NN-RACE'));
+    expect(linhas).toHaveLength(1);
   });
 
   it('o perfil Fiscal recebe mensagem para a tela', async () => {
