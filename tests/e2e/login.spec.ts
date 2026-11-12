@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ETAPAS } from '../../src/modules/devolucoes/etapas';
-import { entrar, semRolagemLateral } from './apoio';
+import { entrar, entrarComo, semRolagemLateral } from './apoio';
 import { USUARIOS_E2E } from './dados';
 
 test('manda para o login quem não está autenticado', async ({ page }) => {
@@ -15,8 +15,7 @@ test('mostra erro com senha errada', async ({ page }) => {
 });
 
 test('gestor entra, vê as 5 etapas do PDF e todas as abas, e sai', async ({ page }) => {
-  await entrar(page, USUARIOS_E2E.gestor);
-  await expect(page).toHaveURL(/\/fluxo$/);
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await semRolagemLateral(page);
 
   for (const etapa of ETAPAS) {
@@ -38,8 +37,7 @@ test('gestor entra, vê as 5 etapas do PDF e todas as abas, e sai', async ({ pag
 });
 
 test('operador vê só a aba Fluxo e não acessa Configurações', async ({ page }) => {
-  await entrar(page, USUARIOS_E2E.operador);
-  await expect(page).toHaveURL(/\/fluxo$/);
+  await entrarComo(page, USUARIOS_E2E.operador);
   await expect(page.getByRole('navigation', { name: 'Seções' }).getByRole('link')).toHaveText(['Fluxo']);
 
   const resposta = await page.goto('/configuracoes');

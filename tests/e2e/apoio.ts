@@ -23,3 +23,9 @@ export async function semRolagemLateral(page: Page) {
   }));
   expect(conteudo, 'a página não pode rolar para o lado').toBeLessThanOrEqual(tela);
 }
+
+/** Entra e espera o login terminar (redirecionamento para /fluxo), para o teste poder navegar em seguida. */
+export async function entrarComo(page: Page, usuario: { email: string; senha: string }) {
+  await entrar(page, usuario);
+  await expect(page).toHaveURL(/\/fluxo$/);
+}

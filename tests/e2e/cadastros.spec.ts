@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ehCelular, entrar, semRolagemLateral } from './apoio';
+import { ehCelular, entrarComo, semRolagemLateral } from './apoio';
 import { USUARIOS_E2E } from './dados';
 
 test('fiscal cadastra um fornecedor e um produto pelo formulário', async ({ page }, testInfo) => {
@@ -9,8 +9,7 @@ test('fiscal cadastra um fornecedor e um produto pelo formulário', async ({ pag
   const sufixo = celular ? 'C' : 'D';
   const razao = `Fornecedor Manual ${sufixo} Ltda`;
 
-  await entrar(page, USUARIOS_E2E.fiscal);
-  await expect(page).toHaveURL(/\/fluxo$/);
+  await entrarComo(page, USUARIOS_E2E.fiscal);
   await page.goto('/cadastros/fornecedores');
   await semRolagemLateral(page);
   await page.getByRole('link', { name: 'Novo fornecedor' }).click();
@@ -38,8 +37,7 @@ test('fiscal cadastra um fornecedor e um produto pelo formulário', async ({ pag
 
 test('um erro no formulário não apaga o que foi digitado', async ({ page }, testInfo) => {
   const sku = `DUP-${ehCelular(testInfo) ? 'C' : 'D'}`;
-  await entrar(page, USUARIOS_E2E.fiscal);
-  await expect(page).toHaveURL(/\/fluxo$/);
+  await entrarComo(page, USUARIOS_E2E.fiscal);
   for (const vez of [1, 2]) {
     await page.goto('/cadastros/produtos/novo');
     await page.getByLabel('SKU (obrigatório)').fill(sku);
@@ -48,5 +46,6 @@ test('um erro no formulário não apaga o que foi digitado', async ({ page }, te
     if (vez === 1) await expect(page.getByRole('status')).toHaveText(`Produto ${sku} salvo.`);
   }
   await expect(page.getByRole('alert').filter({ hasText: 'Já existe' })).toHaveText(`Já existe um produto com o SKU ${sku}`);
+  await expect(page.getByRole('alert').filter({ hasText: 'Já existe' })).toBeFocused();
   await expect(page.getByLabel('Descrição (obrigatório)')).toHaveValue('Tentativa 2');
 });
