@@ -1,8 +1,0 @@
-{$DOMINIO} {
-	encode gzip
-	@avisos path /api/ml/notificacoes
-	request_body @avisos {
-		max_size 64KB
-	}
-	reverse_proxy web:3000
-}

@@ -1,26 +1,22 @@
-services:
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMINIO: ${DOMINIO}
-    volumes:
-      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - web
+# Produção na VPS compartilhada. O HTTPS fica com o nginx que já atende os outros sites do servidor
+# (veja docs/operacao/deploy-vps.md). Este projeto só escuta em 127.0.0.1:3020.
+# A imagem é compilada pelo GitHub Actions (.github/workflows/imagem.yml); a VPS só baixa.
+name: devolucoes
 
+services:
   web:
-    build: .
+    image: ghcr.io/c77idm-dev/devolucoes:${IMAGEM_TAG:-main}
     restart: unless-stopped
     env_file: .env.producao
+    ports:
+      - "127.0.0.1:3020:3000"
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   postgres:
     image: postgres:17-alpine
@@ -36,8 +32,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:

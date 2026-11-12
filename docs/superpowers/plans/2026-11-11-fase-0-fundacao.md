@@ -56,6 +56,10 @@
 - **Deploy:** a spec §13 fala em `docker compose pull`. Na Fase 0, a imagem é **construída na própria VPS** (`up -d --build`), sem registro de imagens. Desfazer = `git checkout <tag anterior>` e subir de novo. O registro de imagens pode entrar depois.
 - **Tokens do ML:** no teste da Fase 0 eles ficam num arquivo local ignorado pelo git (`.ml-tokens.json`). A gravação criptografada no banco (spec §7.1 e §10) é da Fase 3.
 - **Banco de desenvolvimento:** PostgreSQL instalado direto no Windows, em vez de container. O pacote de produção (Docker) é testado direto na VPS, na Tarefa 12.
+- **Produção, mudança de 2026-11-12, depois do diagnóstico da VPS:** a VPS é compartilhada (o nginx ocupa 80/443) e fraca (1 vCPU).
+  - O Caddy da Tarefa 11 saiu: o nginx do servidor faz o HTTPS, com o modelo em `docker/nginx/devolucoes.conf`.
+  - A imagem é compilada pelo GitHub Actions (`.github/workflows/imagem.yml`), e a VPS só baixa.
+  - O guia atualizado é `docs/operacao/deploy-vps.md`, e a Tarefa 12 segue esse guia.
 
 ---
 

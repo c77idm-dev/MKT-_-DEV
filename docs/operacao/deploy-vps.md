@@ -1,61 +1,88 @@
 # Implantação na VPS
 
+A VPS é **compartilhada**:
+- O nginx já atende outros sites nas portas 80 e 443.
+- Já rodam outros containers.
+
+Por isso, este sistema:
+- **não ocupa as portas 80 e 443**: escuta só em `127.0.0.1:3020`, e o nginx do servidor faz o HTTPS;
+- **não é compilado na VPS**: o GitHub Actions compila a imagem a cada envio para a `main` e a publica em `ghcr.io/c77idm-dev/devolucoes`, e a VPS só baixa;
+- usa nomes próprios no Docker: projeto `devolucoes`, containers `devolucoes-web-1` e `devolucoes-postgres-1`, volume `devolucoes_pgdata`;
+- tem limites de memória (web 512 MB, banco 256 MB), para não apertar os outros sistemas.
+
+Nos comandos abaixo, troque `SEU_DOMINIO` pelo domínio do sistema (ex.: `devolucoes.suaempresa.com.br`).
+
 ## O que é preciso
-- VPS com Ubuntu 24.04: mínimo 2 vCPU, 4 GB de RAM e 200 GB de disco. Recomendado: 4 vCPU e 8 GB.
-- Um subdomínio (ex.: `devolucoes.suaempresa.com.br`) com registro **A** apontando para o IP da VPS.
-- Acesso SSH à VPS.
+- Docker e Docker Compose instalados na VPS. Se ainda não tiver: `curl -fsSL https://get.docker.com | sh`.
+- O domínio do sistema com registro **A** apontando para o IP da VPS.
+  - Sem domínio próprio, dá para usar provisoriamente `devolucoes.IP-COM-HIFENS.sslip.io` (ex.: `devolucoes.203-0-113-10.sslip.io`). Ele aponta sozinho para o IP e dispensa configurar DNS.
+- A imagem pública no GitHub (passo 1).
 
 ## Primeira vez
-1. Instale o Docker e libere o firewall:
-   ```sh
-   curl -fsSL https://get.docker.com | sh
-   sudo usermod -aG docker "$USER"   # permite rodar docker sem sudo (saia e entre de novo no SSH)
-   sudo ufw allow OpenSSH && sudo ufw allow 80 && sudo ufw allow 443 && sudo ufw --force enable
-   ```
-   Depois desse passo, saia do SSH e entre de novo para a permissão do grupo docker valer.
-2. Baixe o código em `/opt/devolucoes`:
-   ```sh
-   sudo mkdir -p /opt/devolucoes && sudo chown "$USER" /opt/devolucoes
-   git clone https://github.com/c77idm-dev/MKT-_-DEV.git /opt/devolucoes
-   ```
-   Se o repositório for privado, crie uma *deploy key* (chave SSH só de leitura) no GitHub e clone pelo endereço SSH.
-3. Crie a configuração de produção:
-   ```sh
-   cd /opt/devolucoes
-   cp .env.producao.example .env.producao
-   nano .env.producao   # troque DOMINIO, POSTGRES_PASSWORD e a senha dentro de DATABASE_URL
-   ```
-   Gere a senha do banco com `openssl rand -hex 32`. Use só hexadecimal: caracteres especiais quebram a `DATABASE_URL`, e `$` quebra a interpolação do compose. Use o mesmo valor em `POSTGRES_PASSWORD` e dentro da `DATABASE_URL`.
 
-   Atenção: `POSTGRES_PASSWORD` só vale quando o volume `pgdata` é criado pela primeira vez. Para trocar a senha depois, é preciso usar `ALTER USER` dentro do Postgres.
-4. Se a VPS tem 4 GB de RAM, crie 2 GB de swap antes do primeiro `--build`:
+1. **Deixe a imagem pública** (uma vez só). Depois que o GitHub Actions rodar pela primeira vez:
+   - abra https://github.com/users/c77idm-dev/packages/container/package/devolucoes;
+   - vá em **Package settings → Change visibility → Public**.
+   
+   Se preferir manter a imagem privada, faça na VPS `docker login ghcr.io` com um token do GitHub que tenha a permissão `read:packages`.
+
+2. **Baixe a configuração** em `/opt/devolucoes`:
    ```sh
-   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile && echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+   git clone https://github.com/c77idm-dev/MKT-_-DEV.git /opt/devolucoes
+   cd /opt/devolucoes
    ```
-5. Suba tudo:
+
+3. **Crie o `.env.producao`:**
    ```sh
-   docker compose --env-file .env.producao -f docker-compose.prod.yml up -d --build
+   cp .env.producao.example .env.producao
+   openssl rand -hex 32   # copie o resultado
+   nano .env.producao     # cole a senha em POSTGRES_PASSWORD e dentro da DATABASE_URL
+   chmod 600 .env.producao
    ```
-6. Confira em `https://SEU-DOMINIO/api/saude`. Deve aparecer `{"status":"ok","banco":"ok"}`.
-7. Crie o primeiro Gestor:
+   - Use só a senha hexadecimal: caracteres especiais quebram a `DATABASE_URL`, e `$` quebra o compose.
+   - `POSTGRES_PASSWORD` só vale quando o volume do banco é criado pela primeira vez.
+
+4. **Suba o sistema e confira:**
    ```sh
-   docker compose --env-file .env.producao -f docker-compose.prod.yml exec web \
+   docker compose --env-file .env.producao -f docker-compose.prod.yml pull
+   docker compose --env-file .env.producao -f docker-compose.prod.yml up -d
+   curl -s http://127.0.0.1:3020/api/saude
+   ```
+   Deve aparecer `{"status":"ok","banco":"ok"}`. As migrações do banco rodam sozinhas na subida.
+
+5. **Ligue o domínio no nginx:**
+   ```sh
+   sed "s/DOMINIO_DO_SISTEMA/SEU_DOMINIO/" docker/nginx/devolucoes.conf > /etc/nginx/sites-available/devolucoes
+   ln -s /etc/nginx/sites-available/devolucoes /etc/nginx/sites-enabled/devolucoes
+   nginx -t && systemctl reload nginx
+   ```
+   Se `nginx -t` acusar erro, **não recarregue**: remova o link (`rm /etc/nginx/sites-enabled/devolucoes`) e investigue. Os outros sites continuam no ar com a configuração antiga.
+
+6. **Ligue o HTTPS** (do mesmo jeito que os outros sites do servidor):
+   ```sh
+   certbot --nginx -d SEU_DOMINIO
+   ```
+   Depois, confira em `https://SEU_DOMINIO/api/saude`.
+
+7. **Crie o primeiro Gestor.** O comando pede a senha:
+   ```sh
+   docker compose --env-file .env.producao -f docker-compose.prod.yml exec -it web \
      node dist/criar-usuario.mjs --nome "Seu Nome" --email voce@empresa.com --perfil GESTOR
    ```
 
-## Atualizar (do seu PC)
+## Atualizar
+Depois que o GitHub Actions terminar de compilar a nova versão (aba **Actions** do repositório), rode do seu PC:
 ```sh
-VPS_SSH=usuario@ip-da-vps sh scripts/deploy.sh
+VPS_SSH=root@IP-DA-VPS sh scripts/deploy.sh
 ```
+Ou rode direto na VPS: `cd /opt/devolucoes && git pull && docker compose --env-file .env.producao -f docker-compose.prod.yml pull && docker compose --env-file .env.producao -f docker-compose.prod.yml up -d`.
 
 ## Voltar para a versão anterior
+Cada versão compilada também é publicada com o hash do commit. No `.env.producao`, troque `IMAGEM_TAG=main` pelo hash completo do commit desejado e rode:
 ```sh
-cd /opt/devolucoes
-git log --oneline -5             # escolha o commit anterior
-git checkout <commit>
-docker compose --env-file .env.producao -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.producao -f docker-compose.prod.yml up -d
 ```
-Para voltar ao normal depois: `git checkout main && git pull`.
+Para voltar ao normal, coloque `IMAGEM_TAG=main` de novo.
 
 ## Ver os registros
 ```sh

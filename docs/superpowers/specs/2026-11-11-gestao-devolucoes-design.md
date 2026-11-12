@@ -55,7 +55,8 @@ Controlar o ciclo físico e fiscal das devoluções vindas dos marketplaces (Mer
 
 ```
 VPS
-├─ caddy     → HTTPS automático (ex.: devolucoes.<dominio>.com.br)
+├─ nginx     → já existe no servidor (atende outros sites); faz o HTTPS do domínio do sistema
+│              (certbot) e repassa para o web em 127.0.0.1:3020
 ├─ web       → Next.js: telas, API, recebimento dos avisos do ML e upload
 ├─ worker    → processo Node que executa a fila pg-boss: sincronização com o ML,
 │              compressão de vídeo (ffmpeg), emissão e consulta de NF-e,
@@ -454,7 +455,7 @@ As respostas reais desse teste viram exemplos gravados para os testes automatiza
 
 ## 10. Segurança
 
-- HTTPS (Caddy).
+- HTTPS pelo nginx do servidor, com certificado do certbot (Let's Encrypt).
 - Senhas guardadas com hash (argon2 ou bcrypt). Bloqueio temporário depois de várias falhas de login.
 - A permissão de cada perfil é checada **no servidor**, em toda ação. Esconder botão não basta.
 - Os tokens do ML ficam criptografados no banco (AES-256-GCM, com a chave numa variável de ambiente).
@@ -486,8 +487,13 @@ As respostas reais desse teste viram exemplos gravados para os testes automatiza
 ## 13. Deploy e ambientes
 
 - **Repositório:** git privado (GitHub). Imagens Docker do `web` e do `worker`.
-- **Deploy:** um comando (script, ou GitHub Actions via SSH) faz `docker compose pull && up -d`. As migrações do banco rodam automaticamente na subida.
-- **Desfazer:** voltar para a tag da imagem anterior.
+- **Imagem:** o GitHub Actions compila a imagem a cada envio para a `main` e publica em `ghcr.io/c77idm-dev/devolucoes`, com as tags `main` e o hash do commit. A VPS não compila nada.
+- **Deploy:** um comando (`scripts/deploy.sh`) faz `docker compose pull && up -d` na VPS. As migrações do banco rodam automaticamente na subida.
+- **VPS compartilhada (decidido em 2026-11-12):** o servidor já roda outros sistemas, e o nginx dele ocupa as portas 80 e 443.
+  - Este sistema escuta só em `127.0.0.1:3020`, com nomes próprios no Docker (projeto `devolucoes`) e limites de memória.
+  - O domínio do sistema é próprio e independente dos outros sites do servidor.
+  - O servidor atual (1 vCPU, 4 GB, cerca de 13 GB livres) atende as primeiras fases. Os vídeos (Fase 2) vão para um armazenamento externo (§9).
+- **Desfazer:** apontar `IMAGEM_TAG` no `.env.producao` para o hash do commit anterior e subir de novo.
 - **Desenvolvimento local:** PostgreSQL 17 instalado direto no Windows (no PC de desenvolvimento a virtualização está desligada, então não há Docker) e `npm run dev`. O ffmpeg, quando for necessário (Fase 2), também é instalado direto no Windows. O Docker é usado só na VPS.
 - **VPS:** mínimo de 2 vCPU, 4 GB de RAM e 200 GB de disco. **Recomendado:** 4 vCPU e 8 GB, por causa do ffmpeg.
 
