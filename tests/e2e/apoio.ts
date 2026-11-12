@@ -1,4 +1,4 @@
-import { expect, type Page, type TestInfo } from '@playwright/test';
+import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { eq } from 'drizzle-orm';
 import { criarDb, type Db } from '../../src/db/client';
 import { usuarios } from '../../src/db/schema';
@@ -19,13 +19,45 @@ export function ehCelular(testInfo: TestInfo): boolean {
   return testInfo.project.name === 'celular';
 }
 
-/** Mobile-first: a página nunca pode rolar para o lado. */
+/**
+ * Mobile-first: a página nunca pode rolar para o lado. Compara com a largura do viewport configurada, e não com
+ * `window.innerWidth`: no celular (`isMobile`) o Chromium aumenta o viewport de layout até o `scrollWidth`,
+ * e a comparação com `innerWidth` nunca falharia.
+ */
 export async function semRolagemLateral(page: Page) {
-  const { conteudo, tela } = await page.evaluate(() => ({
-    conteudo: document.documentElement.scrollWidth,
-    tela: window.innerWidth,
-  }));
+  const conteudo = await page.evaluate(() => document.documentElement.scrollWidth);
+  const tela = page.viewportSize()!.width;
   expect(conteudo, 'a página não pode rolar para o lado').toBeLessThanOrEqual(tela);
+}
+
+/**
+ * A rota responde como "não encontrada" (a tela 404 do sistema, com noindex). Não confere o código HTTP: com o
+ * `loading.tsx` da área logada a resposta já começou em streaming e o Next mantém 200 (ver docs, loading.md › Status codes).
+ */
+export async function paginaNaoEncontrada(page: Page, rota: string) {
+  await page.goto(rota);
+  await expect(page.getByRole('heading', { level: 1, name: 'Página não encontrada' })).toBeVisible();
+  await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute('content', /noindex/);
+}
+
+/** O elemento está no centro da tela visível e é o mais alto ali: a barra de abas fixa não o cobre. */
+export async function naFrente(elemento: Locator) {
+  await expect(elemento).toBeInViewport();
+  const livre = await elemento.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const topo = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return topo !== null && el.contains(topo);
+  });
+  expect(livre, 'nenhum outro elemento (barra de abas, rodapé) cobre o centro do elemento').toBe(true);
+}
+
+/** Espera a hidratação do React: ele marca os elementos do DOM com `__reactProps$…` quando assume a página. */
+export async function aguardarHidratacao(elemento: Locator) {
+  await expect
+    .poll(() => elemento.evaluate((el) => Object.keys(el).some((k) => k.startsWith('__reactProps'))))
+    .toBe(true);
+  // Deixa os efeitos da hidratação (como o foco automático) rodarem antes de afirmar que NÃO houve foco.
+  await elemento.page().evaluate(() => new Promise<void>((ok) => setTimeout(ok, 100)));
 }
 
 /** Entra e espera o login terminar (redirecionamento para /fluxo), para o teste poder navegar em seguida. */

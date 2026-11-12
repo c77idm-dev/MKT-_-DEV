@@ -32,7 +32,7 @@ export function FormularioUpload({ acao }: Props) {
           type="file"
           required
           accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          className="min-h-11 w-full text-sm file:mr-3 file:min-h-11 file:rounded-full file:border file:border-borda-forte file:bg-superficie file:px-4 file:font-semibold"
+          className="min-h-11 w-full text-sm file:mr-3 file:min-h-11 file:rounded-full file:border file:border-borda-campo file:bg-superficie file:px-4 file:font-semibold"
         />
       </div>
       <ListaErros erros={estado.erros} />

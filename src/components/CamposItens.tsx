@@ -71,7 +71,7 @@ export function CamposItens({
               type="button"
               onClick={() => remover(linha.chave)}
               aria-label={`Remover item ${i + 1}`}
-              className="flex size-11 shrink-0 items-center justify-center rounded-full border border-borda-forte text-texto-2"
+              className="flex size-11 shrink-0 items-center justify-center rounded-full border border-borda-campo text-texto-2"
             >
               <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <path d="M6 6l12 12M18 6L6 18" />

@@ -19,7 +19,7 @@ export function FormularioLogin() {
           type="email"
           autoComplete="username"
           required
-          className="h-11 rounded-lg border border-borda-forte bg-superficie px-3 text-[15px]"
+          className="h-11 rounded-lg border border-borda-campo bg-superficie px-3 text-[15px]"
         />
       </div>
       <div className="flex flex-col gap-1.5">
@@ -32,7 +32,7 @@ export function FormularioLogin() {
           type="password"
           autoComplete="current-password"
           required
-          className="h-11 rounded-lg border border-borda-forte bg-superficie px-3 text-[15px]"
+          className="h-11 rounded-lg border border-borda-campo bg-superficie px-3 text-[15px]"
         />
       </div>
       {estado.erro && (

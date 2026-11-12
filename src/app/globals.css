@@ -6,6 +6,8 @@
   --color-superficie: #ffffff;
   --color-borda: #dde3e0;
   --color-borda-forte: #c9d2ce;
+  /* Borda de controles de formulário: ≥ 3:1 sobre branco e sobre bg-fundo (WCAG 1.4.11). */
+  --color-borda-campo: #808e89;
   --color-coluna: #e7ece9;
   --color-texto: #13201d;
   --color-texto-2: #3a4a46;
@@ -28,6 +30,15 @@
 body {
   background: var(--color-fundo);
   color: var(--color-texto);
+  /* Palavras longas sem espaço (e-mail, descrição, código) quebram em vez de alargar a página no celular. */
+  overflow-wrap: anywhere;
+}
+
+/* Campo focado não fica escondido sob o rodapé fixo e a barra de abas (só no celular). */
+@media (width < 48rem) {
+  html {
+    scroll-padding-bottom: calc(9rem + env(safe-area-inset-bottom));
+  }
 }
 
 /* Mobile-first (Fase 1): espaço para a barra de abas fixa embaixo e para a área segura do celular.
