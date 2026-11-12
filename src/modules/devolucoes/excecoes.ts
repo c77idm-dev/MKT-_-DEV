@@ -6,7 +6,17 @@ import { pode } from '@/modules/auth/permissoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { idsDosProdutos } from '@/modules/catalogo/produtos';
 import { registrarEvento } from '@/modules/historico/eventos';
-import { chavePedido, codigosAtivosPorPedido, expandirUnidades, validarNovaDevolucao, type EntradaNovaDevolucao } from './criar';
+import {
+  chavePedido,
+  codigosAtivosPorPedido,
+  codigosNaoIdentificadosPorRastreio,
+  expandirUnidades,
+  mensagemLimiteUnidades,
+  mensagemRastreioNaoIdentificado,
+  validarNovaDevolucao,
+  type EntradaNovaDevolucao,
+} from './criar';
+import { LIMITE_UNIDADES_DEVOLUCAO } from './dominio';
 import { ErroDevolucao } from './erros';
 import { exigirTransicao } from './transicoes';
 
@@ -72,6 +82,11 @@ export async function identificarDevolucao(
   if (outra) {
     throw new ErroDevolucao(`O pedido já tem a devolução ${outra}. Se ela ainda está pendente de chegada, cancele-a e tente de novo.`);
   }
+  // Rastreio informado que já é de OUTRO pacote não identificado ativo: o próprio pacote não conta.
+  if (dados.rastreio) {
+    const outroPacote = (await codigosNaoIdentificadosPorRastreio(db, [dados.rastreio], id)).get(dados.rastreio);
+    if (outroPacote) throw new ErroDevolucao(mensagemRastreioNaoIdentificado(outroPacote));
+  }
   const unidades = expandirUnidades(dados.itens);
   const produtosPorSku = await idsDosProdutos(db, [...new Set(unidades)]);
 
@@ -98,6 +113,7 @@ export async function identificarDevolucao(
         .select({ maior: sql<number>`coalesce(max(${itensDevolucao.unidade}), 0)::int` })
         .from(itensDevolucao)
         .where(eq(itensDevolucao.devolucaoId, id));
+      if (maior + unidades.length > LIMITE_UNIDADES_DEVOLUCAO) throw new ErroDevolucao(mensagemLimiteUnidades(maior + unidades.length));
       await tx.insert(itensDevolucao).values(
         unidades.map((sku, i) => ({ devolucaoId: id, unidade: maior + i + 1, sku, produtoEsperadoId: produtosPorSku.get(sku) ?? null })),
       );

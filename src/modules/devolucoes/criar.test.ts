@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LIMITE_UNIDADES_DEVOLUCAO } from './dominio';
 import { expandirUnidades, itensDoFormulario, validarNovaDevolucao } from './criar';
 
 describe('validarNovaDevolucao', () => {
@@ -88,5 +89,18 @@ describe('unidades e formulário', () => {
       { sku: 'A', quantidade: '2' },
       { sku: 'B', quantidade: '' },
     ]);
+  });
+});
+
+describe('validarNovaDevolucao: limite de unidades por devolução (extra)', () => {
+  const base = { canal: 'Shopee', pedido: 'P1' };
+
+  it('aceita até 200 unidades no total e recusa a partir de 201, somando todos os itens', () => {
+    expect(LIMITE_UNIDADES_DEVOLUCAO).toBe(200);
+    const itens = (...qs: number[]) => qs.map((q, i) => ({ sku: `S${i}`, quantidade: String(q) }));
+    expect(validarNovaDevolucao({ ...base, itens: itens(50, 50, 50, 50) }).erros).toEqual([]);
+    const r = validarNovaDevolucao({ ...base, itens: itens(50, 50, 50, 50, 1) });
+    expect(r.dados).toBeNull();
+    expect(r.erros).toEqual(['Uma devolução aceita no máximo 200 unidades no total (foram informadas 201). Divida em mais de uma devolução.']);
   });
 });

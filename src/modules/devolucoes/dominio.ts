@@ -93,3 +93,9 @@ export function statusDaEtapa(numero: number): StatusDevolucao[] {
 
 /** Máximo de unidades de um mesmo SKU numa linha (formulário e planilha). */
 export const LIMITE_QUANTIDADE = 50;
+
+/**
+ * (extra) Máximo de unidades no total de uma devolução. Uma planilha mal mapeada poderia juntar milhares de linhas num pedido só
+ * e estourar o limite de parâmetros do postgres.js (erro 500 e tudo desfeito).
+ */
+export const LIMITE_UNIDADES_DEVOLUCAO = 200;

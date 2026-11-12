@@ -135,6 +135,24 @@ describe('identificarDevolucao (spec §5.2: o Gestor liga o pacote ao pedido)', 
     );
   });
 
+  it('com rastreio: recusa o de OUTRO pacote não identificado, mas não bloqueia o do próprio pacote', async () => {
+    const pacote = await criarNaoIdentificada(db, 'NI-A', operador);
+    const outro = await criarNaoIdentificada(db, 'NI-B', operador);
+    await expect(identificarDevolucao(db, pacote.id, { canal: 'SHOPEE', pedido: 'P1', rastreio: 'NI-B', itens: [] }, gestor)).rejects.toThrow(
+      `Este rastreio é do pacote não identificado ${outro.codigo}. Identifique esse pacote em vez de criar outra devolução.`,
+    );
+    await expect(identificarDevolucao(db, pacote.id, { canal: 'SHOPEE', pedido: 'P1', rastreio: 'ni-a', itens: [] }, gestor)).resolves.toBeUndefined();
+  });
+
+  it('limita o total de unidades da devolução a 200, contando as que o pacote já tem', async () => {
+    const pacote = await criarNaoIdentificada(db, 'NI-C', operador);
+    await identificarDevolucao(db, pacote.id, { canal: 'SHOPEE', pedido: 'P2', itens: [{ sku: 'A', quantidade: '50' }] }, gestor);
+    await db.update(devolucoes).set({ naoIdentificada: true }).where(eq(devolucoes.id, pacote.id));
+    await expect(
+      identificarDevolucao(db, pacote.id, { canal: 'SHOPEE', pedido: 'P3', itens: [{ sku: 'B', quantidade: '50' }, { sku: 'C', quantidade: '50' }, { sku: 'D', quantidade: '50' }, { sku: 'E', quantidade: '1' }] }, gestor),
+    ).rejects.toThrow(/no máximo 200 unidades/);
+  });
+
   it('id inexistente diz "Devolução não encontrada."', async () => {
     await expect(
       identificarDevolucao(db, '00000000-0000-4000-8000-000000000000', { canal: 'SHOPEE', pedido: 'P9', itens: [] }, gestor),

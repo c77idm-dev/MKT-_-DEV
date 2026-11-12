@@ -3,11 +3,13 @@ import { interpretarCanal } from '@/modules/devolucoes/canais';
 import {
   chavePedido,
   codigosAtivosPorPedido,
+  codigosNaoIdentificadosPorRastreio,
   criarDevolucao,
+  mensagemRastreioNaoIdentificado,
   validarNovaDevolucao,
   type DadosNovaDevolucao,
 } from '@/modules/devolucoes/criar';
-import { LIMITE_QUANTIDADE, type Canal } from '@/modules/devolucoes/dominio';
+import { LIMITE_QUANTIDADE, LIMITE_UNIDADES_DEVOLUCAO, type Canal } from '@/modules/devolucoes/dominio';
 import { ErroDevolucao } from '@/modules/devolucoes/erros';
 import { ErroTransicao } from '@/modules/devolucoes/transicoes';
 import { normalizarRastreio } from '@/modules/devolucoes/rastreio';
@@ -106,6 +108,17 @@ export const definicaoDevolucoes: DefinicaoImportacao = {
       if (codigo) p.indices.forEach((i) => erros[i].push(`já existe a devolução ${codigo} para este pedido neste canal`));
     }
 
+    // O rastreio já é de um pacote não identificado ativo: a devolução certa é identificar aquele pacote.
+    const rastreios = pedidos.flatMap((p) => {
+      const rastreio = p.indices.map((i) => itens[i].dados?.rastreio).find((r) => r);
+      return rastreio ? [{ ...p, rastreio }] : [];
+    });
+    const naoIdentificados = await codigosNaoIdentificadosPorRastreio(db, rastreios.map((r) => r.rastreio));
+    for (const p of rastreios) {
+      const codigo = naoIdentificados.get(p.rastreio);
+      if (codigo) p.indices.forEach((i) => erros[i].push(mensagemRastreioNaoIdentificado(codigo)));
+    }
+
     // SKU fora do cadastro é só aviso: a bancada não para por isso.
     const skus = [...new Set(itens.flatMap((i) => i.dados?.itens.map((x) => x.sku) ?? []))];
     const cadastrados = await idsDosProdutos(db, skus);
@@ -132,6 +145,13 @@ export const definicaoDevolucoes: DefinicaoImportacao = {
       const totais = new Map<string, number>();
       for (const i of indices)
         for (const x of itens[i].dados?.itens ?? []) totais.set(x.sku, (totais.get(x.sku) ?? 0) + x.quantidade);
+      // (extra) Limite do total de unidades do pedido: todas as linhas dele recebem o erro.
+      const unidadesDoPedido = [...totais.values()].reduce((soma, q) => soma + q, 0);
+      if (unidadesDoPedido > LIMITE_UNIDADES_DEVOLUCAO) {
+        for (const i of indices) {
+          if (itens[i].dados) erros[i].push(`o pedido soma ${unidadesDoPedido} unidades (máximo ${LIMITE_UNIDADES_DEVOLUCAO} por devolução)`);
+        }
+      }
       for (const [sku, total] of totais) {
         if (total <= LIMITE_QUANTIDADE) continue;
         for (const i of indices) {

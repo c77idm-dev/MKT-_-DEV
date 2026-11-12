@@ -6,7 +6,8 @@ import { listarEventos } from '@/modules/historico/eventos';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { criarDevolucao, type DadosNovaDevolucao } from './criar';
-import { ErroDevolucaoDuplicada } from './erros';
+import { ErroDevolucao, ErroDevolucaoDuplicada } from './erros';
+import { criarNaoIdentificada } from './recebimento';
 import { ErroTransicao } from './transicoes';
 
 const { db, sql } = criarDbTeste();
@@ -108,5 +109,24 @@ describe('criarDevolucao', () => {
     await expect(
       db.insert(devolucoes).values({ origem: 'MANUAL', status: 'AGUARDANDO_CONFERENCIA', naoIdentificada: true }),
     ).resolves.toBeDefined();
+  });
+});
+
+describe('criarDevolucao: rastreio de pacote não identificado e limite de unidades', () => {
+  it('recusa um rastreio que já pertence a um pacote não identificado ativo', async () => {
+    const pacote = await criarNaoIdentificada(db, 'BR-NI-1', operador);
+    await expect(criarDevolucao(db, { ...DADOS, rastreio: 'BR-NI-1' }, { origem: 'MANUAL', usuario: operador })).rejects.toThrow(
+      new ErroDevolucao(`Este rastreio é do pacote não identificado ${pacote.codigo}. Identifique esse pacote em vez de criar outra devolução.`),
+    );
+    // cancelado, o pacote deixa de bloquear
+    await db.update(devolucoes).set({ status: 'CANCELADA' }).where(eq(devolucoes.id, pacote.id));
+    await expect(criarDevolucao(db, { ...DADOS, rastreio: 'BR-NI-1' }, { origem: 'MANUAL', usuario: operador })).resolves.toBeDefined();
+  });
+
+  it('recusa mais de 200 unidades no total (defesa para quem chama sem validar)', async () => {
+    const dados = { ...DADOS, itens: [{ sku: 'A', quantidade: 100 }, { sku: 'B', quantidade: 101 }] };
+    await expect(criarDevolucao(db, dados, { origem: 'MANUAL', usuario: operador })).rejects.toThrow(
+      'Uma devolução aceita no máximo 200 unidades no total (foram informadas 201). Divida em mais de uma devolução.',
+    );
   });
 });

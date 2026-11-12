@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { obterDetalhe } from '@/modules/devolucoes/detalhe';
+import { criarNaoIdentificada } from '@/modules/devolucoes/recebimento';
 import { ErroTransicao } from '@/modules/devolucoes/transicoes';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
@@ -85,6 +86,25 @@ describe('importação de devoluções', () => {
       [8, ['Pedido AMZ-2: aparece com outro rastreio ou reclamação na linha 4'], []],
     ]);
     expect(p.validas).toBe(3);
+  });
+
+  it('pedido com mais de 200 unidades no total: todas as linhas dele recebem o erro e o pedido fica de fora', async () => {
+    const linhas = Array.from({ length: 5 }, (_, i) => ['Shopee', 'SHP-1', '', 'BR1', '', `SKU-${i}`, '45', '', '']);
+    const p = await previa([...linhas, ['Shopee', 'SHP-2', '', 'BR2', '', 'FONE-01', '1', '', '']]);
+    const erro = 'Pedido SHP-1: o pedido soma 225 unidades (máximo 200 por devolução)';
+    expect(p.linhas.map((l) => l.erros)).toEqual([[erro], [erro], [erro], [erro], [erro], []]);
+    expect(p.validas).toBe(1);
+  });
+
+  it('rastreio de pacote não identificado ativo: o pedido inteiro fica de fora, e a confirmação também pula', async () => {
+    const pacote = await criarNaoIdentificada(db, 'BR-NI', operador);
+    const erro = `Pedido SHP-1: Este rastreio é do pacote não identificado ${pacote.codigo}. Identifique esse pacote em vez de criar outra devolução.`;
+    const p = await previa([
+      ['Shopee', 'SHP-1', '', 'br-ni', '', 'FONE-01', '1', '', ''],
+      ['Shopee', 'SHP-1', '', 'br-ni', '', 'CABO-02', '1', '', ''],
+      ['Shopee', 'SHP-2', '', 'BR2', '', 'FONE-01', '1', '', ''],
+    ]);
+    expect(p.linhas.map((l) => l.erros)).toEqual([[erro], [erro], []]);
   });
 
   it('quantidade e data seguem as regras da planilha: 1.000 é mil (recusado), 12.0 é 12, data ISO vale', async () => {

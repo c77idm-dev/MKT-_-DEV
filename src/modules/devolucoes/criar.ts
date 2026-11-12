@@ -1,4 +1,4 @@
-import { and, asc, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes, itensDevolucao } from '@/db/schema';
 import { interpretarData, interpretarInteiro, textoOpcional } from '@/lib/valores';
@@ -7,8 +7,8 @@ import { normalizarSku } from '@/modules/catalogo/documentos';
 import { idsDosProdutos } from '@/modules/catalogo/produtos';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { interpretarCanal } from './canais';
-import { CANAIS, LIMITE_QUANTIDADE, ROTULO_CANAL, type Canal, type StatusDevolucao } from './dominio';
-import { ErroDevolucaoDuplicada } from './erros';
+import { CANAIS, LIMITE_QUANTIDADE, LIMITE_UNIDADES_DEVOLUCAO, ROTULO_CANAL, type Canal, type StatusDevolucao } from './dominio';
+import { ErroDevolucao, ErroDevolucaoDuplicada } from './erros';
 import { normalizarRastreio } from './rastreio';
 import { exigirTransicao } from './transicoes';
 
@@ -52,6 +52,38 @@ function listaDeCanais(): string {
   return `${nomes.slice(0, -1).join(', ')} ou ${nomes[nomes.length - 1]}`;
 }
 
+export function mensagemLimiteUnidades(total: number): string {
+  return `Uma devolução aceita no máximo ${LIMITE_UNIDADES_DEVOLUCAO} unidades no total (foram informadas ${total}). Divida em mais de uma devolução.`;
+}
+
+export function mensagemRastreioNaoIdentificado(codigo: string): string {
+  return `Este rastreio é do pacote não identificado ${codigo}. Identifique esse pacote em vez de criar outra devolução.`;
+}
+
+/**
+ * Código do pacote não identificado ATIVO (não cancelado, extraviado nem concluído) de cada rastreio, na chave do próprio rastreio.
+ * `exceto`: id de um pacote que não conta (o que está sendo identificado).
+ */
+export async function codigosNaoIdentificadosPorRastreio(db: DbOuTx, rastreios: string[], exceto?: string): Promise<Map<string, string>> {
+  const lista = [...new Set(rastreios.filter((r) => r !== ''))];
+  if (lista.length === 0) return new Map();
+  const linhas = await db
+    .select({ rastreio: devolucoes.rastreio, codigo: devolucoes.codigo })
+    .from(devolucoes)
+    .where(
+      and(
+        eq(devolucoes.naoIdentificada, true),
+        inArray(devolucoes.rastreio, lista),
+        notInArray(devolucoes.status, ENCERRADAS),
+        exceto ? ne(devolucoes.id, exceto) : undefined,
+      ),
+    )
+    .orderBy(asc(devolucoes.numero));
+  const resultado = new Map<string, string>();
+  for (const l of linhas) if (l.rastreio && !resultado.has(l.rastreio)) resultado.set(l.rastreio, l.codigo);
+  return resultado;
+}
+
 /** Campos do formulário "Nova devolução" (spec §6.1) e das colunas da planilha de devoluções. */
 export function validarNovaDevolucao(
   e: EntradaNovaDevolucao,
@@ -93,6 +125,8 @@ export function validarNovaDevolucao(
     }
     itens.push({ sku, quantidade });
   });
+  const total = itens.reduce((soma, item) => soma + item.quantidade, 0);
+  if (total > LIMITE_UNIDADES_DEVOLUCAO) erros.push(mensagemLimiteUnidades(total));
   if ((opcoes.exigirItens ?? true) && e.itens.length === 0) erros.push('Informe pelo menos um item (SKU e quantidade)');
 
   if (erros.length > 0 || !canal) return { dados: null, erros };
@@ -162,7 +196,12 @@ export async function criarDevolucao(
     chavePedido(dados.canal, dados.pedido),
   );
   if (existente) throw new ErroDevolucaoDuplicada(existente);
+  if (dados.rastreio) {
+    const naoIdentificado = (await codigosNaoIdentificadosPorRastreio(db, [dados.rastreio])).get(dados.rastreio);
+    if (naoIdentificado) throw new ErroDevolucao(mensagemRastreioNaoIdentificado(naoIdentificado));
+  }
   const unidades = expandirUnidades(dados.itens);
+  if (unidades.length > LIMITE_UNIDADES_DEVOLUCAO) throw new ErroDevolucao(mensagemLimiteUnidades(unidades.length));
   const produtosPorSku = await idsDosProdutos(db, [...new Set(unidades)]);
 
   return db.transaction(async (tx) => {
