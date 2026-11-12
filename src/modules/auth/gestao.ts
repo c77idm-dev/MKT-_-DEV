@@ -27,7 +27,11 @@ function exigirOutroUsuario(alvoId: string, ator: UsuarioSessao, mensagem: strin
   if (!ehUuid(alvoId)) throw new ErroGestaoUsuario('Usuário não encontrado.');
 }
 
-/** Chave fixa da trava que serializa toda mudança de perfil ou de situação (ativo): o volume é minúsculo. */
+/**
+ * Trava que serializa toda mudança de perfil ou de situação (ativo): o volume é minúsculo. Chave de duas partes
+ * (espaço 2 = gestão de usuários) para não colidir com outras travas do sistema (espaço 1 = rastreio no recebimento).
+ */
+const ESPACO_TRAVA_USUARIOS = 2;
 const TRAVA_GESTORES = 727_001;
 
 /**
@@ -35,7 +39,7 @@ const TRAVA_GESTORES = 727_001;
  * travam cada um a linha do próprio alvo e esperam a do outro (deadlock). Com ela, uma operação por vez.
  */
 async function serializarMudancas(tx: DbOuTx) {
-  await tx.execute(sql`select pg_advisory_xact_lock(${TRAVA_GESTORES})`);
+  await tx.execute(sql`select pg_advisory_xact_lock(${ESPACO_TRAVA_USUARIOS}, ${TRAVA_GESTORES})`);
 }
 
 /** Dentro da transação (já serializada): confere que, tirando o alvo, ainda sobra um Gestor ativo. */
@@ -56,9 +60,12 @@ export async function listarUsuarios(db: DbOuTx): Promise<UsuarioLista[]> {
 
 export async function criarUsuarioPeloGestor(db: DbOuTx, dados: DadosNovoUsuario, ator: UsuarioSessao): Promise<UsuarioSessao> {
   exigirGestor(ator);
-  const novo = await criarUsuario(db, dados);
-  await registrarEvento(db, { entidade: 'usuario', entidadeId: novo.id, acao: 'usuario_criado', para: novo.perfil, usuarioId: ator.id });
-  return novo;
+  // Usuário e evento do histórico na mesma transação: se o evento falhar, o usuário não fica criado sem registro.
+  return db.transaction(async (tx) => {
+    const novo = await criarUsuario(tx, dados);
+    await registrarEvento(tx, { entidade: 'usuario', entidadeId: novo.id, acao: 'usuario_criado', para: novo.perfil, usuarioId: ator.id });
+    return novo;
+  });
 }
 
 /** A sessão aberta já passa a valer com o perfil novo: o perfil é lido do banco a cada página. */

@@ -10,6 +10,7 @@ import {
   type DadosNovaDevolucao,
 } from '@/modules/devolucoes/criar';
 import { LIMITE_QUANTIDADE, LIMITE_UNIDADES_DEVOLUCAO, type Canal } from '@/modules/devolucoes/dominio';
+import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { ErroDevolucao } from '@/modules/devolucoes/erros';
 import { ErroTransicao } from '@/modules/devolucoes/transicoes';
 import { normalizarRastreio } from '@/modules/devolucoes/rastreio';
@@ -58,6 +59,7 @@ function juntarPacote(linhas: DadosNovaDevolucao[]): DadosNovaDevolucao {
 export const definicaoDevolucoes: DefinicaoImportacao = {
   tipo: 'devolucoes',
   titulo: 'Devoluções',
+  rotuloVoltar: ETAPAS[0].titulo,
   acao: 'operar_devolucoes',
   voltarPara: '/fluxo/etapa/1',
   rotuloCriados: 'Devoluções criadas',

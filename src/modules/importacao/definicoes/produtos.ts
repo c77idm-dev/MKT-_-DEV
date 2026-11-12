@@ -7,6 +7,7 @@ import { dadosOuErro, type DefinicaoImportacao } from '../definicao';
 export const definicaoProdutos: DefinicaoImportacao = {
   tipo: 'produtos',
   titulo: 'Produtos',
+  rotuloVoltar: 'Produtos',
   acao: 'gerir_catalogo',
   voltarPara: '/cadastros/produtos',
   rotuloCriados: 'Produtos novos',

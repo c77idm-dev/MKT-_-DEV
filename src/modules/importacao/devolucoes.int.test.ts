@@ -47,7 +47,10 @@ afterAll(async () => {
 
 describe('importação de devoluções', () => {
   it('é feita por quem opera devoluções e volta para a etapa 1', () => {
-    expect(definicao()).toMatchObject({ acao: 'operar_devolucoes', voltarPara: '/fluxo/etapa/1', rotuloAtualizados: null });
+    expect(definicao()).toMatchObject({ acao: 'operar_devolucoes', voltarPara: '/fluxo/etapa/1',
+      rotuloVoltar: 'Pedidos Pendentes de Chegada',
+      rotuloAtualizados: null,
+    });
   });
 
   it('sugere as colunas do modelo da spec §6.1', async () => {

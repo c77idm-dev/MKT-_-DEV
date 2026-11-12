@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { usuarios } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { verificarSenha } from './senha';
-import { criarUsuario, ErroEmailEmUso } from './usuarios';
+import { criarUsuario, ErroDadosUsuario, ErroEmailEmUso } from './usuarios';
 
 const { db, sql } = criarDbTeste();
 beforeEach(async () => {
@@ -14,6 +14,16 @@ afterAll(async () => {
 });
 
 describe('criarUsuario', () => {
+  it('limita o nome a 120 e o e-mail a 254 caracteres', async () => {
+    const base = { senha: 'senha-segura-123', perfil: 'OPERADOR' as const };
+    await expect(criarUsuario(db, { ...base, nome: 'N'.repeat(121), email: 'a@b.com' })).rejects.toThrow(
+      new ErroDadosUsuario('Nome: no máximo 120 caracteres'),
+    );
+    await expect(criarUsuario(db, { ...base, nome: 'Ana', email: `${'a'.repeat(250)}@b.com` })).rejects.toThrow(
+      new ErroDadosUsuario('E-mail: no máximo 254 caracteres'),
+    );
+  });
+
   it('cria o usuário com e-mail normalizado e a senha só em hash', async () => {
     const criado = await criarUsuario(db, {
       nome: '  Maria da Silva ',

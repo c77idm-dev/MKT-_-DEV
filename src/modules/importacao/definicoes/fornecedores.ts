@@ -6,6 +6,7 @@ import { dadosOuErro, type DefinicaoImportacao } from '../definicao';
 export const definicaoFornecedores: DefinicaoImportacao = {
   tipo: 'fornecedores',
   titulo: 'Fornecedores',
+  rotuloVoltar: 'Fornecedores',
   acao: 'gerir_catalogo',
   voltarPara: '/cadastros/fornecedores',
   rotuloCriados: 'Fornecedores novos',

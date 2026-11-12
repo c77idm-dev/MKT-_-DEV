@@ -51,7 +51,7 @@ export default async function PaginaImportacao({ params }: { params: Promise<{ t
         </div>
         <div className="grid gap-2 sm:flex">
           <Link href={def.voltarPara} className={BOTAO_PRIMARIO}>
-            Voltar para {def.titulo}
+            Voltar para {def.rotuloVoltar}
           </Link>
           <Link href={`/importacoes/${def.tipo}`} className={BOTAO_SECUNDARIO}>
             Importar outra planilha
@@ -72,7 +72,7 @@ export default async function PaginaImportacao({ params }: { params: Promise<{ t
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <div className="flex flex-col gap-1">
         <Link href={def.voltarPara} className={LINK_VOLTAR}>
-          ← {def.titulo}
+          ← {def.rotuloVoltar}
         </Link>
         <h1 className="text-xl font-bold">Importar planilha: {def.titulo}</h1>
         <p className="text-sm text-texto-2 [overflow-wrap:anywhere]">

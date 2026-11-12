@@ -17,7 +17,7 @@ export default async function PaginaImportar({ params }: { params: Promise<{ tip
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
       <Link href={def.voltarPara} className={LINK_VOLTAR}>
-        ← {def.titulo}
+        ← {def.rotuloVoltar}
       </Link>
       <h1 className="text-xl font-bold">Importar planilha: {def.titulo}</h1>
       <div className={`${CARTAO} flex flex-col gap-2 text-sm`}>

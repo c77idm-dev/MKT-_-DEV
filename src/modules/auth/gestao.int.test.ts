@@ -29,6 +29,14 @@ describe('Usuários (spec §6.8)', () => {
     ]);
   });
 
+  it('se o evento do histórico falha, o usuário também não é criado (mesma transação)', async () => {
+    const atorFantasma = { ...gestor, id: '00000000-0000-4000-8000-000000000001' };
+    await expect(
+      criarUsuarioPeloGestor(db, { nome: 'Dani', email: 'dani@empresa.com', senha: 'senha-dani-123', perfil: 'OPERADOR' }, atorFantasma),
+    ).rejects.toThrow();
+    expect((await listarUsuarios(db)).map((u) => u.email)).not.toContain('dani@empresa.com');
+  });
+
   it('lista os ativos primeiro, em ordem alfabética', async () => {
     const zeca = await criarUsuarioPeloGestor(db, { nome: 'Zeca', email: 'zeca@empresa.com', senha: 'senha-zeca-123', perfil: 'FISCAL' }, gestor);
     await criarUsuarioPeloGestor(db, { nome: 'Ana', email: 'ana@empresa.com', senha: 'senha-ana-1234', perfil: 'OPERADOR' }, gestor);

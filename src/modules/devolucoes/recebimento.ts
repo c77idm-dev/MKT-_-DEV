@@ -104,9 +104,9 @@ export async function criarNaoIdentificada(
   );
   const rastreio = rastreioOuErro(rastreioBruto);
   return db.transaction(async (tx) => {
-    // Trava por rastreio (sem índice único: várias devoluções podem dividir um rastreio). Serializa duas leituras
+    // Trava por rastreio, espaço 1 (a gestão de usuários usa o 2); sem índice único: várias devoluções podem dividir um rastreio). Serializa duas leituras
     // simultâneas de um código novo: a segunda enxerga a linha da primeira e recusa.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${rastreio}))`);
+    await tx.execute(sql`select pg_advisory_xact_lock(1, hashtext(${rastreio}))`);
     const existente = await maisRecentePorRastreio(tx, rastreio);
     if (existente) throw new ErroDevolucao(`Já existe a devolução ${existente.codigo} com este rastreio. Registre a chegada por ela.`);
     const [criada] = await tx

@@ -50,11 +50,11 @@ export async function alterarPerfilAcao(alvoId: string, _anterior: EstadoAcaoUsu
 export async function definirAtivoAcao(alvoId: string, ativo: boolean): Promise<EstadoAcaoUsuario> {
   const gestor = await exigirPermissao('administrar');
   try {
-    await definirAtivo(obterDb(), alvoId, ativo, gestor);
+    await definirAtivo(obterDb(), alvoId, ativo === true, gestor);
   } catch (erro) {
     if (ehErroConhecido(erro)) return { erro: erro.message, ok: null };
     throw erro;
   }
   revalidatePath('/configuracoes/usuarios');
-  return { erro: null, ok: ativo ? 'reativado' : 'desativado' };
+  return { erro: null, ok: ativo === true ? 'reativado' : 'desativado' };
 }

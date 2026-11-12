@@ -10,6 +10,8 @@ export type LinhaPrevia = LinhaMapeada & { erros: string[]; avisos: string[] };
 export type DefinicaoImportacao = {
   tipo: TipoImportacao;
   titulo: string;
+  /** Texto do link de volta (o nome da tela para onde ele leva). */
+  rotuloVoltar: string;
   /** Permissão exigida (spec §6.9). */
   acao: Acao;
   /** Lista para onde o usuário volta. */

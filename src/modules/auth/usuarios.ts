@@ -23,8 +23,8 @@ export class ErroDadosUsuario extends Error {
 }
 
 const esquemaNovoUsuario = z.object({
-  nome: z.string().trim().min(1, 'Informe o nome'),
-  email: z.string().trim().toLowerCase().email('E-mail inválido'),
+  nome: z.string().trim().min(1, 'Informe o nome').max(120, 'Nome: no máximo 120 caracteres'),
+  email: z.string().trim().toLowerCase().email('E-mail inválido').max(254, 'E-mail: no máximo 254 caracteres'),
   senha: z.string().min(TAMANHO_MINIMO_SENHA, `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres`),
   perfil: z.enum(PERFIS),
 });
