@@ -1,4 +1,7 @@
+import { zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
+import { interpretarInteiro, interpretarValor } from '@/lib/valores';
+import { normalizarNcm } from '@/modules/catalogo/documentos';
 import { criarXlsx, paraArrayBuffer } from '../../../tests/helpers/xlsx';
 import { ErroPlanilha, lerCsv, lerPlanilha, MAX_LINHAS, montarPlanilha } from './planilha';
 
@@ -41,10 +44,38 @@ describe('lerPlanilha: XLSX', () => {
       linhaCabecalho: 1,
       cabecalhos: ['Código', 'Descrição', 'Custo', 'GTIN'],
       linhas: [
-        ['SKU-1', 'Fone', '12.5', '7891234567895'],
+        ['SKU-1', 'Fone', '12,5', '7891234567895'],
         ['SKU-2', 'Cabo & Cia', '', '0789'],
       ],
     });
+  });
+
+  it('custos com 3 casas ou sobras de ponto flutuante viram valor em reais, sem ler "0.125" como 125 (e inteiros ficam como estão)', async () => {
+    const xlsx = criarXlsx([
+      ['custo', 'gtin', 'qtd'],
+      [0.125, 7891234567895, 12],
+      [12.345, 7891234567895, 3],
+      [12.300000000000001, 7891234567895, 1],
+      [12.5, 7891234567895, 1],
+    ]);
+    const { linhas } = await lerPlanilha('c.xlsx', xlsx);
+    expect(linhas.map((l) => interpretarValor(l[0]))).toEqual(['0.13', '12.35', '12.30', '12.50']);
+    expect(linhas.map((l) => l[1])).toEqual(Array(4).fill('7891234567895'));
+    expect(linhas.map((l) => interpretarInteiro(l[2]))).toEqual([12, 3, 1, 1]);
+  });
+
+  it('NCM numérico (8471.3012) e quantidade "12.0" continuam válidos depois da troca do ponto', async () => {
+    const { linhas } = await lerPlanilha('n.xlsx', criarXlsx([['ncm', 'qtd'], [8471.3012, 12.0], ['8471.3012', '3']]));
+    expect(linhas.map((l) => normalizarNcm(l[0]))).toEqual(['84713012', '84713012']);
+    expect(linhas.map((l) => interpretarInteiro(l[1]))).toEqual([12, 3]);
+  });
+
+  it('recusa xlsx cujo conteúdo descompactado passa de 50 MB (bomba de zip), sem descompactar', async () => {
+    const bomba = paraArrayBuffer(zipSync({ 'xl/worksheets/sheet1.xml': new Uint8Array(51 * 1024 * 1024) }, { level: 1 }));
+    expect(bomba.byteLength).toBeLessThan(1024 * 1024);
+    await expect(lerPlanilha('bomba.xlsx', bomba)).rejects.toThrow(
+      new ErroPlanilha('A planilha descompactada é grande demais (mais de 50 MB). Divida o arquivo.'),
+    );
   });
 
   it('explica quando o arquivo .xlsx não é uma planilha', async () => {

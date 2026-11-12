@@ -1,3 +1,4 @@
+import { unzipSync } from 'fflate';
 import Papa from 'papaparse';
 import { readSheet } from 'read-excel-file/universal';
 
@@ -53,10 +54,33 @@ export function lerCsv(texto: string): string[][] {
   return resultado.data;
 }
 
+/** Limite do conteúdo descompactado de um .xlsx (proteção contra "bomba de zip"). */
+export const LIMITE_XLSX_DESCOMPACTADO = 50 * 1024 * 1024;
+
+/** Soma os tamanhos descompactados declarados no diretório do zip, sem descompactar nada. */
+function tamanhoDescompactado(conteudo: ArrayBuffer): number {
+  let total = 0;
+  unzipSync(new Uint8Array(conteudo), {
+    filter: (arquivo) => {
+      total += arquivo.originalSize;
+      return false;
+    },
+  });
+  return total;
+}
+
 async function lerXlsx(conteudo: ArrayBuffer): Promise<unknown[][]> {
+  let grande: boolean;
   try {
-    // Números como texto: EAN e CNPJ não perdem dígitos nem zeros.
-    return await readSheet(conteudo, { parseNumber: (texto: string) => texto });
+    grande = tamanhoDescompactado(conteudo) > LIMITE_XLSX_DESCOMPACTADO;
+  } catch {
+    throw new ErroPlanilha('Não foi possível ler o arquivo .xlsx. Abra no Excel, salve de novo e tente outra vez.');
+  }
+  if (grande) throw new ErroPlanilha('A planilha descompactada é grande demais (mais de 50 MB). Divida o arquivo.');
+  try {
+    // Números como texto: EAN e CNPJ não perdem dígitos nem zeros. O XLSX guarda decimais sempre com "." ("0.125",
+    // "12.300000000000001"); trocar por "," evita que `interpretarValor` leia "12.345" como milhar (12345,00).
+    return await readSheet(conteudo, { parseNumber: (texto: string) => (texto.includes('.') ? texto.replace('.', ',') : texto) });
   } catch {
     throw new ErroPlanilha('Não foi possível ler o arquivo .xlsx. Abra no Excel, salve de novo e tente outra vez.');
   }
