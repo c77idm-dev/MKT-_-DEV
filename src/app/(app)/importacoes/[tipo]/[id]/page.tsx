@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ALERTA_ATENCAO, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, CARTAO, LINK_VOLTAR, ROTULO } from '@/components/estilos';
+import { ALERTA_ATENCAO, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CARTAO, LINK_VOLTAR } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { obterDefinicao } from '@/modules/importacao/definicoes';
@@ -75,68 +75,53 @@ export default async function PaginaImportacao({ params }: { params: Promise<{ t
         </p>
       </div>
 
-      <ImportacaoInterativa>
-      <section aria-labelledby="titulo-colunas" className={`${CARTAO} flex flex-col gap-3`}>
-        <h2 id="titulo-colunas" className="text-base font-bold">
-          1. Colunas da planilha
-        </h2>
-        <p className="text-sm text-texto-2">Para cada campo do sistema, escolha a coluna da planilha. O que parece igual já vem sugerido.</p>
-        <FormularioColunas acao={definirMapeamentoAcao.bind(null, def.tipo, imp.id)}>
-          <div className="grid gap-3 md:grid-cols-2">
-            {def.campos.map((campo) => (
-              <div key={campo.chave} className="flex flex-col gap-1.5">
-                <label htmlFor={`campo-${campo.chave}`} className={ROTULO}>
-                  {campo.rotulo}
-                  {campo.obrigatorio ? ' (obrigatório)' : ''}
-                </label>
-                <select id={`campo-${campo.chave}`} name={`campo:${campo.chave}`} defaultValue={mapeamento[campo.chave] ?? ''} className={CAMPO}>
-                  <option value="">Não importar</option>
-                  {imp.cabecalhos.map((cabecalho, i) => (
-                    <option key={cabecalho} value={cabecalho}>
-                      {cabecalho}
-                      {exemplo[i] ? ` (ex.: ${exemplo[i].slice(0, 30)})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
-        </FormularioColunas>
-      </section>
+      <ImportacaoInterativa chaves={def.campos.map((c) => c.chave)} mapeamento={mapeamento}>
+        <section aria-labelledby="titulo-colunas" className={`${CARTAO} flex flex-col gap-3`}>
+          <h2 id="titulo-colunas" className="text-base font-bold">
+            1. Colunas da planilha
+          </h2>
+          <p className="text-sm text-texto-2">Para cada campo do sistema, escolha a coluna da planilha. O que parece igual já vem sugerido.</p>
+          <FormularioColunas
+            campos={def.campos.map((c) => ({ chave: c.chave, rotulo: c.rotulo, obrigatorio: c.obrigatorio }))}
+            cabecalhos={imp.cabecalhos}
+            exemplo={exemplo}
+            acao={definirMapeamentoAcao.bind(null, def.tipo, imp.id)}
+          />
+        </section>
 
-      <section aria-labelledby="titulo-previa" className="flex flex-col gap-3">
-        <h2 id="titulo-previa" className="text-base font-bold">
-          2. Prévia
-        </h2>
-        {previa.faltando.length > 0 ? (
-          <p className={ALERTA_ATENCAO}>Escolha a coluna de: {previa.faltando.join(', ')}.</p>
-        ) : (
-          <>
-            <p className="text-[15px]">
-              <strong>{previa.validas}</strong> {previa.validas === 1 ? 'linha pronta' : 'linhas prontas'} para importar ·{' '}
-              <strong>{previa.comErro}</strong> com erro (serão ignoradas)
-            </p>
-            <CartoesPrevia campos={camposMapeados} linhas={linhasOrdenadas.slice(0, LIMITE_PREVIA)} />
-            {linhasOrdenadas.length > LIMITE_PREVIA && (
-              <p className="text-sm text-texto-2">
-                Mostrando {LIMITE_PREVIA} de {linhasOrdenadas.length} linhas. Todas foram verificadas.
+        <section aria-labelledby="titulo-previa" className="flex flex-col gap-3">
+          <h2 id="titulo-previa" className="text-base font-bold">
+            2. Prévia
+          </h2>
+          {previa.faltando.length > 0 ? (
+            <p className={ALERTA_ATENCAO}>Escolha a coluna de: {previa.faltando.join(', ')}.</p>
+          ) : (
+            <>
+              <p className="text-[15px]">
+                <strong>{previa.validas}</strong> {previa.validas === 1 ? 'linha pronta' : 'linhas prontas'} para importar ·{' '}
+                <strong>{previa.comErro}</strong> com erro (serão ignoradas)
               </p>
-            )}
-          </>
-        )}
-      </section>
+              <CartoesPrevia campos={camposMapeados} linhas={linhasOrdenadas.slice(0, LIMITE_PREVIA)} />
+              {linhasOrdenadas.length > LIMITE_PREVIA && (
+                <p className="text-sm text-texto-2">
+                  Mostrando {LIMITE_PREVIA} de {linhasOrdenadas.length} linhas. Todas foram verificadas.
+                </p>
+              )}
+            </>
+          )}
+        </section>
 
-      {/* "contents": o rodapé preso (sticky) precisa da página inteira como área, não de um cartão curto. */}
-      <section aria-labelledby="titulo-confirmar" className="contents">
-        <h2 id="titulo-confirmar" className="text-base font-bold">
-          3. Confirmar
-        </h2>
-        <FormularioConfirmacao
-          acao={confirmarImportacaoAcao.bind(null, def.tipo, imp.id)}
-          mapeamento={mapeamento}
-          habilitado={previa.faltando.length === 0 && previa.validas > 0}
-        />
-      </section>
+        {/* "contents": o rodapé preso (sticky) precisa da página inteira como área, não de um cartão curto. */}
+        <section aria-labelledby="titulo-confirmar" className="contents">
+          <h2 id="titulo-confirmar" className="text-base font-bold">
+            3. Confirmar
+          </h2>
+          <FormularioConfirmacao
+            acao={confirmarImportacaoAcao.bind(null, def.tipo, imp.id)}
+            mapeamento={mapeamento}
+            habilitado={previa.faltando.length === 0 && previa.validas > 0}
+          />
+        </section>
       </ImportacaoInterativa>
     </div>
   );

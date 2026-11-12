@@ -24,11 +24,10 @@ export function FormularioConfirmacao({ acao, mapeamento, habilitado }: Props) {
         <input key={chave} type="hidden" name={`campo:${chave}`} value={cabecalho ?? ''} />
       ))}
       <ListaErros erros={estado.erros} />
-      {atualizando && (
-        <p aria-live="polite" className="text-sm text-texto-2">
-          Atualizando a prévia…
-        </p>
-      )}
+      {/* Sempre presente: leitores de tela anunciam o texto quando ele aparece, e o layout não pula. */}
+      <p aria-live="polite" className="min-h-5 text-sm text-texto-2">
+        {atualizando ? 'Atualizando a prévia…' : ''}
+      </p>
       {!habilitado && !atualizando && <p className="text-sm text-texto-2">Ajuste as colunas até haver pelo menos uma linha pronta.</p>}
       <RodapeFormulario>
         <button type="submit" disabled={!habilitado || pendente || atualizando} className={BOTAO_PRIMARIO}>
