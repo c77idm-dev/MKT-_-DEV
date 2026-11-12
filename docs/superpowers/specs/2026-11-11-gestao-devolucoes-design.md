@@ -27,7 +27,7 @@ Controlar o ciclo físico e fiscal das devoluções vindas dos marketplaces (Mer
 - Integração automática com Amazon, Shopee, Magalu, TikTok Shop e Shein.
 - Integração com o ERP **Bitbrain**. O conector fica reservado, e até lá vale a ponte por exportação de XML (§8.7).
 - Rastreio automático nos Correios e transportadoras para os canais manuais.
-- Mapeamento de colunas por canal na importação de planilha (a v1 usa um modelo padrão).
+- (Saiu desta lista em 2026-11-12: o mapeamento de colunas na importação agora faz parte da v1; veja §6.8.)
 - App nativo, carta de correção (CC-e) e inutilização de numeração pelo sistema.
 
 ## 3. Decisões tomadas
@@ -245,6 +245,13 @@ As etapas e os nomes na tela seguem o organograma do PDF.
   - **grade das Fotos 1 a 4** (miniaturas com ✓ e o próximo espaço tracejado) e o Vídeo de Prova logo abaixo
   - campos S/N, Lote e Validade, e o botão "Continuar" fixo no rodapé
 - Áreas de toque com no mínimo 44 px. Contraste de texto de no mínimo 4,5:1.
+- **Mobile-first, em TODO o sistema (decidido em 2026-11-12):** "o sistema é focado para celular, então ele tem que ficar perfeito para o usuário final". Toda tela é desenhada e testada primeiro no celular (390×844) e depois se adapta ao computador.
+  - **Sem rolagem lateral no celular:** as listas viram cartões, e os formulários ficam em uma coluna, com o botão principal sempre ao alcance.
+  - **Navegação no celular:** uma barra fixa embaixo, com ícones e só as abas do perfil. No computador, as abas ficam no topo.
+  - **Quadro de fluxo no celular:** seletor de etapa no topo, com as 5 etapas e suas contagens, e os cartões da etapa escolhida abaixo. No computador, as 5 colunas.
+  - **Busca Avançada no celular:** atrás de um botão "Filtros", com os filtros ativos visíveis.
+  - **Instalável na tela inicial (PWA):** tem manifesto e ícones já na Fase 1. O funcionamento offline vem na Fase 2.
+  - **Testes ponta a ponta:** rodam também num celular simulado, e conferem que a página não rola de lado.
 
 ### 6.0.1 Painel: alertas
 - Alertas:
@@ -310,6 +317,12 @@ Regras da conferência:
   - Produtos: `sku, ean, descricao, cnpj_fornecedor, ncm, custo, unidade`.
   - Fornecedores: `razao_social, cnpj, ie, logradouro, numero, complemento, bairro, cidade, uf, cep, contato_sac, email_sac`.
   - A importação atualiza o que já existe pelo SKU (produtos) ou pelo CNPJ (fornecedores).
+  - **Mapeamento de colunas (decidido em 2026-11-12):**
+    - Toda importação (produtos, fornecedores e devoluções da §6.1) aceita a planilha do jeito que ela está.
+    - Depois do upload, uma tela mostra as colunas encontradas e o usuário escolhe qual delas corresponde a cada campo do sistema. O sistema já sugere a correspondência quando o nome se parece (ex.: "Código" → `sku`, "Código de barras"/"GTIN" → `ean`).
+    - O mapeamento escolhido fica salvo por tipo de importação, para a próxima vez.
+    - Os nomes de coluna listados acima são só o modelo sugerido.
+- **Usuários (Gestor, Fase 1):** listar, criar (nome, e-mail, perfil, senha inicial), mudar o perfil e desativar ou reativar. Desativar encerra as sessões do usuário na hora.
 - **Configurações (Gestor):** dados da empresa, regime tributário, regras fiscais, série e ambiente da NF-e, conexão com o ML, obrigatoriedade do vídeo, prazo de guarda das mídias, armazenamento e usuários.
 - **Falhas (Gestor):** tarefas de fundo que esgotaram as tentativas, com o motivo e o botão "tentar de novo".
 
