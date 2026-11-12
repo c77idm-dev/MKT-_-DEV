@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ETAPAS } from '../../src/modules/devolucoes/etapas';
-import { entrar, entrarComo, semRolagemLateral } from './apoio';
+import { ehCelular, entrar, entrarComo, semRolagemLateral } from './apoio';
 import { USUARIOS_E2E } from './dados';
 
 test('manda para o login quem não está autenticado', async ({ page }) => {
@@ -14,12 +14,17 @@ test('mostra erro com senha errada', async ({ page }) => {
   await expect(page.getByRole('alert').filter({ hasText: 'E-mail' })).toHaveText('E-mail ou senha incorretos.');
 });
 
-test('gestor entra, vê as 5 etapas do PDF e todas as abas, e sai', async ({ page }) => {
+test('gestor entra, vê as 5 etapas do PDF e todas as abas, e sai', async ({ page }, testInfo) => {
   await entrarComo(page, USUARIOS_E2E.gestor);
   await semRolagemLateral(page);
 
   for (const etapa of ETAPAS) {
-    await expect(page.getByRole('heading', { level: 2, name: etapa.titulo })).toBeVisible();
+    if (ehCelular(testInfo)) {
+      // No celular as etapas são os botões do seletor "Etapas", com o nome do PDF no nome acessível.
+      await expect(page.getByRole('navigation', { name: 'Etapas' }).getByRole('link', { name: etapa.titulo })).toBeVisible();
+    } else {
+      await expect(page.getByRole('heading', { level: 2, name: etapa.titulo })).toBeVisible();
+    }
   }
   const nav = page.getByRole('navigation', { name: 'Seções' });
   await expect(nav.getByRole('link')).toHaveText([
