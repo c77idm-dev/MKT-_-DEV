@@ -535,7 +535,9 @@ Ordem: **P → (2, 3, 4 em paralelo) → merge 2 → merge 3 → merge 4 → Fas
 - **D16.** A divisão Estoque Bom / Estoque Problema da coluna 4 é da Fase 4 (spec §6.4), e não da 2.
 - **D17.** Os falsos (ML, Focus e armazenamento em memória) ficam em `src/`, e `lerEnv` recusa `falso` em produção.
 
-## 9. Perguntas em aberto para o usuário
+## 9. Perguntas que estavam em aberto (decididas)
 
-1. **Contas reais só no fim:** os critérios de pronto da spec §14 pedem contas reais (Fase 3: "devolução real do ML entra sozinha"; Fases 4 e 5: "NF autorizada em homologação"). O teste real da API do ML (§7.6) também não foi feito (não há `tests/fixtures/ml`). Proposta: as Fases 3, 4 e 5 terminam com os falsos (montados a partir da documentação oficial), e uma etapa "Ligação das contas reais" antes da Fase 6 cumpre esses critérios e ajusta o mapeamento do ML às respostas reais (pode haver retrabalho no conector). Confirma?
-2. **Mídia em produção antes do B2:** com 100 devoluções por dia, os vídeos enchem os ~13 GB livres da VPS em poucos dias. Proposta: a Fase 2 pode ir para a VPS com `ARMAZENAMENTO=disco` só para teste na bancada, e o uso diário começa depois que a conta B2 (ou R2) for ligada. Confirma, ou prefere criar a conta B2 já na Fase 2?
+O usuário já tinha decidido as duas: "constroi ele inteiro e deixa para conectarmos no final".
+
+1. **Contas reais só no fim: SIM.** As Fases 3, 4 e 5 terminam com os falsos, montados a partir da documentação oficial. Uma etapa **"Ligação das contas reais"**, antes da Fase 6, cumpre os critérios de pronto da spec §14 que dependem de contas reais: devolução real do ML e NF autorizada em homologação. Essa etapa também ajusta o mapeamento do ML às respostas reais do teste §7.6. Os conectores devem isolar o mapeamento (funções puras sobre o JSON de entrada), para esse ajuste ficar barato.
+2. **Mídia antes do B2: disco só para teste.** A Fase 2 vai para a VPS com `ARMAZENAMENTO=disco`, só para teste na bancada. O uso diário começa quando a conta B2 (ou R2) for ligada, na mesma etapa de ligação das contas. A tela de Configurações mostra um aviso quando o provedor é `disco` em produção.
