@@ -1,4 +1,4 @@
-import { formatarCnpj } from '@/modules/catalogo/documentos';
+import { formatarCnpj, somenteAlfanumericos } from '@/modules/catalogo/documentos';
 import { interpretarLinhaFornecedor, upsertFornecedores } from '@/modules/catalogo/fornecedores';
 import { dadosOuErro, type DefinicaoImportacao } from '../definicao';
 
@@ -28,9 +28,17 @@ export const definicaoFornecedores: DefinicaoImportacao = {
     const interpretadas = linhas.map((linha) => ({ linha, ...interpretarLinhaFornecedor(linha.valores) }));
     // Chave repetida na mesma planilha: vale a última linha; as anteriores viram erro (o upsert não aceita a mesma chave duas vezes).
     const ultimaLinha = new Map<string, number>();
-    for (const { linha, dados } of interpretadas) if (dados) ultimaLinha.set(dados.cnpj, linha.numeroLinha);
+    // A chave vem do texto da linha (mesmo inválida): uma duplicata inválida depois também derruba a ocorrência válida anterior.
+    const chaveDe = (valores: Record<string, string>) => {
+      const limpo = somenteAlfanumericos(valores.cnpj ?? '');
+      return /^\d{12,13}$/.test(limpo) ? limpo.padStart(14, '0') : limpo;
+    };
+    for (const { linha } of interpretadas) {
+      const chave = chaveDe(linha.valores);
+      if (chave) ultimaLinha.set(chave, linha.numeroLinha);
+    }
     return interpretadas.map(({ linha, dados, erros }) => {
-      const ultima = dados ? ultimaLinha.get(dados.cnpj) : undefined;
+      const ultima = dados ? ultimaLinha.get(chaveDe(linha.valores)) : undefined;
       if (dados && ultima !== undefined && ultima !== linha.numeroLinha) {
         erros.push(`linha repetida: o CNPJ ${formatarCnpj(dados.cnpj)} aparece de novo na linha ${ultima}`);
       }

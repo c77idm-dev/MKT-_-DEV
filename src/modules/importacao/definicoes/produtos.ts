@@ -1,4 +1,4 @@
-import { formatarCnpj } from '@/modules/catalogo/documentos';
+import { formatarCnpj, normalizarSku } from '@/modules/catalogo/documentos';
 import { idsDosFornecedores } from '@/modules/catalogo/fornecedores';
 import { interpretarLinhaProduto, upsertProdutos } from '@/modules/catalogo/produtos';
 import { dadosOuErro, type DefinicaoImportacao } from '../definicao';
@@ -26,13 +26,18 @@ export const definicaoProdutos: DefinicaoImportacao = {
     const existentes = await idsDosFornecedores(db, cnpjs);
     // Chave repetida na mesma planilha: vale a última linha; as anteriores viram erro (o upsert não aceita a mesma chave duas vezes).
     const ultimaLinha = new Map<string, number>();
-    for (const { linha, dados } of interpretadas) if (dados) ultimaLinha.set(dados.sku, linha.numeroLinha);
+    // A chave vem do texto da linha (mesmo inválida): uma duplicata inválida depois também derruba a ocorrência válida anterior.
+    const chaveDe = (valores: Record<string, string>) => normalizarSku(valores.sku ?? '');
+    for (const { linha } of interpretadas) {
+      const chave = chaveDe(linha.valores);
+      if (chave) ultimaLinha.set(chave, linha.numeroLinha);
+    }
     return interpretadas.map(({ linha, dados, erros }) => {
       if (dados) {
         if (dados.cnpjFornecedor && !existentes.has(dados.cnpjFornecedor)) {
           erros.push(`Fornecedor não cadastrado (CNPJ ${formatarCnpj(dados.cnpjFornecedor)}). Importe os fornecedores antes.`);
         }
-        const ultima = ultimaLinha.get(dados.sku);
+        const ultima = ultimaLinha.get(chaveDe(linha.valores));
         if (ultima !== undefined && ultima !== linha.numeroLinha) {
           erros.push(`linha repetida: o SKU ${dados.sku} aparece de novo na linha ${ultima}`);
         }

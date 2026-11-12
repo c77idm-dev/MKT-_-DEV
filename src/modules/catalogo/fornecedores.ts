@@ -94,12 +94,14 @@ export async function salvarFornecedor(db: DbOuTx, dados: DadosFornecedor, id?: 
 
 /** Importação: atualiza pelo CNPJ (spec §6.8). Célula vazia mantém o valor atual. */
 export async function upsertFornecedores(db: DbOuTx, lista: DadosFornecedor[]): Promise<{ criados: number; atualizados: number }> {
+  // Ordem fixa por CNPJ: duas importações simultâneas travam as linhas na mesma ordem, sem deadlock.
+  const ordenada = [...lista].sort((a, b) => (a.cnpj < b.cnpj ? -1 : a.cnpj > b.cnpj ? 1 : 0));
   let criados = 0;
   let atualizados = 0;
-  for (let i = 0; i < lista.length; i += LOTE) {
+  for (let i = 0; i < ordenada.length; i += LOTE) {
     const linhas = await db
       .insert(fornecedores)
-      .values(lista.slice(i, i + LOTE))
+      .values(ordenada.slice(i, i + LOTE))
       .onConflictDoUpdate({
         target: fornecedores.cnpj,
         set: {

@@ -1,7 +1,7 @@
-import { asc, count, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { ehViolacaoDeUnicidade } from '@/db/erros';
-import { fornecedores, produtos } from '@/db/schema';
+import { fornecedores, itensDevolucao, produtos } from '@/db/schema';
 import { FOI_INSERIDO, manterSeVazio } from '@/db/sql';
 import { escaparLike } from '@/lib/texto';
 import { ehUuid } from '@/lib/uuid';
@@ -80,21 +80,41 @@ export async function salvarProduto(db: DbOuTx, dados: DadosProduto, id?: string
     unidade: dados.unidade,
   };
   try {
-    if (id) {
-      const [atualizado] = await db
-        .update(produtos)
-        .set({ ...valores, atualizadoEm: new Date() })
-        .where(eq(produtos.id, id))
-        .returning({ id: produtos.id });
-      if (!atualizado) throw new ErroCadastro('Produto não encontrado');
-      return atualizado.id;
-    }
-    const [criado] = await db.insert(produtos).values(valores).returning({ id: produtos.id });
-    return criado.id;
+    // Mesma transação da gravação: os itens de devoluções criadas antes do cadastro passam a apontar para o produto.
+    return await db.transaction(async (tx) => {
+      let produtoId: string;
+      if (id) {
+        const [atualizado] = await tx
+          .update(produtos)
+          .set({ ...valores, atualizadoEm: new Date() })
+          .where(eq(produtos.id, id))
+          .returning({ id: produtos.id });
+        if (!atualizado) throw new ErroCadastro('Produto não encontrado');
+        produtoId = atualizado.id;
+      } else {
+        const [criado] = await tx.insert(produtos).values(valores).returning({ id: produtos.id });
+        produtoId = criado.id;
+      }
+      await ligarItensAosProdutos(tx, [dados.sku]);
+      return produtoId;
+    });
   } catch (erro) {
     if (ehViolacaoDeUnicidade(erro)) throw new ErroCadastro(`Já existe um produto com o SKU ${dados.sku}`);
     throw erro;
   }
+}
+
+/**
+ * Itens de devolução criados quando o SKU ainda não estava no catálogo ficam sem `produto_esperado_id`; ao cadastrar o produto,
+ * ligamos esses itens a ele (a busca por fornecedor/EAN e o detalhe dependem desse vínculo). Chamar na transação da gravação.
+ */
+async function ligarItensAosProdutos(db: DbOuTx, skus: string[]): Promise<void> {
+  if (skus.length === 0) return;
+  await db
+    .update(itensDevolucao)
+    .set({ produtoEsperadoId: produtos.id })
+    .from(produtos)
+    .where(and(isNull(itensDevolucao.produtoEsperadoId), eq(itensDevolucao.sku, produtos.sku), inArray(produtos.sku, skus)));
 }
 
 /** Importação: atualiza pelo SKU (spec §6.8). Célula vazia mantém o valor atual. */
@@ -103,40 +123,46 @@ export async function upsertProdutos(db: DbOuTx, lista: DadosProduto[]): Promise
   const ids = await idsDosFornecedores(db, cnpjs);
   const faltando = cnpjs.find((c) => !ids.has(c));
   if (faltando) throw new ErroCadastro(`Fornecedor não cadastrado (CNPJ ${formatarCnpj(faltando)})`);
-  let criados = 0;
-  let atualizados = 0;
-  for (let i = 0; i < lista.length; i += LOTE) {
-    const valores = lista.slice(i, i + LOTE).map((p) => ({
-      sku: p.sku,
-      ean: p.ean,
-      descricao: p.descricao,
-      fornecedorId: p.cnpjFornecedor ? (ids.get(p.cnpjFornecedor) ?? null) : null,
-      ncm: p.ncm,
-      custo: p.custo,
-      unidade: p.unidade,
-    }));
-    const linhas = await db
-      .insert(produtos)
-      .values(valores)
-      .onConflictDoUpdate({
-        target: produtos.sku,
-        set: {
-          descricao: manterSeVazio('produtos', 'descricao'),
-          ean: manterSeVazio('produtos', 'ean'),
-          fornecedorId: manterSeVazio('produtos', 'fornecedor_id'),
-          ncm: manterSeVazio('produtos', 'ncm'),
-          custo: manterSeVazio('produtos', 'custo'),
-          unidade: manterSeVazio('produtos', 'unidade'),
-          atualizadoEm: new Date(),
-        },
-      })
-      .returning({ inserido: FOI_INSERIDO });
-    for (const l of linhas) {
-      if (l.inserido) criados++;
-      else atualizados++;
+  // Ordem fixa por SKU: duas importações simultâneas travam as linhas na mesma ordem, sem deadlock.
+  const ordenada = [...lista].sort((a, b) => (a.sku < b.sku ? -1 : a.sku > b.sku ? 1 : 0));
+  return db.transaction(async (tx) => {
+    let criados = 0;
+    let atualizados = 0;
+    for (let i = 0; i < ordenada.length; i += LOTE) {
+      const lote = ordenada.slice(i, i + LOTE);
+      const valores = lote.map((p) => ({
+        sku: p.sku,
+        ean: p.ean,
+        descricao: p.descricao,
+        fornecedorId: p.cnpjFornecedor ? (ids.get(p.cnpjFornecedor) ?? null) : null,
+        ncm: p.ncm,
+        custo: p.custo,
+        unidade: p.unidade,
+      }));
+      const linhas = await tx
+        .insert(produtos)
+        .values(valores)
+        .onConflictDoUpdate({
+          target: produtos.sku,
+          set: {
+            descricao: manterSeVazio('produtos', 'descricao'),
+            ean: manterSeVazio('produtos', 'ean'),
+            fornecedorId: manterSeVazio('produtos', 'fornecedor_id'),
+            ncm: manterSeVazio('produtos', 'ncm'),
+            custo: manterSeVazio('produtos', 'custo'),
+            unidade: manterSeVazio('produtos', 'unidade'),
+            atualizadoEm: new Date(),
+          },
+        })
+        .returning({ inserido: FOI_INSERIDO });
+      for (const l of linhas) {
+        if (l.inserido) criados++;
+        else atualizados++;
+      }
+      await ligarItensAosProdutos(tx, lote.map((p) => p.sku));
     }
-  }
-  return { criados, atualizados };
+    return { criados, atualizados };
+  });
 }
 
 export async function listarProdutos(

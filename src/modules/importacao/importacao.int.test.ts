@@ -73,6 +73,36 @@ describe('importação de fornecedores', () => {
   });
 });
 
+describe('chave repetida com a última ocorrência inválida', () => {
+  it('fornecedores: a linha válida anterior não é importada em silêncio', async () => {
+    const def = definicao('fornecedores');
+    const imp = await enviar('fornecedores', ['Razão Social', 'CNPJ', 'UF'], [
+      ['Alfa Ltda', '11.222.333/0001-81', 'SP'],
+      ['Alfa de novo', '11222333000181', 'XX'],
+    ]);
+    const previa = await calcularPrevia(db, def, imp, await mapeamentoEfetivo(db, def, imp));
+    expect(previa.validas).toBe(0);
+    expect(previa.linhas.map((l) => l.erros)).toEqual([
+      ['linha repetida: o CNPJ 11.222.333/0001-81 aparece de novo na linha 3'],
+      ['UF inválida: XX'],
+    ]);
+  });
+
+  it('produtos: idem para o SKU', async () => {
+    const def = definicao('produtos');
+    const imp = await enviar('produtos', ['Código', 'Descrição', 'EAN'], [
+      ['FONE-01', 'Fone', ''],
+      ['fone-01', 'Fone de novo', '123'],
+    ]);
+    const previa = await calcularPrevia(db, def, imp, await mapeamentoEfetivo(db, def, imp));
+    expect(previa.validas).toBe(0);
+    expect(previa.linhas.map((l) => l.erros)).toEqual([
+      ['linha repetida: o SKU FONE-01 aparece de novo na linha 3'],
+      ['EAN inválido: 123'],
+    ]);
+  });
+});
+
 describe('importação de produtos', () => {
   it('acusa fornecedor não cadastrado e SKU repetido', async () => {
     await criarFornecedorTeste(db, { cnpj: '11222333000181' });

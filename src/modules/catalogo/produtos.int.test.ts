@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
-import { criarFornecedorTeste } from '../../../tests/helpers/fabricas';
+import { buscarDevolucoes } from '@/modules/devolucoes/busca';
+import { obterDetalhe } from '@/modules/devolucoes/detalhe';
+import { criarDevolucaoTeste, criarFornecedorTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { ErroCadastro } from './erros';
 import {
   idsDosProdutos,
@@ -98,5 +100,35 @@ describe('produtos no banco', () => {
     expect((await listarProdutos(db)).linhas.map((p) => p.sku)).toEqual(['CABO-02', 'FONE-01']);
     expect(await idsDosProdutos(db, ['FONE-01', 'NAO-EXISTE'])).toEqual(new Map([['FONE-01', id]]));
     expect(await idsDosProdutos(db, [])).toEqual(new Map());
+  });
+});
+
+describe('ligação dos itens já criados aos produtos cadastrados depois', () => {
+  async function devolucaoComSkuDesconhecido() {
+    const operador = await criarUsuarioTeste(db, 'OPERADOR');
+    return criarDevolucaoTeste(db, operador, { itens: [{ sku: 'NOVO-01', quantidade: 2 }, { sku: 'OUTRO-9', quantidade: 1 }] });
+  }
+
+  it('upsertProdutos liga os itens sem produto: a busca por fornecedor e o detalhe passam a achar o produto', async () => {
+    const d = await devolucaoComSkuDesconhecido();
+    await criarFornecedorTeste(db, { razaoSocial: 'Beta Ltda', cnpj: '11222333000181' });
+    expect((await buscarDevolucoes(db, { fornecedor: 'Beta' })).devolucoes).toHaveLength(0);
+
+    await upsertProdutos(db, [{ ...FONE, sku: 'NOVO-01', cnpjFornecedor: '11222333000181' }]);
+
+    expect((await buscarDevolucoes(db, { fornecedor: 'Beta' })).devolucoes.map((x) => x.codigo)).toEqual([d.codigo]);
+    const detalhe = await obterDetalhe(db, d.codigo);
+    expect(detalhe?.itens.map((i) => [i.sku, i.descricao])).toEqual([
+      ['NOVO-01', 'Fone Bluetooth'],
+      ['NOVO-01', 'Fone Bluetooth'],
+      ['OUTRO-9', null],
+    ]);
+  });
+
+  it('salvarProduto (criação) também liga os itens sem produto', async () => {
+    const d = await devolucaoComSkuDesconhecido();
+    await salvarProduto(db, { ...FONE, sku: 'OUTRO-9', descricao: 'Cabo USB' });
+    const detalhe = await obterDetalhe(db, d.codigo);
+    expect(detalhe?.itens.map((i) => i.descricao)).toEqual([null, null, 'Cabo USB']);
   });
 });
