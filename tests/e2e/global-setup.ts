@@ -11,6 +11,10 @@ const ROTAS_AQUECIMENTO = [
   '/fluxo',
   '/manifest.webmanifest',
   '/icones/192',
+  '/cadastros/produtos',
+  '/cadastros/produtos/novo',
+  '/cadastros/fornecedores',
+  '/cadastros/fornecedores/novo',
 ];
 
 export default async function globalSetup() {
