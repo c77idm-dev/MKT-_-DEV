@@ -20,3 +20,16 @@ describe('NavAbas', () => {
     expect(screen.getByRole('link', { name: 'Fluxo' }).getAttribute('aria-current')).toBeNull();
   });
 });
+
+describe('NavAbas no celular', () => {
+  it('cada aba tem ícone e nome, e a navegação "Seções" é uma barra fixa', () => {
+    mocks.caminho = '/fluxo';
+    render(<NavAbas abas={ABAS} />);
+    const links = screen.getAllByRole('link');
+    expect(links.map((l) => l.textContent)).toEqual(['Fluxo', 'Lotes e Remessas']);
+    for (const link of links) {
+      expect(link.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    }
+    expect(screen.getByRole('navigation', { name: 'Seções' }).className).toContain('fixed');
+  });
+});

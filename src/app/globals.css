@@ -29,3 +29,36 @@ body {
   background: var(--color-fundo);
   color: var(--color-texto);
 }
+
+/* Mobile-first (Fase 1): espaço para a barra de abas fixa embaixo e para a área segura do celular.
+   Cada utilitário já volta ao normal a partir de md (48rem), sem depender da ordem das classes. */
+@utility espaco-barra {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  @media (width >= 48rem) {
+    padding-bottom: 1.25rem;
+  }
+}
+
+@utility acima-barra {
+  bottom: calc(4rem + env(safe-area-inset-bottom));
+  @media (width >= 48rem) {
+    bottom: 0;
+  }
+}
+
+@utility seguro-inferior {
+  padding-bottom: env(safe-area-inset-bottom);
+  @media (width >= 48rem) {
+    padding-bottom: 0;
+  }
+}
+
+@utility painel-inferior {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+/* Foco visível para teclado e leitor de código USB (pendência da Fase 0). */
+:focus-visible {
+  outline: 2px solid var(--color-destaque);
+  outline-offset: 2px;
+}

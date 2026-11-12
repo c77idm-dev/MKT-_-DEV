@@ -11,7 +11,11 @@ export default defineConfig({
   workers: 1,
   globalSetup: './tests/e2e/global-setup.ts',
   use: { baseURL: `http://localhost:${PORTA}`, trace: 'retain-on-failure' },
-  projects: [{ name: 'computador', use: { ...devices['Desktop Chrome'] } }],
+  // Mobile-first: todo spec roda no computador e no celular (390×844, Chromium).
+  projects: [
+    { name: 'computador', use: { ...devices['Desktop Chrome'] } },
+    { name: 'celular', use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } } },
+  ],
   webServer: {
     command: `npm run dev -- --port ${PORTA}`,
     url: `http://localhost:${PORTA}/api/saude`,
