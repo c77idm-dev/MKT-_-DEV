@@ -11,7 +11,7 @@ Atualizado em 12/11/2026. Mantenha este arquivo em dia ao fechar cada etapa e en
     - Fase 2 (com a "Parte A", a base comum): [plans/2026-11-12-fase-2-conferencia.md](plans/2026-11-12-fase-2-conferencia.md)
     - Fase 3: [plans/2026-11-12-fase-3-mercado-livre.md](plans/2026-11-12-fase-3-mercado-livre.md)
     - Fase 4: [plans/2026-11-12-fase-4-fiscal.md](plans/2026-11-12-fase-4-fiscal.md)
-  - Se um desses arquivos ainda não estiver no repositório, o plano não terminou de ser escrito e precisa ser feito de novo, a partir do contrato.
+  - Um plano está incompleto se tiver um marcador `<!-- CONTINUA -->` ou se ainda não estiver no repositório. Nesse caso, continue a partir da última tarefa escrita, seguindo o contrato.
 - **Próximos passos, em ordem:**
   1. Executar a **Parte A da Fase 2** no `main`.
   2. Criar as worktrees e os bancos (contrato §6).
