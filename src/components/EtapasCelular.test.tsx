@@ -52,4 +52,9 @@ describe('EtapasCelular', () => {
     expect(screen.getByText('Lotes chegam depois.')).toBeTruthy();
     expect(screen.queryByText('Nenhuma devolução nesta etapa')).toBeNull();
   });
+
+  it('sem colunas, não renderiza nada (e não quebra)', () => {
+    const { container } = render(<EtapasCelular colunas={[]} selecionada={1} />);
+    expect(container.firstChild).toBeNull();
+  });
 });

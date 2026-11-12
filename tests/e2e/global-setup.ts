@@ -24,6 +24,8 @@ const ROTAS_AQUECIMENTO = [
   '/fluxo/devolucoes/nova',
   '/fluxo/devolucoes/DEV-000000',
   '/fluxo/recebimento',
+  '/configuracoes',
+  '/configuracoes/usuarios',
 ];
 
 export default async function globalSetup() {

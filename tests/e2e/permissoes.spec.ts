@@ -25,3 +25,9 @@ test('operador não abre a importação de produtos (HTTP 404)', async ({ page }
   expect(resposta?.status()).toBe(404);
   await expect(page.getByRole('heading', { name: 'Página não encontrada' })).toBeVisible();
 });
+
+test('operador não abre a tela de Usuários (HTTP 404)', async ({ page }) => {
+  await entrarComo(page, USUARIOS_E2E.operador);
+  const resposta = await page.goto('/configuracoes/usuarios');
+  expect(resposta?.status()).toBe(404);
+});

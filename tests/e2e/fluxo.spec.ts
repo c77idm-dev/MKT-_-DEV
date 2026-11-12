@@ -44,6 +44,8 @@ test('o quadro mostra a devolução nova na etapa 1 e a Busca Avançada do quadr
     // Etapa inválida na URL: não quebra e cai numa etapa válida.
     await page.goto('/fluxo?etapa=99');
     await expect(etapas.locator('[aria-current="page"]')).toHaveCount(1);
+    // Cai na primeira etapa com devoluções: a 1, onde a devolução criada acima está.
+    await expect(etapas.getByRole('link', { name: /^Pedidos Pendentes de Chegada/ })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { level: 1, name: 'Fluxo de devoluções' })).toBeVisible();
     await page.goto('/fluxo');
   } else {

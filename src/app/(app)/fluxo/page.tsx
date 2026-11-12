@@ -15,7 +15,8 @@ export const metadata: Metadata = { title: 'Fluxo · Gestão de Devoluções' };
 
 export default async function PaginaFluxo({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   const usuario = await exigirPermissao('ver_listas');
-  const pedida = Number(primeiroValor((await searchParams).etapa));
+  const textoEtapa = primeiroValor((await searchParams).etapa);
+  const pedida = /^\d+$/.test(textoEtapa) ? Number(textoEtapa) : 0;
   const quadro = await montarQuadro(obterDb());
   const colunas = quadro.map((c) => (c.numero === 5 ? { ...c, nota: NOTA_ETAPA_LOTES } : c));
   // Sem etapa válida na URL, o celular abre a primeira etapa que tem devoluções (ou a 1).

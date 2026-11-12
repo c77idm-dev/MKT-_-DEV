@@ -14,6 +14,14 @@ export class ErroEmailEmUso extends Error {
   }
 }
 
+/** Dado inválido no cadastro do usuário (mensagem pronta para a tela). */
+export class ErroDadosUsuario extends Error {
+  constructor(mensagem: string) {
+    super(mensagem);
+    this.name = 'ErroDadosUsuario';
+  }
+}
+
 const esquemaNovoUsuario = z.object({
   nome: z.string().trim().min(1, 'Informe o nome'),
   email: z.string().trim().toLowerCase().email('E-mail inválido'),
@@ -26,7 +34,7 @@ export type DadosNovoUsuario = { nome: string; email: string; senha: string; per
 export async function criarUsuario(db: DbOuTx, dados: DadosNovoUsuario): Promise<UsuarioSessao> {
   const resultado = esquemaNovoUsuario.safeParse(dados);
   if (!resultado.success) {
-    throw new Error(resultado.error.issues.map((i) => i.message).join('; '));
+    throw new ErroDadosUsuario(resultado.error.issues.map((i) => i.message).join('; '));
   }
   const d = resultado.data;
   const senhaHash = await gerarHashSenha(d.senha);

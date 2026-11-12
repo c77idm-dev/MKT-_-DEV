@@ -6,3 +6,7 @@ export const ROTULO_PERFIL: Record<Perfil, string> = {
   FISCAL: 'Fiscal',
   GESTOR: 'Gestor',
 };
+
+export function ehPerfil(texto: string): texto is Perfil {
+  return (PERFIS as readonly string[]).includes(texto);
+}

@@ -9,6 +9,7 @@ import { BOTAO_SECUNDARIO, VAZIO } from './estilos';
  */
 export function EtapasCelular({ colunas, selecionada }: { colunas: ColunaFluxo[]; selecionada: number }) {
   const atual = colunas.find((c) => c.numero === selecionada) ?? colunas[0];
+  if (!atual) return null;
   const cartoes = atual.cartoes ?? [];
   return (
     <div className="flex flex-col gap-3">

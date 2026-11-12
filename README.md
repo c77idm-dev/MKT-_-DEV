@@ -19,15 +19,31 @@ npm run usuario:criar -- --nome "Seu Nome" --email voce@empresa.com --perfil GES
 npm run dev                   # http://localhost:3000
 ```
 
+## O que existe hoje (Fases 0 e 1)
+Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, formulários em uma coluna, barra de abas embaixo, alvos de toque de 44 px, app instalável (PWA).
+- Login, três perfis (Operador, Fiscal, Gestor) e permissões por ação; barra de abas que muda conforme o perfil.
+- Quadro de Fluxo com as 5 etapas do PDF e Busca Avançada.
+- Devoluções: cadastro manual, importação por planilha agrupando por pedido (extra), histórico de eventos.
+- Recebimento com a câmera em tela cheia (leitor de código de barras) ou digitando o código.
+- Cadastros de produtos e fornecedores, com importação por planilha (extra).
+- Usuários (só o Gestor): criar, mudar o perfil, desativar e reativar. Desativar encerra as sessões na hora, e o sistema nunca fica sem um Gestor ativo (extra).
+
+Ainda não existem: conferência, lotes e remessas, contestações, integração com o Mercado Livre e relatórios (fases seguintes).
+
 ## Testes
 | Comando | O que roda |
 |---|---|
 | `npm test` | Regras e componentes (sem banco) |
 | `npm run test:int` | Integração com o banco de testes |
-| `npm run test:e2e` | Navegador de ponta a ponta (login, abas, permissões) |
+| `npm run test:e2e` | Navegador de ponta a ponta, em dois projetos: `computador` e `celular` (390×844) |
 | `npm run typecheck` / `npm run lint` | Tipos e estilo |
 
 Antes do primeiro `npm run test:e2e`, rode `npx playwright install chromium` (uma vez). Pare o `npm run dev` antes de rodar o e2e: o Next 16 usa um arquivo de trava no modo dev e não sobe dois servidores juntos.
+
+O `npm run dev` e o `npm run build` copiam antes o leitor de código de barras (`zxing_reader.wasm`) para `public/zxing/` (script `scripts/copiar-zxing.mjs`). A câmera só abre em HTTPS ou em `localhost`; para testar a leitura no celular, use o sistema publicado na VPS.
+
+## Publicar na VPS
+Siga [docs/operacao/deploy-vps.md](docs/operacao/deploy-vps.md). A importação de planilhas aceita arquivos de até 5 MB, então o nginx da VPS precisa de `client_max_body_size 6m;` (o padrão, 1 MB, recusa a planilha antes de chegar ao sistema).
 
 ## Teste real do Mercado Livre
 1. Preencha `ML_CLIENT_ID`, `ML_CLIENT_SECRET` e `ML_REDIRECT_URI` no `.env`.

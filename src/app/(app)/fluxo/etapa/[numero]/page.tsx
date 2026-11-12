@@ -12,6 +12,7 @@ import { buscarDevolucoes } from '@/modules/devolucoes/busca';
 import { statusDaEtapa } from '@/modules/devolucoes/dominio';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { lerFiltros } from '@/modules/devolucoes/filtros';
+import { NOTA_ETAPA_LOTES } from '@/modules/devolucoes/quadro';
 
 export const metadata: Metadata = { title: 'Etapa · Gestão de Devoluções' };
 
@@ -52,7 +53,7 @@ export default async function PaginaEtapa({ params, searchParams }: Props) {
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
         <h1 className="text-xl font-bold">{etapa.titulo}</h1>
-        <p className={VAZIO}>Os lotes por fornecedor aparecem aqui quando a conferência estiver pronta.</p>
+        <p className={VAZIO}>{NOTA_ETAPA_LOTES}</p>
       </div>
     );
   }

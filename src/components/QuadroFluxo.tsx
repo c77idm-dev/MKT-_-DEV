@@ -62,7 +62,7 @@ export function QuadroFluxo({ colunas }: { colunas: ColunaFluxo[] }) {
               {coluna.href && coluna.total > 0 && (
                 <Link
                   href={coluna.href}
-                  className="flex min-h-11 items-center justify-center rounded-lg text-sm font-semibold text-destaque hover:bg-superficie"
+                  className="flex min-h-11 items-center justify-center rounded-lg text-sm font-semibold text-destaque-escuro hover:bg-superficie"
                 >
                   {escondidas > 0 ? `+ ${rotuloTotal(escondidas)}` : 'Ver lista'}
                   {escondidas > 0 && ' '}
