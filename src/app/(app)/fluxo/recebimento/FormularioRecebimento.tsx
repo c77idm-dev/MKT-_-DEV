@@ -5,6 +5,7 @@ import { useActionState, useCallback, useEffect, useRef, type ReactNode } from '
 import { ALERTA_ERRO, BOTAO_PRIMARIO, CAMPO, ROTULO } from '@/components/estilos';
 import { useLeitorCamera } from '@/components/leitor/useLeitorCamera';
 import { registrarChegadaAcao, type EstadoRecebimento } from './acoes';
+import { podeAceitarLeitura } from './guarda';
 
 const INICIAL: EstadoRecebimento = { tipo: 'inicial' };
 
@@ -48,34 +49,63 @@ function LinksDevolucoes({ codigos }: { codigos: string[] }) {
   );
 }
 
-function Cartao({ tom, titulo, children }: { tom: 'sucesso' | 'aviso'; titulo: string; children: ReactNode }) {
-  const cores = tom === 'sucesso' ? 'border-bom bg-bom-suave text-bom' : 'border-atencao bg-atencao-suave text-atencao';
+/** Cartão grande do resultado. O texto visível fica escondido do leitor de tela porque a região aria-live (acima) já o anuncia. */
+function Cartao({ tom, titulo, mensagem, children }: { tom: Tom; titulo: string; mensagem: ReactNode; children?: ReactNode }) {
+  const cores =
+    tom === 'sucesso' ? 'border-bom bg-bom-suave text-bom' : tom === 'aviso' ? 'border-atencao bg-atencao-suave text-atencao' : 'border-erro bg-erro-suave text-erro';
   return (
-    <div className={`flex flex-col gap-1 rounded-2xl border-2 p-4 ${cores}`}>
-      <p className="flex items-center gap-2 text-xl font-bold">
+    <div data-testid="cartao-resultado" className={`flex flex-col gap-1 rounded-2xl border-2 p-4 ${cores}`}>
+      <p aria-hidden="true" className="flex items-center gap-2 text-xl font-bold">
         <Icone tom={tom} />
         {titulo}
+      </p>
+      <p aria-hidden="true" className="text-[15px] font-medium">
+        {mensagem}
       </p>
       {children}
     </div>
   );
 }
 
-/** Resposta grande e clara depois de cada leitura. A área fica sempre no DOM para o leitor de tela anunciar (aria-live). */
+function textoAnunciado(estado: EstadoRecebimento): string {
+  switch (estado.tipo) {
+    case 'sucesso':
+    case 'aviso':
+      return `${estado.titulo}. ${estado.mensagem}`;
+    case 'nao_encontrada':
+      return `Rastreio não encontrado. Nenhuma devolução com o rastreio ${estado.rastreio}.`;
+    case 'erro':
+      return estado.mensagem;
+    default:
+      return '';
+  }
+}
+
+/**
+ * Resposta grande e clara depois de cada leitura. A região aria-live fica sempre no DOM e leva só o título e a
+ * mensagem; links e botões ficam fora dela, para o leitor de tela não repetir controles.
+ */
 function Resultado({ estado, acao, pendente }: { estado: EstadoRecebimento; acao: (dados: FormData) => void; pendente: boolean }) {
   return (
-    <div role="status" aria-live="polite">
+    <>
+      <div role="status" aria-live="polite" className="sr-only">
+        {textoAnunciado(estado)}
+      </div>
       {(estado.tipo === 'sucesso' || estado.tipo === 'aviso') && (
-        <Cartao tom={estado.tipo} titulo={estado.titulo}>
-          <p className="text-[15px] font-medium">{estado.mensagem}</p>
+        <Cartao tom={estado.tipo} titulo={estado.titulo} mensagem={estado.mensagem}>
           <LinksDevolucoes codigos={estado.codigos} />
         </Cartao>
       )}
       {estado.tipo === 'nao_encontrada' && (
-        <Cartao tom="aviso" titulo="Rastreio não encontrado">
-          <p className="text-[15px] font-medium">
-            Nenhuma devolução com o rastreio <span className="break-all font-mono">{estado.rastreio}</span>.
-          </p>
+        <Cartao
+          tom="aviso"
+          titulo="Rastreio não encontrado"
+          mensagem={
+            <>
+              Nenhuma devolução com o rastreio <span className="break-all font-mono">{estado.rastreio}</span>.
+            </>
+          }
+        >
           <form action={acao} className="mt-2">
             <input type="hidden" name="intencao" value="criar_nao_identificada" />
             <input type="hidden" name="rastreio" value={estado.rastreio} />
@@ -85,13 +115,8 @@ function Resultado({ estado, acao, pendente }: { estado: EstadoRecebimento; acao
           </form>
         </Cartao>
       )}
-      {estado.tipo === 'erro' && (
-        <p className={`${ALERTA_ERRO} flex items-center gap-2 text-[15px]`}>
-          <Icone tom="erro" />
-          {estado.mensagem}
-        </p>
-      )}
-    </div>
+      {estado.tipo === 'erro' && <Cartao tom="erro" titulo="Não foi possível registrar" mensagem={estado.mensagem} />}
+    </>
   );
 }
 
@@ -104,10 +129,18 @@ export function FormularioRecebimento() {
   const [estado, acao, pendente] = useActionState(registrarChegadaAcao, INICIAL);
   const formularioRef = useRef<HTMLFormElement>(null);
   const campoRef = useRef<HTMLInputElement>(null);
+  // Última situação do envio, lida pelo callback da câmera (que não é recriado a cada renderização).
+  const situacaoEnvioRef = useRef({ pendente, estado });
+  useEffect(() => {
+    situacaoEnvioRef.current = { pendente, estado };
+  }, [pendente, estado]);
   const aoLer = useCallback((codigo: string) => {
     const campo = campoRef.current;
     const formulario = formularioRef.current;
     if (!campo || !formulario) return;
+    if (!podeAceitarLeitura(situacaoEnvioRef.current.pendente, situacaoEnvioRef.current.estado)) return;
+    // Marca já como pendente: uma segunda leitura antes da próxima renderização também é ignorada.
+    situacaoEnvioRef.current = { pendente: true, estado: situacaoEnvioRef.current.estado };
     campo.value = codigo;
     formulario.requestSubmit();
   }, []);
@@ -119,23 +152,52 @@ export function FormularioRecebimento() {
   useEffect(() => {
     if (window.matchMedia('(pointer: fine)').matches) campoRef.current?.focus();
   }, []);
+  // Depois de cada resposta, o computador volta o foco ao campo (próximo pacote); no toque não abre o teclado.
+  useEffect(() => {
+    if (estado.tipo !== 'inicial' && window.matchMedia('(pointer: fine)').matches) campoRef.current?.focus();
+  }, [estado]);
+
+  // Com a câmera aberta o botão fica fixo no topo do painel (sticky), mesmo com um cartão alto; fechada, vai depois do formulário.
+  const botaoCamera = (
+    <button
+      type="button"
+      onClick={cameraAberta ? fechar : abrir}
+      className={`flex min-h-16 w-full items-center justify-center gap-2 rounded-2xl text-lg font-semibold ${
+        cameraAberta ? 'sticky top-0 z-10 mt-4 border border-borda-forte bg-superficie text-texto' : 'bg-texto text-white'
+      }`}
+    >
+      <svg
+        aria-hidden="true"
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M7 12h10" />
+      </svg>
+      {cameraAberta ? 'Fechar câmera' : 'Ler com a câmera'}
+    </button>
+  );
 
   return (
     <div className={cameraAberta ? 'fixed inset-0 z-50 flex h-dvh flex-col bg-black' : 'flex flex-col gap-4'}>
       <div className={cameraAberta ? 'relative min-h-0 flex-1' : 'hidden'}>
         <video ref={videoRef} playsInline muted aria-label="Imagem da câmera" className="h-full w-full object-cover" />
         <div aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-1/2 h-0.5 -translate-y-1/2 bg-white/80" />
-        {situacao === 'abrindo' && (
-          <p className="absolute inset-x-0 top-6 text-center text-sm font-semibold text-white">Abrindo a câmera…</p>
-        )}
+        {situacao === 'abrindo' && <p className="absolute inset-x-0 top-6 text-center text-sm font-semibold text-white">Abrindo a câmera…</p>}
       </div>
       <div
         className={
           cameraAberta
-            ? 'flex max-h-[60dvh] flex-col gap-3 overflow-y-auto rounded-t-2xl bg-superficie px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
+            ? 'flex max-h-[60dvh] flex-col gap-3 overflow-y-auto rounded-t-2xl bg-superficie px-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
             : 'flex flex-col gap-4'
         }
       >
+        {cameraAberta && botaoCamera}
         <Resultado estado={estado} acao={acao} pendente={pendente} />
         <form ref={formularioRef} action={acao} className="flex flex-col gap-3">
           <input type="hidden" name="intencao" value="receber" />
@@ -158,28 +220,7 @@ export function FormularioRecebimento() {
             {pendente ? 'Registrando…' : 'Registrar chegada'}
           </button>
         </form>
-        <button
-          type="button"
-          onClick={cameraAberta ? fechar : abrir}
-          className={`flex min-h-16 w-full items-center justify-center gap-2 rounded-2xl text-lg font-semibold ${
-            cameraAberta ? 'border border-borda-forte bg-superficie text-texto' : 'bg-texto text-white'
-          }`}
-        >
-          <svg
-            aria-hidden="true"
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M7 12h10" />
-          </svg>
-          {cameraAberta ? 'Fechar câmera' : 'Ler com a câmera'}
-        </button>
+        {!cameraAberta && botaoCamera}
         {erroCamera && (
           <p role="alert" className={ALERTA_ERRO}>
             {erroCamera}

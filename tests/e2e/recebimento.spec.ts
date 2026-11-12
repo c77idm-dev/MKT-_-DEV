@@ -14,7 +14,7 @@ async function criarComRastreio(rastreio: string, status?: 'CANCELADA'): Promise
   });
 }
 
-test('operador registra a chegada digitando o rastreio (como faz o leitor USB)', async ({ page }) => {
+test('operador registra a chegada digitando o rastreio (como faz o leitor USB)', async ({ page }, testInfo) => {
   const rastreio = codigoUnico('RC');
   const codigo = await criarComRastreio(rastreio);
   await entrarComo(page, USUARIOS_E2E.operador);
@@ -34,6 +34,7 @@ test('operador registra a chegada digitando o rastreio (como faz o leitor USB)',
   await expect(resultado).toContainText(codigo);
   await expect(resultado).toContainText(/\d{2}\/\d{2}\/\d{4}/);
   await expect(campo).toHaveValue('');
+  if (!ehCelular(testInfo)) await expect(campo).toBeFocused(); // computador: pronto para o próximo pacote
   await semRolagemLateral(page);
 
   await campo.fill(rastreio);
@@ -57,7 +58,7 @@ test('pacote de devolução cancelada mostra o cartão de bloqueada, com texto e
   const resultado = page.getByRole('status');
   await expect(resultado).toContainText('Fale com o Gestor');
   await expect(resultado).toContainText(codigo);
-  await expect(resultado.locator('svg[aria-hidden="true"]').first()).toBeVisible();
+  await expect(page.getByTestId('cartao-resultado').locator('svg[aria-hidden="true"]').first()).toBeVisible();
   await semRolagemLateral(page);
 });
 
@@ -71,7 +72,7 @@ test('rastreio desconhecido vira pacote não identificado', async ({ page }) => 
   await semRolagemLateral(page);
   await page.getByRole('button', { name: 'Registrar pacote não identificado' }).click();
   await expect(page.getByRole('status')).toContainText('Pacote não identificado registrado');
-  await page.getByRole('status').getByRole('link').click();
+  await page.getByTestId('cartao-resultado').getByRole('link').click();
   await expect(page.getByText('Não identificada').first()).toBeVisible();
 });
 

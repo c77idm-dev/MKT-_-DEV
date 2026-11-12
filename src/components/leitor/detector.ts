@@ -17,6 +17,9 @@ export const FORMATOS = [
   'pdf417',
 ] as const;
 
+/** O leitor do navegador só serve se lê todos estes; senão o ZXing (que lê todos) assume. */
+const OBRIGATORIOS = ['code_128', 'qr_code', 'data_matrix', 'ean_13'] as const;
+
 type CodigoDetectado = { rawValue: string };
 
 export type ConstrutorDetector = {
@@ -54,7 +57,7 @@ export async function criarDetector(
   if (Nativo) {
     const suportados = (await Nativo.getSupportedFormats?.().catch(() => [])) ?? [];
     const formatos = FORMATOS.filter((f) => suportados.includes(f));
-    if (formatos.includes('code_128')) return embrulhar('nativo', new Nativo({ formats: [...formatos] }));
+    if (OBRIGATORIOS.every((f) => formatos.includes(f))) return embrulhar('nativo', new Nativo({ formats: [...formatos] }));
   }
   const Alternativa = await carregarAlternativa();
   return embrulhar('zxing', new Alternativa({ formats: [...FORMATOS] }));
