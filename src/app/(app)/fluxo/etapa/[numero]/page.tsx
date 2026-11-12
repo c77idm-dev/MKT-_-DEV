@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { ListaDevolucoes } from '@/components/ListaDevolucoes';
-import { BOTAO_PRIMARIO, VAZIO } from '@/components/estilos';
+import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, VAZIO } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { lerPagina, type ParametrosBusca } from '@/lib/parametros';
 import { pode } from '@/modules/auth/permissoes';
@@ -22,9 +22,14 @@ function acoesDaEtapa(numero: number, podeOperar: boolean): ReactNode {
   if (!podeOperar) return null;
   if (numero === 1) {
     return (
-      <Link href="/fluxo/devolucoes/nova" className={BOTAO_PRIMARIO}>
-        Nova devolução
-      </Link>
+      <>
+        <Link href="/fluxo/devolucoes/nova" className={BOTAO_PRIMARIO}>
+          Nova devolução
+        </Link>
+        <Link href="/importacoes/devolucoes" className={BOTAO_SECUNDARIO}>
+          Importar planilha
+        </Link>
+      </>
     );
   }
   if (numero === 2) {

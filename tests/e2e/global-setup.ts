@@ -17,6 +17,7 @@ const ROTAS_AQUECIMENTO = [
   '/cadastros/fornecedores/novo',
   '/importacoes/produtos',
   '/importacoes/fornecedores',
+  '/importacoes/devolucoes',
   '/fluxo/etapa/1',
   '/fluxo/etapa/2',
   '/fluxo/busca',
