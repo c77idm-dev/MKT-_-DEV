@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { Db } from '@/db/client';
+import type { DbOuTx } from '@/db/client';
+import { ehViolacaoDeUnicidade } from '@/db/erros';
 import { usuarios } from '@/db/schema';
 import { PERFIS, type Perfil } from './perfis';
 import { gerarHashSenha, TAMANHO_MINIMO_SENHA } from './senha';
@@ -22,7 +23,7 @@ const esquemaNovoUsuario = z.object({
 
 export type DadosNovoUsuario = { nome: string; email: string; senha: string; perfil: Perfil };
 
-export async function criarUsuario(db: Db, dados: DadosNovoUsuario): Promise<UsuarioSessao> {
+export async function criarUsuario(db: DbOuTx, dados: DadosNovoUsuario): Promise<UsuarioSessao> {
   const resultado = esquemaNovoUsuario.safeParse(dados);
   if (!resultado.success) {
     throw new Error(resultado.error.issues.map((i) => i.message).join('; '));
@@ -39,14 +40,4 @@ export async function criarUsuario(db: Db, dados: DadosNovoUsuario): Promise<Usu
     if (ehViolacaoDeUnicidade(erro)) throw new ErroEmailEmUso(d.email);
     throw erro;
   }
-}
-
-function codigoDoErro(x: unknown): unknown {
-  return typeof x === 'object' && x !== null && 'code' in x ? (x as { code?: unknown }).code : undefined;
-}
-
-/** 23505 = unique_violation. Versões recentes do Drizzle embrulham o erro do driver em `cause`. */
-function ehViolacaoDeUnicidade(erro: unknown): boolean {
-  const causa = typeof erro === 'object' && erro !== null ? (erro as { cause?: unknown }).cause : undefined;
-  return codigoDoErro(erro) === '23505' || codigoDoErro(causa) === '23505';
 }

@@ -15,6 +15,13 @@
       "when": 1794431269917,
       "tag": "0001_old_penance",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794496241715,
+      "tag": "0002_early_hawkeye",
+      "breakpoints": true
     }
   ]
 }
