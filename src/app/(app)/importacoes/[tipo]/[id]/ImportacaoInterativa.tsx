@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
+import { createContext, startTransition, useContext, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { BOTAO_SECUNDARIO, CAMPO, ROTULO } from '@/components/estilos';
 import type { Mapeamento } from '@/modules/importacao/tipos';
 
@@ -48,7 +48,9 @@ type CampoTela = { chave: string; rotulo: string; obrigatorio: boolean };
 
 /**
  * Formulário das colunas (selects controlados). Trocar uma coluna envia na hora, para a prévia atualizar sem
- * outro toque; "Atualizar prévia" continua como alternativa. `action` com Server Action funciona mesmo antes da hidratação.
+ * outro toque; "Atualizar prévia" continua como alternativa. `action` com Server Action funciona mesmo antes da hidratação;
+ * depois dela o `onSubmit` assume e chama a ação sem o reinício automático do formulário do React 19, que devolvia os
+ * selects a "Não importar" quando a ação terminava (a tela mostrava uma coluna e a prévia usava outra).
  */
 export function FormularioColunas({
   campos,
@@ -63,8 +65,13 @@ export function FormularioColunas({
 }) {
   const { selecionado, escolher } = useEstadoImportacao();
   const formulario = useRef<HTMLFormElement>(null);
+  function aoEnviar(evento: FormEvent<HTMLFormElement>) {
+    evento.preventDefault();
+    const dados = new FormData(evento.currentTarget);
+    startTransition(() => acao(dados));
+  }
   return (
-    <form ref={formulario} action={acao} className="flex flex-col gap-3">
+    <form ref={formulario} action={acao} onSubmit={aoEnviar} className="flex flex-col gap-3">
       <div className="grid gap-3 md:grid-cols-2">
         {campos.map((campo) => (
           <div key={campo.chave} className="flex flex-col gap-1.5">
