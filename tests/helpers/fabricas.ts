@@ -3,6 +3,7 @@ import type { Perfil } from '@/modules/auth/perfis';
 import { criarUsuario, type UsuarioSessao } from '@/modules/auth/usuarios';
 import { salvarFornecedor, type DadosFornecedor } from '@/modules/catalogo/fornecedores';
 import { salvarProduto, type DadosProduto } from '@/modules/catalogo/produtos';
+import { criarDevolucao, type DadosNovaDevolucao, type DevolucaoCriada } from '@/modules/devolucoes/criar';
 
 /** Fábricas de dados para os testes de integração e ponta a ponta (não existem dados de demonstração). */
 let contador = 0;
@@ -50,4 +51,28 @@ export async function criarProdutoTeste(db: DbOuTx, dados: Partial<DadosProduto>
     unidade: 'UN',
     ...dados,
   });
+}
+
+export async function criarDevolucaoTeste(
+  db: DbOuTx,
+  usuario: UsuarioSessao,
+  dados: Partial<DadosNovaDevolucao> = {},
+): Promise<DevolucaoCriada> {
+  const n = proximo();
+  const marca = Date.now().toString(36).toUpperCase();
+  return criarDevolucao(
+    db,
+    {
+      canal: 'SHOPEE',
+      pedido: `PED-TESTE-${n}-${marca}`,
+      reclamacaoId: null,
+      rastreio: `TST${n}X${marca}`,
+      transportadora: 'Correios',
+      motivoCliente: null,
+      postadaEm: null,
+      itens: [{ sku: 'SKU-TESTE', quantidade: 1 }],
+      ...dados,
+    },
+    { origem: 'MANUAL', usuario },
+  );
 }

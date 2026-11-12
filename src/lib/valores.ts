@@ -32,3 +32,23 @@ export function textoOpcional(valor: string | undefined, max: number, rotulo: st
   }
   return s === '' ? null : s;
 }
+
+/** "3", "3.0" ou "3,0" → 3 (o Excel às vezes manda inteiros com ".0"). Outros textos → null. */
+export function interpretarInteiro(texto: string): number | null {
+  const s = texto.trim().replace(',', '.');
+  if (!/^\d+(\.0+)?$/.test(s)) return null;
+  return Number.parseInt(s, 10);
+}
+
+/** "05/11/2026", "5/11/2026" ou "2026-11-05" → "2026-11-05". Datas que não existem → null. */
+export function interpretarData(texto: string): string | null {
+  const s = texto.trim();
+  const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  const partes = br ? [br[3], br[2], br[1]] : iso ? [iso[1], iso[2], iso[3]] : null;
+  if (!partes) return null;
+  const [ano, mes, dia] = partes.map(Number);
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+  if (data.getUTCFullYear() !== ano || data.getUTCMonth() !== mes - 1 || data.getUTCDate() !== dia) return null;
+  return `${String(ano).padStart(4, '0')}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}

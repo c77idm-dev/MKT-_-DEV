@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { interpretarValor, textoOpcional } from './valores';
+import { interpretarData, interpretarInteiro, interpretarValor, textoOpcional } from './valores';
 
 describe('interpretarValor', () => {
   it.each([
@@ -34,5 +34,33 @@ describe('textoOpcional', () => {
     const erros: string[] = [];
     expect(textoOpcional('abcdef', 5, 'Número', erros)).toBeNull();
     expect(erros).toEqual(['Número: no máximo 5 caracteres']);
+  });
+});
+
+describe('interpretarInteiro', () => {
+  it.each([
+    ['3', 3],
+    ['3.0', 3],
+    ['3,0', 3],
+  ])('%s → %d', (texto, n) => {
+    expect(interpretarInteiro(texto)).toBe(n);
+  });
+
+  it.each(['2.5', 'abc', '', '-1'])('recusa %j', (texto) => {
+    expect(interpretarInteiro(texto)).toBeNull();
+  });
+});
+
+describe('interpretarData', () => {
+  it.each([
+    ['05/11/2026', '2026-11-05'],
+    ['5/11/2026', '2026-11-05'],
+    ['2026-11-05', '2026-11-05'],
+  ])('%s → %s', (texto, iso) => {
+    expect(interpretarData(texto)).toBe(iso);
+  });
+
+  it.each(['31/02/2026', '2026-13-01', 'ontem'])('recusa %j', (texto) => {
+    expect(interpretarData(texto)).toBeNull();
   });
 });
