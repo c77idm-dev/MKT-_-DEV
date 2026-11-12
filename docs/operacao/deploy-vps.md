@@ -77,6 +77,11 @@ VPS_SSH=root@IP-DA-VPS sh scripts/deploy.sh
 ```
 Ou rode direto na VPS: `cd /opt/devolucoes && git pull && docker compose --env-file .env.producao -f docker-compose.prod.yml pull && docker compose --env-file .env.producao -f docker-compose.prod.yml up -d`.
 
+Para liberar espaço das versões antigas, remova só as imagens sem nome deste projeto. **Não use `docker image prune`**: a VPS é compartilhada e ele apagaria imagens sem uso de outros projetos (o `scripts/deploy.sh` já faz isto):
+```sh
+docker images --filter dangling=true -q | xargs -r docker image inspect --format "{{.Id}} {{.RepoDigests}}" | grep "ghcr.io/c77idm-dev/devolucoes@" | cut -d" " -f1 | xargs -r docker rmi
+```
+
 ## Voltar para a versão anterior
 Cada versão compilada também é publicada com o hash do commit. No `.env.producao`, troque `IMAGEM_TAG=main` pelo hash completo do commit desejado e rode:
 ```sh

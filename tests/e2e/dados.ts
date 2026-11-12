@@ -1,4 +1,9 @@
-export const PORTA_E2E = 3100;
+import { existsSync } from 'node:fs';
+
+// O playwright.config.ts importa este arquivo antes de carregar o .env, então o .env é lido aqui.
+if (existsSync('.env')) process.loadEnvFile('.env');
+
+export const PORTA_E2E = Number(process.env.PORTA_E2E || 3100);
 export const URL_E2E = `http://localhost:${PORTA_E2E}`;
 
 export const USUARIOS_E2E = {

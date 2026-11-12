@@ -1,7 +1,8 @@
 import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { eq } from 'drizzle-orm';
-import { criarDb, type Db } from '../../src/db/client';
+import type { Db } from '../../src/db/client';
 import { usuarios } from '../../src/db/schema';
+import { criarDbTeste } from '../helpers/db';
 import type { UsuarioSessao } from '../../src/modules/auth/usuarios';
 
 /** Espera a hidratação (o login é client component) e repete se o dev server recarregar a página. */
@@ -68,9 +69,7 @@ export async function entrarComo(page: Page, usuario: { email: string; senha: st
 
 /** Abre uma conexão com o banco de testes (o mesmo do servidor do e2e) só para preparar dados com as fábricas. */
 export async function comBanco<T>(fn: (db: Db) => Promise<T>): Promise<T> {
-  const url = process.env.DATABASE_URL_TEST;
-  if (!url) throw new Error('Defina DATABASE_URL_TEST no .env');
-  const { db, sql } = criarDb(url);
+  const { db, sql } = criarDbTeste();
   try {
     return await fn(db);
   } finally {

@@ -9,4 +9,6 @@ ssh "$VPS_SSH" 'set -eu
   git pull --ff-only
   docker compose --env-file .env.producao -f docker-compose.prod.yml pull
   docker compose --env-file .env.producao -f docker-compose.prod.yml up -d
-  docker image prune -f'
+  # Não use `docker image prune`: a VPS é compartilhada e ele apagaria imagens sem uso de OUTROS projetos.
+  # Remove só as imagens sem nome (dangling) cujo digest é deste projeto.
+  docker images --filter dangling=true -q | xargs -r docker image inspect --format "{{.Id}} {{.RepoDigests}}" | grep "ghcr.io/c77idm-dev/devolucoes@" | cut -d" " -f1 | xargs -r docker rmi || true'
