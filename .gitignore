@@ -48,3 +48,6 @@ next-env.d.ts
 /dist
 /test-results
 /playwright-report
+
+# .wasm do leitor de código, copiado de node_modules (scripts/copiar-zxing.mjs)
+/public/zxing

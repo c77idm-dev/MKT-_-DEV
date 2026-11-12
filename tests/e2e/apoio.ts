@@ -67,5 +67,12 @@ export function codigoUnico(prefixo: string): string {
 /** No celular a Busca Avançada fica atrás do botão "Filtros"; no computador ela já está aberta. */
 export async function abrirBusca(page: Page) {
   const botao = page.getByRole('button', { name: /^Filtros/ });
-  if ((await botao.isVisible()) && (await botao.getAttribute('aria-expanded')) !== 'true') await botao.click();
+  const painel = page.locator('#painel-busca');
+  // Espera (web-first) o botão do celular ou o painel já aberto do computador, em vez de checar uma vez só.
+  await expect(botao.or(painel).first()).toBeVisible();
+  if (await botao.isVisible()) {
+    if ((await botao.getAttribute('aria-expanded')) !== 'true') await botao.click();
+    await expect(botao).toHaveAttribute('aria-expanded', 'true');
+  }
+  await expect(painel).toBeVisible();
 }

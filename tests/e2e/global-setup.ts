@@ -22,6 +22,7 @@ const ROTAS_AQUECIMENTO = [
   '/fluxo/busca',
   '/fluxo/devolucoes/nova',
   '/fluxo/devolucoes/DEV-000000',
+  '/fluxo/recebimento',
 ];
 
 export default async function globalSetup() {

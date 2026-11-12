@@ -139,3 +139,12 @@ test.describe('mobile-first (celular)', () => {
     await expect(enviar).toBeInViewport();
   });
 });
+
+test('a etapa 6 não existe (HTTP 404) e a etapa 5 mostra o aviso dos lotes', async ({ page }) => {
+  await entrarComo(page, USUARIOS_E2E.operador);
+  const inexistente = await page.goto('/fluxo/etapa/6');
+  expect(inexistente?.status()).toBe(404);
+  await page.goto('/fluxo/etapa/5');
+  await expect(page.getByText('Os lotes por fornecedor aparecem aqui quando a conferência estiver pronta.')).toBeVisible();
+  await semRolagemLateral(page);
+});

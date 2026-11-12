@@ -5,7 +5,7 @@ import { CamposItens } from '@/components/CamposItens';
 import { ListaErros } from '@/components/ListaErros';
 import { RodapeFormulario } from '@/components/RodapeFormulario';
 import { SelectCanal } from '@/components/SelectCanal';
-import { BOTAO_PRIMARIO, CARTAO, ROTULO } from '@/components/estilos';
+import { BOTAO_PRIMARIO, CAMPO, CARTAO, ROTULO } from '@/components/estilos';
 import { useEnvioFormulario } from '@/components/useEnvioFormulario';
 import type { EstadoAcaoGestor } from './acoes';
 
@@ -41,7 +41,7 @@ export function FormularioEncerrar({ acao }: { acao: Acao }) {
           minLength={3}
           maxLength={500}
           rows={3}
-          className="w-full rounded-lg border border-borda-forte bg-superficie px-3 py-2 text-[15px]"
+          className={`${CAMPO} min-h-24 py-2`}
         />
       </div>
       <ListaErros erros={estado.erros} />
