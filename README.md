@@ -35,10 +35,11 @@ Ainda não existem: conferência, lotes e remessas, contestações, integração
 |---|---|
 | `npm test` | Regras e componentes (sem banco) |
 | `npm run test:int` | Integração com o banco de testes |
-| `npm run test:e2e` | Navegador de ponta a ponta, em dois projetos: `computador` e `celular` (390×844) |
+| `npm run test:e2e` | Navegador de ponta a ponta, em dois projetos: `computador` e `celular` (390×844). Faz o build de produção e sobe o `next start` na porta 3100 |
+| `E2E_DEV=1 npm run test:e2e` | O mesmo, mas contra o `next dev` (iteração local rápida; a 1ª visita de cada rota é lenta e o teste pode estourar o tempo) |
 | `npm run typecheck` / `npm run lint` | Tipos e estilo |
 
-Antes do primeiro `npm run test:e2e`, rode `npx playwright install chromium` (uma vez). Pare o `npm run dev` antes de rodar o e2e: o Next 16 usa um arquivo de trava no modo dev e não sobe dois servidores juntos.
+Antes do primeiro `npm run test:e2e`, rode `npx playwright install chromium` (uma vez). O e2e roda contra um build de produção (`npm run build` com `NEXT_DIST_DIR=.next-e2e`, depois `next start`), o que evita a instabilidade da compilação sob demanda do `next dev`; a primeira execução leva alguns minutos a mais por causa do build, e o `.next` do dev não é tocado. O banco usado é o de testes (`DATABASE_URL_TEST`). Com `E2E_DEV=1` o servidor é o `next dev`: pare o seu `npm run dev` antes, porque o Next 16 usa um arquivo de trava e não sobe dois servidores juntos.
 
 O `npm run dev` e o `npm run build` copiam antes o leitor de código de barras (`zxing_reader.wasm`) para `public/zxing/` (script `scripts/copiar-zxing.mjs`). A câmera só abre em HTTPS ou em `localhost`; para testar a leitura no celular, use o sistema publicado na VPS.
 
