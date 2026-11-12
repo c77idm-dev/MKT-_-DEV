@@ -17,8 +17,15 @@ import { normalizarRastreio } from '@/modules/devolucoes/rastreio';
 import { dadosOuErro, type DefinicaoImportacao } from '../definicao';
 import type { LinhaPulada } from '../tipos';
 
+/**
+ * Número de pedido do ML tem 16+ dígitos: o Excel, numa célula numérica, mostra "2,00001E+15" e perde dígitos.
+ * Não dá para recuperar o número: a linha vira erro e a pessoa exporta de novo com a coluna como Texto.
+ */
+const NOTACAO_CIENTIFICA = /^\d+([.,]\d+)?[eE][+-]?\d+$/;
+const ERRO_NOTACAO_CIENTIFICA = 'Pedido em notação científica: no Excel, formate a coluna como Texto e exporte de novo.';
+
 function interpretarLinha(v: Record<string, string>) {
-  return validarNovaDevolucao({
+  const resultado = validarNovaDevolucao({
     canal: v.canal ?? '',
     pedido: v.numero_pedido ?? '',
     reclamacaoId: v.id_reclamacao,
@@ -28,6 +35,8 @@ function interpretarLinha(v: Record<string, string>) {
     postadaEm: v.data_postagem,
     itens: [{ sku: v.sku ?? '', quantidade: v.quantidade ?? '' }],
   });
+  const cientifica = [v.numero_pedido, v.id_reclamacao].some((c) => NOTACAO_CIENTIFICA.test((c ?? '').trim()));
+  return cientifica ? { dados: null, erros: [...resultado.erros, ERRO_NOTACAO_CIENTIFICA] } : resultado;
 }
 
 /** Linhas com o mesmo canal, pedido, rastreio e reclamação são o mesmo pacote: viram uma devolução só. */

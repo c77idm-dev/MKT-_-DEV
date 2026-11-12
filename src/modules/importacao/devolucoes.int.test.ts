@@ -123,6 +123,20 @@ describe('importação de devoluções', () => {
     ]);
   });
 
+  it('número de pedido ou reclamação em notação científica (cifra do Excel) vira erro da linha', async () => {
+    const aviso = 'Pedido em notação científica: no Excel, formate a coluna como Texto e exporte de novo.';
+    const p = await previa([
+      ['Mercado Livre', '2.0000123456789E+15', '', 'BR1', '', 'FONE-01', '1', '', ''],
+      ['Mercado Livre', '2000012345678901', '5,1e+12', 'BR2', '', 'FONE-01', '1', '', ''],
+      ['Mercado Livre', '2000012345678902', '123456', 'BR3', '', 'FONE-01', '1', '', ''],
+    ]);
+    expect(p.linhas.map((l) => l.erros)).toEqual([
+      [`Pedido 2.0000123456789E+15: ${aviso}`],
+      [`Pedido 2000012345678901: ${aviso}`],
+      [],
+    ]);
+  });
+
   it('confirma: uma devolução por pedido, uma linha por unidade, com origem Planilha', async () => {
     const def = definicao();
     const imp = await enviar([
