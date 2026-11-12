@@ -49,7 +49,10 @@ Atualizado em 12/11/2026. Mantenha este arquivo em dia ao fechar cada etapa e en
   - Nunca rode `docker image prune` global.
   - O usuário opera a VPS por uma sessão da Claude web. Passe a ele textos prontos para colar.
 - **Segredos nunca vão para o git.** O ML Client Secret e as senhas ficam só no `.env` local ou da VPS.
-- **Push:** só ao fechar uma etapa. Em cada push para o `main`, o GitHub Actions gera a imagem.
+- **Push frequente:** o usuário precisa poder continuar de outro computador.
+  - Ao fechar cada passo (plano pronto, tarefa revisada), envie ao GitHub a branch em que está trabalhando: `fase-N-...`, `planos-fases-2-6`.
+  - O `main` só recebe o que já foi juntado e revisado. Cada push no `main` faz o GitHub Actions gerar a imagem; a imagem não é publicada sozinha.
+  - Atualize este arquivo antes de cada push.
 
 ## Ambiente de desenvolvimento
 - O Windows não tem Docker (VT-x desligado na BIOS). Não insista nisso.
