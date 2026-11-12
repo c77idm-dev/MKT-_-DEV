@@ -88,3 +88,11 @@ Para voltar ao normal, coloque `IMAGEM_TAG=main` de novo.
 ```sh
 docker compose --env-file .env.producao -f docker-compose.prod.yml logs -f web
 ```
+
+## Fase 1: planilhas de até 5 MB
+A importação de planilhas envia arquivos de até 5 MB. Na VPS, aumente o limite do nginx uma vez:
+```sh
+sed -i 's/client_max_body_size 1m;/client_max_body_size 6m;/' /etc/nginx/sites-available/devolucoes
+nginx -t && systemctl reload nginx
+```
+Se `nginx -t` acusar erro, não recarregue e confira o arquivo.

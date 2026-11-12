@@ -18,3 +18,10 @@ test('fiscal usa a barra de abas para chegar aos cadastros e não abre Contesta�
   const resposta = await page.goto('/contestacoes');
   expect(resposta?.status()).toBe(404);
 });
+
+test('operador não abre a importação de produtos (HTTP 404)', async ({ page }) => {
+  await entrarComo(page, USUARIOS_E2E.operador);
+  const resposta = await page.goto('/importacoes/produtos');
+  expect(resposta?.status()).toBe(404);
+  await expect(page.getByRole('heading', { name: 'Página não encontrada' })).toBeVisible();
+});

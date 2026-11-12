@@ -2,7 +2,8 @@
 
 import { startTransition, useActionState, useEffect, type FormEvent } from 'react';
 
-export const ID_ERROS_FORMULARIO = 'erros-formulario';
+import { ID_ERROS_FORMULARIO } from './ListaErros';
+export { ID_ERROS_FORMULARIO };
 
 /**
  * Envia o formulário para uma Server Action sem limpar os campos. O `<form action>` do React 19 limpa
