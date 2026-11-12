@@ -33,3 +33,12 @@ describe('NavAbas no celular', () => {
     expect(screen.getByRole('navigation', { name: 'Seções' }).className).toContain('fixed');
   });
 });
+
+describe('NavAbas rótulo curto', () => {
+  it('mostra o rótulo curto no celular e mantém o nome acessível completo', () => {
+    mocks.caminho = '/fluxo';
+    render(<NavAbas abas={[{ rotulo: 'Produtos e Fornecedores', href: '/cadastros' }]} />);
+    const link = screen.getByRole('link', { name: 'Produtos e Fornecedores' });
+    expect(link.getAttribute('data-curto')).toBe('Cadastros');
+  });
+});

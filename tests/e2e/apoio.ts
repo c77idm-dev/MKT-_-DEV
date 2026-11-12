@@ -1,10 +1,14 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
 
+/** Espera a hidratação (o login é client component) e repete se o dev server recarregar a página. */
 export async function entrar(page: Page, usuario: { email: string; senha: string }) {
-  await page.goto('/login');
+  await page.goto('/login', { waitUntil: 'networkidle' });
+  const botao = page.getByRole('button', { name: 'Entrar' });
+  await expect(botao).toBeVisible();
+  await expect(botao).toBeEnabled();
   await page.getByLabel('E-mail').fill(usuario.email);
   await page.getByLabel('Senha').fill(usuario.senha);
-  await page.getByRole('button', { name: 'Entrar' }).click();
+  await botao.click();
 }
 
 export function ehCelular(testInfo: TestInfo): boolean {

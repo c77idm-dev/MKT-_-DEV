@@ -36,7 +36,7 @@ export function AppShell({ usuario, acaoSair, children }: Props) {
             <span className="text-xs text-texto-2">{ROTULO_PERFIL[usuario.perfil]}</span>
           </div>
           <form action={acaoSair}>
-            <button type="submit" className="min-h-11 rounded-full border border-borda-forte px-4 text-sm font-semibold">
+            <button type="submit" className="min-h-11 rounded-full border border-borda-forte px-4 text-sm font-semibold md:hover:bg-fundo">
               Sair
             </button>
           </form>

@@ -35,6 +35,15 @@ const ICONES: Record<string, ReactNode> = {
   '/configuracoes': <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />,
 };
 
+/** Rótulos curtos só para o celular (barra estreita); o nome acessível continua o rótulo completo. */
+const ROTULO_CURTO: Record<string, string> = {
+  '/fluxo': 'Fluxo',
+  '/contestacoes': 'Contestações',
+  '/lotes': 'Lotes',
+  '/cadastros': 'Cadastros',
+  '/configuracoes': 'Config.',
+};
+
 /**
  * No celular: barra fixa embaixo, com ícone e nome, respeitando a área segura.
  * A partir de md: as abas em pílula na barra superior, como na Fase 0.
@@ -53,7 +62,9 @@ export function NavAbas({ abas }: { abas: AbaNav[] }) {
             key={aba.href}
             href={aba.href}
             aria-current={ativa ? 'page' : undefined}
-            className={`flex min-h-16 flex-col items-center justify-center gap-0.5 px-1 text-center text-[11px] leading-tight [overflow-wrap:anywhere] md:min-h-11 md:flex-row md:rounded-full md:px-3.5 md:text-sm ${
+            aria-label={aba.rotulo}
+            data-curto={ROTULO_CURTO[aba.href] ?? aba.rotulo}
+            className={`flex min-h-16 flex-col items-center justify-center gap-0.5 px-1 text-center text-[11px] leading-tight break-words after:content-[attr(data-curto)] md:after:hidden md:min-h-11 md:flex-row md:rounded-full md:px-3.5 md:text-sm ${
               ativa ? 'font-semibold text-destaque md:bg-destaque-suave' : 'font-medium text-texto-2 md:hover:bg-fundo'
             }`}
           >
@@ -71,7 +82,7 @@ export function NavAbas({ abas }: { abas: AbaNav[] }) {
             >
               {ICONES[aba.href]}
             </svg>
-            <span>{aba.rotulo}</span>
+            <span className="max-md:sr-only">{aba.rotulo}</span>
           </Link>
         );
       })}
