@@ -17,6 +17,11 @@ const ROTAS_AQUECIMENTO = [
   '/cadastros/fornecedores/novo',
   '/importacoes/produtos',
   '/importacoes/fornecedores',
+  '/fluxo/etapa/1',
+  '/fluxo/etapa/2',
+  '/fluxo/busca',
+  '/fluxo/devolucoes/nova',
+  '/fluxo/devolucoes/DEV-000000',
 ];
 
 export default async function globalSetup() {
