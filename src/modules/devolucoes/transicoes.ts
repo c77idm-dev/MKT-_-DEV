@@ -33,15 +33,16 @@ export function podeTransitar(p: PedidoTransicao): boolean {
 }
 
 export class ErroTransicao extends ErroDevolucao {
-  constructor(p: PedidoTransicao) {
+  /** `mensagemTela`: texto curto para o operador; sem ele, a mensagem é técnica (logs e testes). */
+  constructor(p: PedidoTransicao, mensagemTela?: string) {
     const de = p.de ? ROTULO_STATUS[p.de] : '(nova)';
     const quem = p.ator === 'SISTEMA' ? 'sistema' : ROTULO_PERFIL[p.ator];
-    super(`Mudança de status não permitida: ${de} → ${ROTULO_STATUS[p.para]} (${quem}).`);
+    super(mensagemTela ?? `Mudança de status não permitida: ${de} → ${ROTULO_STATUS[p.para]} (${quem}).`);
     this.name = 'ErroTransicao';
   }
 }
 
-/** Chamada antes de toda gravação de status. */
-export function exigirTransicao(p: PedidoTransicao): void {
-  if (!podeTransitar(p)) throw new ErroTransicao(p);
+/** Chamada antes de toda gravação de status. Com `mensagemTela`, a recusa já sai em português para a tela. */
+export function exigirTransicao(p: PedidoTransicao, mensagemTela?: string): void {
+  if (!podeTransitar(p)) throw new ErroTransicao(p, mensagemTela);
 }
