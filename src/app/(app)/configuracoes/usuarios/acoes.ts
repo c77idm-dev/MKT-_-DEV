@@ -9,7 +9,8 @@ import { ErroDadosUsuario, ErroEmailEmUso } from '@/modules/auth/usuarios';
 
 /** `versao` muda a cada usuário criado: o formulário recomeça vazio. Com erro, os campos ficam como estavam. */
 export type EstadoNovoUsuario = { erros: string[]; criado: string | null; versao: number };
-export type EstadoAcaoUsuario = { erro: string | null };
+/** `ok` diz o que deu certo, para a tela avisar ("Perfil de X salvo."). */
+export type EstadoAcaoUsuario = { erro: string | null; ok: 'perfil' | 'desativado' | 'reativado' | null };
 
 function ehErroConhecido(erro: unknown): erro is Error {
   return erro instanceof ErroDadosUsuario || erro instanceof ErroEmailEmUso || erro instanceof ErroGestaoUsuario;
@@ -38,11 +39,11 @@ export async function alterarPerfilAcao(alvoId: string, _anterior: EstadoAcaoUsu
   try {
     await alterarPerfil(obterDb(), alvoId, String(dados.get('perfil') ?? ''), gestor);
   } catch (erro) {
-    if (ehErroConhecido(erro)) return { erro: erro.message };
+    if (ehErroConhecido(erro)) return { erro: erro.message, ok: null };
     throw erro;
   }
   revalidatePath('/configuracoes/usuarios');
-  return { erro: null };
+  return { erro: null, ok: 'perfil' };
 }
 
 /** Usada com `.bind(null, id, ativo)`: o estado anterior e o formulário não são necessários. */
@@ -51,9 +52,9 @@ export async function definirAtivoAcao(alvoId: string, ativo: boolean): Promise<
   try {
     await definirAtivo(obterDb(), alvoId, ativo, gestor);
   } catch (erro) {
-    if (ehErroConhecido(erro)) return { erro: erro.message };
+    if (ehErroConhecido(erro)) return { erro: erro.message, ok: null };
     throw erro;
   }
   revalidatePath('/configuracoes/usuarios');
-  return { erro: null };
+  return { erro: null, ok: ativo ? 'reativado' : 'desativado' };
 }

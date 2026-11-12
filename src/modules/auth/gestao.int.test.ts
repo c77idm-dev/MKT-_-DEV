@@ -105,4 +105,44 @@ describe('Trava contra ficar sem Gestor', () => {
     await definirAtivo(db, outro.id, false, gestor);
     expect(await db.select().from(sessoes).where(eq(sessoes.usuarioId, outro.id))).toHaveLength(0);
   });
+
+  // Dois Gestores se rebaixando/desativando ao mesmo tempo: um passa, o outro recebe a recusa (nunca deadlock).
+  const MSG = 'O sistema precisa de pelo menos um Gestor ativo.';
+  /**
+   * Segura as duas linhas de Gestor numa transação externa, dispara as duas operações juntas e só então solta.
+   * Assim as duas começam no mesmo instante, cada uma com a linha do seu alvo (no código sem trava global,
+   * cada uma trava o próprio alvo e espera a do outro: deadlock garantido).
+   */
+  async function corrida(operacao: (alvo: UsuarioSessao, ator: UsuarioSessao) => Promise<void>) {
+    // Só A e B podem ser os Gestores ativos nesta corrida.
+    await db.update(usuarios).set({ ativo: false }).where(eq(usuarios.id, gestor.id));
+    const a = await criarUsuarioTeste(db, 'GESTOR');
+    const b = await criarUsuarioTeste(db, 'GESTOR');
+    let soltar!: () => void;
+    const segurar = new Promise<void>((resolve) => (soltar = resolve));
+    let travou!: () => void;
+    const jaTravou = new Promise<void>((resolve) => (travou = resolve));
+    const externa = sql.begin(async (tx) => {
+      await tx`select id from usuarios where id in (${a.id}, ${b.id}) for update`;
+      travou();
+      await segurar;
+    });
+    await jaTravou;
+    const resultados = Promise.allSettled([operacao(b, a), operacao(a, b)]);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    soltar();
+    await externa;
+    const falhas = (await resultados).filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    expect(falhas.map((f) => String(f.reason))).toEqual([String(new ErroGestaoUsuario(MSG))]);
+    const ativos = (await listarUsuarios(db)).filter((u) => u.perfil === 'GESTOR' && u.ativo);
+    expect(ativos).toHaveLength(1);
+  }
+
+  it('dois Gestores se rebaixando ao mesmo tempo: um passa, o outro é recusado, sem deadlock', async () => {
+    await corrida((alvo, ator) => alterarPerfil(db, alvo.id, 'OPERADOR', ator));
+  });
+
+  it('dois Gestores se desativando ao mesmo tempo: um passa, o outro é recusado, sem deadlock', async () => {
+    await corrida((alvo, ator) => definirAtivo(db, alvo.id, false, ator));
+  });
 });

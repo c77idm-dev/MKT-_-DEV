@@ -53,18 +53,29 @@ test('gestor cria, desativa, reativa e muda o perfil de um usuário; desativar e
   const paginaCarla = await contexto.newPage();
   await entrarComo(paginaCarla, { email, senha });
 
-  await cartao.getByRole('button', { name: `Desativar ${nome}` }).click();
+  // Desativar pede um segundo toque (confirmação) e avisa o resultado.
+  // O primeiro toque pode chegar antes da hidratação (não faz nada); repete até o botão pedir a confirmação.
+  const confirmar = cartao.getByRole('button', { name: `Confirmar: desativar ${nome}` });
+  await expect(async () => {
+    await cartao.getByRole('button', { name: `Desativar ${nome}`, exact: true }).click({ timeout: 2000 });
+    await expect(confirmar).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
+  await expect(cartao).toContainText('Operador · Ativo');
+  await confirmar.click();
   await expect(cartao).toContainText('Operador · Desativado');
+  await expect(cartao.getByRole('status')).toHaveText(`${nome} desativado.`);
   await paginaCarla.goto('/fluxo');
   await expect(paginaCarla).toHaveURL(/\/login$/);
 
   await cartao.getByRole('button', { name: `Reativar ${nome}` }).click();
   await expect(cartao).toContainText('Operador · Ativo');
+  await expect(cartao.getByRole('status')).toHaveText(`${nome} reativado.`);
   await entrarComo(paginaCarla, { email, senha });
 
   await cartao.getByLabel(`Perfil de ${nome}`, { exact: true }).selectOption('FISCAL');
   await cartao.getByRole('button', { name: `Salvar perfil de ${nome}` }).click();
   await expect(cartao).toContainText('Fiscal · Ativo');
+  await expect(cartao.getByRole('status')).toHaveText(`Perfil de ${nome} salvo.`);
   await paginaCarla.reload();
   await expect(paginaCarla.getByRole('navigation', { name: 'Seções' }).getByRole('link')).toHaveText([
     'Fluxo',

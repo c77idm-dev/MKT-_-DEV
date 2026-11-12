@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { sessoes, usuarios } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
@@ -27,16 +27,23 @@ function exigirOutroUsuario(alvoId: string, ator: UsuarioSessao, mensagem: strin
   if (!ehUuid(alvoId)) throw new ErroGestaoUsuario('Usuário não encontrado.');
 }
 
+/** Chave fixa da trava que serializa toda mudança de perfil ou de situação (ativo): o volume é minúsculo. */
+const TRAVA_GESTORES = 727_001;
+
 /**
- * Dentro da transação: trava os Gestores ativos e confere que, tirando o alvo, ainda sobra um.
- * A trava (FOR UPDATE) evita que dois Gestores se rebaixem ao mesmo tempo e deixem o sistema sem nenhum.
+ * Primeira coisa de toda transação que muda perfil ou ativo. Sem ela, dois Gestores que se rebaixam ao mesmo tempo
+ * travam cada um a linha do próprio alvo e esperam a do outro (deadlock). Com ela, uma operação por vez.
  */
+async function serializarMudancas(tx: DbOuTx) {
+  await tx.execute(sql`select pg_advisory_xact_lock(${TRAVA_GESTORES})`);
+}
+
+/** Dentro da transação (já serializada): confere que, tirando o alvo, ainda sobra um Gestor ativo. */
 async function exigirOutroGestorAtivo(tx: DbOuTx, alvoId: string) {
   const outros = await tx
     .select({ id: usuarios.id })
     .from(usuarios)
-    .where(and(eq(usuarios.perfil, 'GESTOR'), eq(usuarios.ativo, true), ne(usuarios.id, alvoId)))
-    .for('update');
+    .where(and(eq(usuarios.perfil, 'GESTOR'), eq(usuarios.ativo, true), ne(usuarios.id, alvoId)));
   if (outros.length === 0) throw new ErroGestaoUsuario(MSG_ULTIMO_GESTOR);
 }
 
@@ -60,7 +67,8 @@ export async function alterarPerfil(db: DbOuTx, alvoId: string, perfil: string, 
   exigirOutroUsuario(alvoId, ator, 'Você não pode mudar o próprio perfil.');
   if (!ehPerfil(perfil)) throw new ErroGestaoUsuario('Perfil inválido.');
   await db.transaction(async (tx) => {
-    const [antes] = await tx.select({ perfil: usuarios.perfil, ativo: usuarios.ativo }).from(usuarios).where(eq(usuarios.id, alvoId)).for('update');
+    await serializarMudancas(tx);
+    const [antes] = await tx.select({ perfil: usuarios.perfil, ativo: usuarios.ativo }).from(usuarios).where(eq(usuarios.id, alvoId));
     if (!antes) throw new ErroGestaoUsuario('Usuário não encontrado.');
     if (antes.perfil === perfil) return;
     if (antes.perfil === 'GESTOR' && antes.ativo) await exigirOutroGestorAtivo(tx, alvoId);
@@ -74,7 +82,8 @@ export async function definirAtivo(db: DbOuTx, alvoId: string, ativo: boolean, a
   exigirGestor(ator);
   exigirOutroUsuario(alvoId, ator, 'Você não pode desativar o próprio usuário.');
   await db.transaction(async (tx) => {
-    const [antes] = await tx.select({ perfil: usuarios.perfil, ativo: usuarios.ativo }).from(usuarios).where(eq(usuarios.id, alvoId)).for('update');
+    await serializarMudancas(tx);
+    const [antes] = await tx.select({ perfil: usuarios.perfil, ativo: usuarios.ativo }).from(usuarios).where(eq(usuarios.id, alvoId));
     if (!antes) throw new ErroGestaoUsuario('Usuário não encontrado.');
     if (!ativo && antes.perfil === 'GESTOR' && antes.ativo) await exigirOutroGestorAtivo(tx, alvoId);
     await tx
