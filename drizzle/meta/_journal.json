@@ -22,6 +22,13 @@
       "when": 1794496241715,
       "tag": "0002_early_hawkeye",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794496819842,
+      "tag": "0003_tiresome_jamie_braddock",
+      "breakpoints": true
     }
   ]
 }

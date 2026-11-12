@@ -65,3 +65,11 @@ describe('aplicarMapeamento', () => {
     ]);
   });
 });
+
+describe('aplicarMapeamento: cabeçalho fora da linha 1', () => {
+  it('numera as linhas pela posição real na planilha', () => {
+    const planilha = { cabecalhos: ['sku'], linhas: [['A1'], ['B2']], linhaCabecalho: 3 };
+    const campos = [{ chave: 'sku', rotulo: 'SKU', obrigatorio: true, sinonimos: [] }];
+    expect(aplicarMapeamento(planilha, campos, { sku: 'sku' }).map((l) => l.numeroLinha)).toEqual([4, 5]);
+  });
+});

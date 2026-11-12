@@ -32,6 +32,8 @@ export type ProdutoLista = {
   fornecedor: string | null;
 };
 
+const CUSTO_MAXIMO = 9999999999.99; // numeric(12,2)
+
 /** Valida uma linha de produto com as chaves do modelo da spec §6.8 (sku, ean, descricao, cnpj_fornecedor, ncm, custo, unidade). */
 export function interpretarLinhaProduto(v: Record<string, string>): { dados: DadosProduto | null; erros: string[] } {
   const erros: string[] = [];
@@ -52,6 +54,7 @@ export function interpretarLinhaProduto(v: Record<string, string>): { dados: Dad
   const custoTexto = (v.custo ?? '').trim();
   const custo = custoTexto ? interpretarValor(custoTexto) : null;
   if (custoTexto && !custo) erros.push(`Custo inválido: ${custoTexto}`);
+  else if (custo && Number(custo) > CUSTO_MAXIMO) erros.push('Custo acima do máximo permitido (9.999.999.999,99)');
   const unidade = textoOpcional(v.unidade, 6, 'Unidade', erros)?.toUpperCase() ?? null;
   if (erros.length > 0 || !descricao) return { dados: null, erros };
   return { dados: { sku, ean, descricao, cnpjFornecedor, ncm, custo, unidade }, erros: [] };

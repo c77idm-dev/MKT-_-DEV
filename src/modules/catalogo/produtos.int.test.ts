@@ -45,6 +45,12 @@ describe('interpretarLinhaProduto', () => {
     expect(dados).toEqual({ sku: 'FONE-01', ean: '7891000000014', descricao: 'Fone Bluetooth', cnpjFornecedor: '11222333000181', ncm: '85183000', custo: '89.90', unidade: 'UN' });
   });
 
+  it('recusa custo acima do limite da coluna numeric(12,2)', () => {
+    const base = { sku: 'A', descricao: 'Item' };
+    expect(interpretarLinhaProduto({ ...base, custo: '9999999999,99' }).erros).toEqual([]);
+    expect(interpretarLinhaProduto({ ...base, custo: '10000000000' }).erros).toEqual(['Custo acima do máximo permitido (9.999.999.999,99)']);
+  });
+
   it('junta os erros da linha', () => {
     const { dados, erros } = interpretarLinhaProduto({ sku: '', descricao: '', ean: '7891000000099', cnpj_fornecedor: '1', ncm: '12', custo: 'abc' });
     expect(dados).toBeNull();

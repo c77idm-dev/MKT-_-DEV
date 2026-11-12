@@ -8,14 +8,15 @@ describe('interpretarValor', () => {
     ['12.5', '12.50'],
     ['1234', '1234.00'],
     ['1.234', '1234.00'],
-    ['1,234.56', '1234.56'],
+    ['1234.56', '1234.56'],
+    ['1.234.567', '1234567.00'],
     ['R$ 89,90', '89.90'],
     [' 0 ', '0.00'],
   ])('%s → %s', (texto, esperado) => {
     expect(interpretarValor(texto)).toBe(esperado);
   });
 
-  it.each(['', 'abc', '-5', '12,3,4', '1.2.3'])('recusa %j', (texto) => {
+  it.each(['', 'abc', '-5', '12,3,4', '1.2.3', '1,234.56', '1.234.5'])('recusa %j', (texto) => {
     expect(interpretarValor(texto)).toBeNull();
   });
 });

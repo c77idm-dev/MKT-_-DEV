@@ -1,17 +1,21 @@
 /**
- * Valor em reais, não negativo: "1.234,56", "12,5", "12.5", "1,234.56" ou "R$ 89,90".
- * Devolve com 2 casas e ponto ("1234.56"), que é o formato da coluna numeric, ou null.
+ * Valor em reais, não negativo, em dois formatos sem ambiguidade:
+ * - com vírgula: a vírgula é o decimal e os pontos são milhar ("1.234,56", "12,5");
+ * - sem vírgula: um único ponto seguido de 1 ou 2 dígitos é decimal ("12.5", "1234.56", como o Excel entrega);
+ *   pontos em grupos de 3 dígitos são milhar ("1.234", "1.234.567").
+ * Qualquer outra forma é inválida. Aceita prefixo "R$". Devolve com 2 casas e ponto ("1234.56"), ou null.
  */
 export function interpretarValor(texto: string): string | null {
   const s = texto.trim().replace(/^R\$/i, '').replace(/\s/g, '');
   if (s === '') return null;
   let normal: string;
-  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s) || /^\d+,\d+$/.test(s)) {
+  if (s.includes(',')) {
+    if (!/^(\d{1,3}(\.\d{3})+|\d+),\d+$/.test(s)) return null;
     normal = s.replace(/\./g, '').replace(',', '.');
-  } else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) {
-    normal = s.replace(/,/g, '');
-  } else if (/^\d+(\.\d+)?$/.test(s)) {
+  } else if (/^\d+(\.\d{1,2})?$/.test(s)) {
     normal = s;
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+    normal = s.replace(/\./g, '');
   } else {
     return null;
   }

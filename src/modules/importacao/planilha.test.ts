@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { criarXlsx, paraArrayBuffer } from '../../../tests/helpers/xlsx';
-import { ErroPlanilha, lerPlanilha, MAX_LINHAS } from './planilha';
+import { ErroPlanilha, lerCsv, lerPlanilha, MAX_LINHAS, montarPlanilha } from './planilha';
 
 const utf8 = (texto: string) => paraArrayBuffer(new TextEncoder().encode(texto));
 
@@ -8,6 +8,7 @@ describe('lerPlanilha: CSV', () => {
   it('lê CSV com ";", BOM, aspas e linha vazia no meio', async () => {
     const csv = '﻿sku;descricao;custo\r\nA1;"Fone; sem fio";1.234,56\r\n\r\nB2;Cabo;\r\n';
     expect(await lerPlanilha('produtos.csv', utf8(csv))).toEqual({
+      linhaCabecalho: 1,
       cabecalhos: ['sku', 'descricao', 'custo'],
       linhas: [
         ['A1', 'Fone; sem fio', '1.234,56'],
@@ -20,7 +21,7 @@ describe('lerPlanilha: CSV', () => {
   it('lê CSV com "," e CSV salvo em Windows-1252 pelo Excel', async () => {
     expect((await lerPlanilha('a.csv', utf8('a,b\n1,2\n'))).linhas).toEqual([['1', '2']]);
     const latin1 = Uint8Array.from('Código;Descrição\r\nA1;Pão\r\n', (c) => c.charCodeAt(0));
-    expect(await lerPlanilha('b.csv', paraArrayBuffer(latin1))).toEqual({ cabecalhos: ['Código', 'Descrição'], linhas: [['A1', 'Pão']] });
+    expect(await lerPlanilha('b.csv', paraArrayBuffer(latin1))).toEqual({ cabecalhos: ['Código', 'Descrição'], linhas: [['A1', 'Pão']], linhaCabecalho: 1 });
   });
 
   it('dá nome às colunas sem título e diferencia nomes repetidos', async () => {
@@ -37,6 +38,7 @@ describe('lerPlanilha: XLSX', () => {
       ['SKU-2', 'Cabo & Cia', null, '0789'],
     ]);
     expect(await lerPlanilha('produtos.xlsx', xlsx)).toEqual({
+      linhaCabecalho: 1,
       cabecalhos: ['Código', 'Descrição', 'Custo', 'GTIN'],
       linhas: [
         ['SKU-1', 'Fone', '12.5', '7891234567895'],
@@ -65,5 +67,26 @@ describe('lerPlanilha: recusas', () => {
     await expect(lerPlanilha('c.csv', utf8('sku;descricao\n'))).rejects.toThrow('A planilha só tem a linha dos nomes das colunas.');
     const grande = `sku\n${'A\n'.repeat(MAX_LINHAS + 1)}`;
     await expect(lerPlanilha('g.csv', utf8(grande))).rejects.toThrow(`A planilha tem ${MAX_LINHAS + 1} linhas; o limite é ${MAX_LINHAS}. Divida o arquivo.`);
+  });
+});
+
+describe('montarPlanilha: linhas em branco no início', () => {
+  it('pula linhas totalmente vazias antes do cabeçalho e guarda a linha real dele', () => {
+    const r = montarPlanilha([[], ['', ' '], ['sku', 'descricao'], ['A1', 'Fone']]);
+    expect(r.cabecalhos).toEqual(['sku', 'descricao']);
+    expect(r.linhas).toEqual([['A1', 'Fone']]);
+    expect(r.linhaCabecalho).toBe(3);
+  });
+
+  it('sem linhas em branco o cabeçalho é a linha 1', () => {
+    expect(montarPlanilha([['sku'], ['A1']]).linhaCabecalho).toBe(1);
+  });
+});
+
+describe('lerCsv: aspas sem fechamento', () => {
+  it('explica o erro e a linha', () => {
+    expect(() => lerCsv('sku;descricao\nA1;"Fone sem fechar\nB2;Cabo\n')).toThrow(
+      new ErroPlanilha('Aspas sem fechamento na linha 2 — confira o arquivo'),
+    );
   });
 });

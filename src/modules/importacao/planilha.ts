@@ -1,7 +1,8 @@
 import Papa from 'papaparse';
 import { readSheet } from 'read-excel-file/universal';
 
-export type Planilha = { cabecalhos: string[]; linhas: string[][] };
+/** `linhaCabecalho`: linha real do cabeçalho na planilha (1 quando não há linhas em branco antes). */
+export type Planilha = { cabecalhos: string[]; linhas: string[][]; linhaCabecalho?: number };
 
 export class ErroPlanilha extends Error {
   constructor(mensagem: string) {
@@ -46,7 +47,10 @@ export function lerCsv(texto: string): string[][] {
     .slice(0, 10)
     .join('\n');
   const separador = Papa.parse<string[]>(amostra).meta.delimiter || ',';
-  return Papa.parse<string[]>(texto, { delimiter: separador, skipEmptyLines: false }).data;
+  const resultado = Papa.parse<string[]>(texto, { delimiter: separador, skipEmptyLines: false });
+  const aspas = resultado.errors.find((e) => e.code === 'MissingQuotes');
+  if (aspas) throw new ErroPlanilha(`Aspas sem fechamento na linha ${(aspas.row ?? 0) + 1} — confira o arquivo`);
+  return resultado.data;
 }
 
 async function lerXlsx(conteudo: ArrayBuffer): Promise<unknown[][]> {
@@ -77,6 +81,11 @@ function nomesUnicos(nomes: string[]): string[] {
 export function montarPlanilha(brutas: unknown[][]): Planilha {
   const linhas = brutas.map((linha) => linha.map(celulaParaTexto));
   while (linhas.length > 0 && linhas[linhas.length - 1].every((c) => c === '')) linhas.pop();
+  let linhaCabecalho = 1;
+  while (linhas.length > 0 && linhas[0].every((c) => c === '')) {
+    linhas.shift();
+    linhaCabecalho++;
+  }
   if (linhas.length === 0) throw new ErroPlanilha('A planilha está vazia.');
   const [primeira, ...dados] = linhas;
   while (primeira.length > 0 && primeira[primeira.length - 1] === '') primeira.pop();
@@ -85,5 +94,5 @@ export function montarPlanilha(brutas: unknown[][]): Planilha {
     throw new ErroPlanilha(`A planilha tem ${dados.length} linhas; o limite é ${MAX_LINHAS}. Divida o arquivo.`);
   }
   const cabecalhos = nomesUnicos(primeira.map((c, i) => c || `Coluna ${i + 1}`));
-  return { cabecalhos, linhas: dados.map((linha) => cabecalhos.map((_, i) => linha[i] ?? '')) };
+  return { cabecalhos, linhas: dados.map((linha) => cabecalhos.map((_, i) => linha[i] ?? '')), linhaCabecalho };
 }

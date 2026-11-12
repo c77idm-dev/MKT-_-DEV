@@ -80,18 +80,19 @@ export function camposFaltando(campos: readonly CampoImportacao[], mapeamento: M
   return campos.filter((c) => c.obrigatorio && !mapeamento[c.chave]);
 }
 
-/** Uma LinhaMapeada por linha com algum valor. `numeroLinha` é o número da linha na planilha (o cabeçalho é a linha 1). */
+/** Uma LinhaMapeada por linha com algum valor. `numeroLinha` é o número da linha na planilha (o cabeçalho é a linha 1, ou `linhaCabecalho` quando há linhas em branco antes). */
 export function aplicarMapeamento(planilha: Planilha, campos: readonly CampoImportacao[], mapeamento: Mapeamento): LinhaMapeada[] {
   const indices = campos.map((campo) => {
     const cabecalho = mapeamento[campo.chave];
     return { chave: campo.chave, indice: cabecalho ? planilha.cabecalhos.indexOf(cabecalho) : -1 };
   });
   const resultado: LinhaMapeada[] = [];
+  const primeiraLinha = (planilha.linhaCabecalho ?? 1) + 1;
   planilha.linhas.forEach((linha, i) => {
     const valores: Record<string, string> = {};
     for (const { chave, indice } of indices) valores[chave] = indice >= 0 ? (linha[indice] ?? '').trim() : '';
     if (Object.values(valores).every((v) => v === '')) return;
-    resultado.push({ numeroLinha: i + 2, valores });
+    resultado.push({ numeroLinha: i + primeiraLinha, valores });
   });
   return resultado;
 }
