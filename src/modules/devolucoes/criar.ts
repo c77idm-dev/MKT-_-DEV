@@ -7,7 +7,7 @@ import { normalizarSku } from '@/modules/catalogo/documentos';
 import { idsDosProdutos } from '@/modules/catalogo/produtos';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { interpretarCanal } from './canais';
-import { LIMITE_QUANTIDADE, type Canal, type StatusDevolucao } from './dominio';
+import { CANAIS, LIMITE_QUANTIDADE, ROTULO_CANAL, type Canal, type StatusDevolucao } from './dominio';
 import { ErroDevolucaoDuplicada } from './erros';
 import { normalizarRastreio } from './rastreio';
 import { exigirTransicao } from './transicoes';
@@ -46,6 +46,12 @@ export type DadosNovaDevolucao = {
 
 export type DevolucaoCriada = { id: string; codigo: string; unidades: number };
 
+/** "A, B ou C" com os nomes de tela dos canais aceitos. */
+function listaDeCanais(): string {
+  const nomes = CANAIS.map((c) => ROTULO_CANAL[c]);
+  return `${nomes.slice(0, -1).join(', ')} ou ${nomes[nomes.length - 1]}`;
+}
+
 /** Campos do formulário "Nova devolução" (spec §6.1) e das colunas da planilha de devoluções. */
 export function validarNovaDevolucao(
   e: EntradaNovaDevolucao,
@@ -55,7 +61,7 @@ export function validarNovaDevolucao(
   const canalTexto = e.canal.trim();
   const canal = canalTexto ? interpretarCanal(canalTexto) : null;
   if (!canalTexto) erros.push('Escolha o canal (marketplace)');
-  else if (!canal) erros.push(`Canal desconhecido: ${canalTexto}`);
+  else if (!canal) erros.push(`Canal desconhecido: ${canalTexto}. Use: ${listaDeCanais()}.`);
   const pedido = e.pedido.trim();
   if (!pedido) erros.push('Informe o número do pedido');
   else if (pedido.length > 60) erros.push('Número do pedido: no máximo 60 caracteres');

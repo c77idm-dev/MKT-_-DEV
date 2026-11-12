@@ -7,11 +7,12 @@ import {
   validarNovaDevolucao,
   type DadosNovaDevolucao,
 } from '@/modules/devolucoes/criar';
-import type { Canal } from '@/modules/devolucoes/dominio';
+import { LIMITE_QUANTIDADE, type Canal } from '@/modules/devolucoes/dominio';
 import { ErroDevolucao } from '@/modules/devolucoes/erros';
 import { ErroTransicao } from '@/modules/devolucoes/transicoes';
 import { normalizarRastreio } from '@/modules/devolucoes/rastreio';
 import { dadosOuErro, type DefinicaoImportacao } from '../definicao';
+import type { LinhaPulada } from '../tipos';
 
 function interpretarLinha(v: Record<string, string>) {
   return validarNovaDevolucao({
@@ -35,6 +36,20 @@ function chaveDaLinha(v: Record<string, string>): string {
     normalizarRastreio(v.rastreio ?? ''),
     (v.id_reclamacao ?? '').trim(),
   ].join('|');
+}
+
+type CampoDoPacote = 'transportadora' | 'motivoCliente' | 'postadaEm';
+const CAMPOS_DO_PACOTE: { campo: CampoDoPacote; rotulo: string }[] = [
+  { campo: 'transportadora', rotulo: 'transportadora' },
+  { campo: 'motivoCliente', rotulo: 'motivo do cliente' },
+  { campo: 'postadaEm', rotulo: 'data de postagem' },
+];
+
+/** Junta as linhas válidas de um pacote: campos soltos valem pelo primeiro preenchido; um item por linha, na ordem. */
+function juntarPacote(linhas: DadosNovaDevolucao[]): DadosNovaDevolucao {
+  const base = { ...linhas[0], itens: linhas.flatMap((d) => d.itens) };
+  for (const { campo } of CAMPOS_DO_PACOTE) base[campo] = linhas.map((d) => d[campo]).find((v) => v !== null) ?? null;
+  return base;
 }
 
 /** Modelo sugerido da spec §6.1: canal, numero_pedido, id_reclamacao, rastreio, transportadora, sku, quantidade, motivo_cliente, data_postagem. */
@@ -100,6 +115,31 @@ export const definicaoDevolucoes: DefinicaoImportacao = {
       }),
     );
 
+    for (const indices of grupos.values()) {
+      // Campos soltos: vale o primeiro preenchido; outro valor diferente nas linhas seguintes vira aviso.
+      for (const { campo, rotulo } of CAMPOS_DO_PACOTE) {
+        let escolhida: { valor: string; linha: number } | null = null;
+        for (const i of indices) {
+          const valor = itens[i].dados?.[campo] ?? null;
+          if (valor === null) continue;
+          if (!escolhida) escolhida = { valor, linha: itens[i].linha.numeroLinha };
+          else if (valor !== escolhida.valor) {
+            avisos[i].push(`${rotulo} diferente da linha ${escolhida.linha}; ficou a da linha ${escolhida.linha}`);
+          }
+        }
+      }
+      // Quantidade somada por SKU dentro do pedido: o limite vale para o total.
+      const totais = new Map<string, number>();
+      for (const i of indices)
+        for (const x of itens[i].dados?.itens ?? []) totais.set(x.sku, (totais.get(x.sku) ?? 0) + x.quantidade);
+      for (const [sku, total] of totais) {
+        if (total <= LIMITE_QUANTIDADE) continue;
+        for (const i of indices) {
+          if (itens[i].dados?.itens.some((x) => x.sku === sku)) erros[i].push(`o SKU ${sku} soma ${total} unidades no pedido (máximo ${LIMITE_QUANTIDADE})`);
+        }
+      }
+    }
+
     // Um pedido com qualquer linha errada fica de fora inteiro (não dá para gravar meia devolução).
     for (const indices of grupos.values()) {
       const comErro = indices.find((i) => erros[i].length > 0);
@@ -119,25 +159,29 @@ export const definicaoDevolucoes: DefinicaoImportacao = {
   },
 
   async aplicar(db, linhas, usuario) {
-    const grupos = new Map<string, DadosNovaDevolucao>();
+    const grupos = new Map<string, { dados: DadosNovaDevolucao[]; linhas: number[] }>();
     for (const linha of linhas) {
       const dados = dadosOuErro(interpretarLinha(linha.valores), linha.numeroLinha);
       const chave = chaveDaLinha(linha.valores);
-      const grupo = grupos.get(chave);
-      if (grupo) grupo.itens.push(...dados.itens);
-      else grupos.set(chave, { ...dados, itens: [...dados.itens] });
+      const grupo = grupos.get(chave) ?? { dados: [], linhas: [] };
+      grupo.dados.push(dados);
+      grupo.linhas.push(linha.numeroLinha);
+      grupos.set(chave, grupo);
     }
     let criados = 0;
-    for (const dados of grupos.values()) {
+    const puladas: LinhaPulada[] = [];
+    for (const grupo of grupos.values()) {
+      const pacote = juntarPacote(grupo.dados);
       try {
-        await criarDevolucao(db, dados, { origem: 'PLANILHA', usuario });
+        await criarDevolucao(db, pacote, { origem: 'PLANILHA', usuario });
         criados += 1;
       } catch (erro) {
-        // Regra de negócio (ex.: o pedido ganhou devolução depois da prévia): pula só este pedido. ErroTransicao (sem
-        // permissão) não é capturado: sobe e a confirmação inteira é desfeita.
+        // Regra de negócio (ex.: o pedido ganhou devolução depois da prévia): pula só este pedido e diz por quê.
+        // ErroTransicao (sem permissão) não é capturado: sobe e a confirmação inteira é desfeita.
         if (!(erro instanceof ErroDevolucao) || erro instanceof ErroTransicao) throw erro;
+        for (const linha of grupo.linhas) puladas.push({ linha, erro: `Pedido ${pacote.pedido}: ${erro.message}` });
       }
     }
-    return { criados, atualizados: 0 };
+    return { criados, atualizados: 0, puladas };
   },
 };

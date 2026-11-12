@@ -116,8 +116,14 @@ export async function confirmarImportacao(
       .where(and(eq(importacoes.id, imp.id), eq(importacoes.situacao, 'PENDENTE')))
       .returning({ id: importacoes.id });
     if (!travada) throw new ErroImportacao('Esta importação já foi concluída.');
-    const { criados, atualizados } = await def.aplicar(tx, validas, usuario);
-    const resumo: ResumoImportacao = { criados, atualizados, ignorados: previa.comErro, linhasComErro: linhasComErro.slice(0, 200) };
+    const { criados, atualizados, puladas = [] } = await def.aplicar(tx, validas, usuario);
+    const resumo: ResumoImportacao = {
+      criados,
+      atualizados,
+      ignorados: previa.comErro + puladas.length,
+      linhasComErro: [...linhasComErro, ...puladas.map((x) => x.linha)].sort((a, b) => a - b).slice(0, 200),
+      ...(puladas.length > 0 ? { puladas: puladas.slice(0, 200) } : {}),
+    };
     await tx.update(importacoes).set({ resumo, mapeamento, linhas: [] }).where(eq(importacoes.id, imp.id));
     await tx
       .insert(mapeamentosImportacao)

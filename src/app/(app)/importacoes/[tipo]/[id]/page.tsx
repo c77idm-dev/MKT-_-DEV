@@ -43,6 +43,11 @@ export default async function PaginaImportacao({ params }: { params: Promise<{ t
             Linhas com erro (ignoradas): <strong>{r?.ignorados ?? 0}</strong>
             {comErro.length > 0 ? ` (${comErro.length === 1 ? 'linha' : 'linhas'} ${comErro.join(', ')})` : ''}
           </p>
+          {(r?.puladas ?? []).map((x) => (
+            <p key={x.linha} className="text-[14px] text-texto-2">
+              Linha {x.linha}: {x.erro}
+            </p>
+          ))}
         </div>
         <div className="grid gap-2 sm:flex">
           <Link href={def.voltarPara} className={BOTAO_PRIMARIO}>

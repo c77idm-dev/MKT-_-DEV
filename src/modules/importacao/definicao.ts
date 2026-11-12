@@ -2,7 +2,7 @@ import type { DbOuTx } from '@/db/client';
 import type { Acao } from '@/modules/auth/permissoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import type { CampoImportacao, LinhaMapeada } from './mapeamento';
-import type { TipoImportacao } from './tipos';
+import type { LinhaPulada, TipoImportacao } from './tipos';
 
 export type LinhaPrevia = LinhaMapeada & { erros: string[]; avisos: string[] };
 
@@ -20,7 +20,7 @@ export type DefinicaoImportacao = {
   campos: readonly CampoImportacao[];
   validar(db: DbOuTx, linhas: LinhaMapeada[]): Promise<LinhaPrevia[]>;
   /** Recebe só linhas sem erro e roda dentro da transação da confirmação. */
-  aplicar(db: DbOuTx, linhas: LinhaPrevia[], usuario: UsuarioSessao): Promise<{ criados: number; atualizados: number }>;
+  aplicar(db: DbOuTx, linhas: LinhaPrevia[], usuario: UsuarioSessao): Promise<{ criados: number; atualizados: number; puladas?: LinhaPulada[] }>;
 };
 
 export function dadosOuErro<T>(resultado: { dados: T | null; erros: string[] }, numeroLinha: number): T {

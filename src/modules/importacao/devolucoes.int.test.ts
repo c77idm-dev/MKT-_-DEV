@@ -79,7 +79,7 @@ describe('importação de devoluções', () => {
       [2, [], []],
       [3, [], ['Pedido SHP-1: SKU CABO-99 fora do cadastro de produtos']],
       [4, [], []],
-      [5, ['Pedido X-3: Canal desconhecido: Loja X'], []],
+      [5, ['Pedido X-3: Canal desconhecido: Loja X. Use: Mercado Livre, Amazon, Shopee, Magalu, TikTok Shop ou Shein.'], []],
       [6, ['Pedido MGL-4: outra linha deste pedido tem erro (linha 7); o pedido inteiro fica de fora'], []],
       [7, ['Pedido MGL-4: Informe o SKU'], []],
       [8, ['Pedido AMZ-2: aparece com outro rastreio ou reclamação na linha 4'], []],
@@ -160,14 +160,58 @@ describe('importação de devoluções', () => {
     expect(p.linhas[0].erros).toEqual(['Pedido SHP-1: já existe a devolução DEV-000001 para este pedido neste canal']);
   });
 
-  it('se o pedido ganhar devolução entre a prévia e a gravação, o pedido é pulado sem derrubar a importação', async () => {
+  it('se o pedido ganhar devolução entre a prévia e a confirmação, ele vai para as ignoradas com o motivo', async () => {
     const def = definicao();
-    const linhas = [['Shopee', 'SHP-1', '', 'BR1', '', 'FONE-01', '1', '', '']];
+    const linhas = [
+      ['Shopee', 'SHP-1', '', 'BR1', '', 'FONE-01', '1', '', ''],
+      ['Shopee', 'SHP-1', '', 'BR1', '', 'CABO-02', '1', '', ''],
+      ['Amazon', 'AMZ-2', '', 'BR2', '', 'FONE-01', '1', '', ''],
+    ];
     const imp = await enviar(linhas);
-    const mapeadas = (await calcularPrevia(db, def, imp, await mapeamentoEfetivo(db, def, imp))).linhas;
-    const outra = await enviar(linhas);
-    await confirmarImportacao(db, def, outra, await mapeamentoEfetivo(db, def, outra), operador);
-    await expect(def.aplicar(db, mapeadas, operador)).resolves.toEqual({ criados: 0, atualizados: 0 });
+    const mapa = await mapeamentoEfetivo(db, def, imp);
+    await calcularPrevia(db, def, imp, mapa);
+    // A confirmação recalcula a prévia; só a corrida dentro da gravação chega a `puladas`. Simulada: o duplicado nasce
+    // no banco no instante em que a gravação começa (depois da prévia da confirmação).
+    const comCorrida: DefinicaoImportacao = {
+      ...def,
+      aplicar: async (tx, validas, usuario) => {
+        const outra = await enviar([linhas[0]]);
+        await confirmarImportacao(db, def, outra, await mapeamentoEfetivo(db, def, outra), operador);
+        return def.aplicar(tx, validas, usuario);
+      },
+    };
+    const resumo = await confirmarImportacao(db, comCorrida, imp, mapa, operador);
+    expect(resumo).toMatchObject({ criados: 1, ignorados: 2, linhasComErro: [2, 3] });
+    expect(resumo.puladas?.map((x) => x.linha)).toEqual([2, 3]);
+    expect(resumo.puladas?.[0].erro).toMatch(/Pedido SHP-1: .*á existe a devolução DEV-000001/);
+  });
+
+  it('campos do pacote: vale o primeiro valor preenchido e um valor diferente vira aviso', async () => {
+    const p = await previa([
+      ['Shopee', 'SHP-1', '', 'BR1', '', 'FONE-01', '1', '', ''],
+      ['Shopee', 'SHP-1', '', 'BR1', 'Correios', 'CABO-02', '1', 'Defeito', ''],
+      ['Shopee', 'SHP-1', '', 'BR1', 'Jadlog', 'CABO-03', '1', 'Defeito', ''],
+    ]);
+    expect(p.linhas.map((l) => l.avisos.filter((a) => !a.includes('fora do cadastro')))).toEqual([
+      [],
+      [],
+      ['Pedido SHP-1: transportadora diferente da linha 3; ficou a da linha 3'],
+    ]);
+  });
+
+  it('a quantidade soma por SKU dentro do pedido: acima de 50 é erro e o pedido fica de fora', async () => {
+    const def = definicao();
+    const imp = await enviar([
+      ['Shopee', 'SHP-1', '', 'BR1', '', 'FONE-01', '30', '', ''],
+      ['Shopee', 'SHP-1', '', 'BR1', '', 'FONE-01', '30', '', ''],
+      ['Shopee', 'SHP-1', '', 'BR1', '', 'CABO-02', '1', '', ''],
+    ]);
+    const p = await calcularPrevia(db, def, imp, await mapeamentoEfetivo(db, def, imp));
+    expect(p.linhas.map((l) => l.erros)).toEqual([
+      ['Pedido SHP-1: o SKU FONE-01 soma 60 unidades no pedido (máximo 50)'],
+      ['Pedido SHP-1: o SKU FONE-01 soma 60 unidades no pedido (máximo 50)'],
+      ['Pedido SHP-1: outra linha deste pedido tem erro (linha 2); o pedido inteiro fica de fora'],
+    ]);
   });
 
   it('o Fiscal não importa devoluções e nada fica gravado', async () => {

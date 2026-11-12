@@ -44,7 +44,7 @@ describe('validarNovaDevolucao', () => {
     });
     expect(dados).toBeNull();
     expect(erros).toEqual([
-      'Canal desconhecido: Loja X',
+      'Canal desconhecido: Loja X. Use: Mercado Livre, Amazon, Shopee, Magalu, TikTok Shop ou Shein.',
       'Informe o número do pedido',
       'Data de postagem inválida: 31/02/2026',
       'Quantidade inválida (item 1): use um número de 1 a 50',
