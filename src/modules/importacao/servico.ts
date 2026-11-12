@@ -8,7 +8,7 @@ import { aplicarMapeamento, camposFaltando, sanitizarMapeamento, sugerirMapeamen
 import type { Planilha } from './planilha';
 import type { Mapeamento, ResumoImportacao, TipoImportacao } from './tipos';
 
-export const TAMANHO_MAXIMO_BYTES = 5 * 1024 * 1024;
+export { TAMANHO_MAXIMO_BYTES } from './limites';
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
 
 export class ErroImportacao extends Error {

@@ -9,6 +9,7 @@ import { calcularPrevia, mapeamentoEfetivo, obterImportacao } from '@/modules/im
 import { definirMapeamentoAcao, confirmarImportacaoAcao } from '../acoes';
 import { CartoesPrevia } from './CartoesPrevia';
 import { FormularioConfirmacao } from './FormularioConfirmacao';
+import { FormularioColunas, ImportacaoInterativa } from './ImportacaoInterativa';
 
 export const metadata: Metadata = { title: 'Importar planilha · Gestão de Devoluções' };
 
@@ -74,12 +75,13 @@ export default async function PaginaImportacao({ params }: { params: Promise<{ t
         </p>
       </div>
 
+      <ImportacaoInterativa>
       <section aria-labelledby="titulo-colunas" className={`${CARTAO} flex flex-col gap-3`}>
         <h2 id="titulo-colunas" className="text-base font-bold">
           1. Colunas da planilha
         </h2>
         <p className="text-sm text-texto-2">Para cada campo do sistema, escolha a coluna da planilha. O que parece igual já vem sugerido.</p>
-        <form action={definirMapeamentoAcao.bind(null, def.tipo, imp.id)} className="flex flex-col gap-3">
+        <FormularioColunas acao={definirMapeamentoAcao.bind(null, def.tipo, imp.id)}>
           <div className="grid gap-3 md:grid-cols-2">
             {def.campos.map((campo) => (
               <div key={campo.chave} className="flex flex-col gap-1.5">
@@ -99,10 +101,7 @@ export default async function PaginaImportacao({ params }: { params: Promise<{ t
               </div>
             ))}
           </div>
-          <button type="submit" className={BOTAO_SECUNDARIO}>
-            Atualizar prévia
-          </button>
-        </form>
+        </FormularioColunas>
       </section>
 
       <section aria-labelledby="titulo-previa" className="flex flex-col gap-3">
@@ -138,6 +137,7 @@ export default async function PaginaImportacao({ params }: { params: Promise<{ t
           habilitado={previa.faltando.length === 0 && previa.validas > 0}
         />
       </section>
+      </ImportacaoInterativa>
     </div>
   );
 }

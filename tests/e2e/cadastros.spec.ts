@@ -139,3 +139,37 @@ test('planilha acima de 5 MB é recusada com mensagem clara', async ({ page }) =
   await expect(alerta).toHaveText('A planilha passa de 5 MB. Divida o arquivo.');
   await expect(alerta).toBeFocused();
 });
+
+test('trocar uma coluna atualiza a prévia sozinho e a confirmação usa a coluna nova', async ({ page }, testInfo) => {
+  const sufixo = ehCelular(testInfo) ? 'C' : 'D';
+  const sku = `AUTO-${sufixo}1`;
+  const csv = ['Código;Nome do produto;Preço de custo', `${sku};Produto Auto ${sufixo};45,00`].join('\r\n');
+  await entrarComo(page, USUARIOS_E2E.fiscal);
+  await page.goto('/importacoes/produtos');
+  await page.getByLabel('Planilha').setInputFiles({ name: 'auto.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await page.getByRole('button', { name: 'Enviar planilha' }).click();
+  await expect(page.getByLabel('Custo')).toHaveValue('Preço de custo');
+  const valorNaPrevia = page.locator('dd', { hasText: '45,00' });
+  await expect(valorNaPrevia).toBeVisible();
+
+  // Sem tocar em "Atualizar prévia": a troca da coluna atualiza a prévia e o botão espera.
+  await page.getByLabel('Custo').selectOption('');
+  await expect(valorNaPrevia).toHaveCount(0);
+  await page.getByRole('button', { name: 'Confirmar importação' }).click();
+  await expect(page.getByRole('status')).toContainText('Produtos novos: 1');
+
+  await page.goto(`/cadastros/produtos?busca=${sku}`);
+  const cartao = page.getByRole('link', { name: new RegExp(`^Editar ${sku}`) });
+  await expect(cartao).toBeVisible();
+  await expect(cartao).not.toContainText('R$');
+});
+
+test('planilha acima de 6 MB também recebe a mensagem clara de 5 MB', async ({ page }) => {
+  await entrarComo(page, USUARIOS_E2E.fiscal);
+  await page.goto('/importacoes/fornecedores');
+  await page.getByLabel('Planilha').setInputFiles({ name: 'enorme.csv', mimeType: 'text/csv', buffer: Buffer.alloc(6.5 * 1024 * 1024, 'a') });
+  await page.getByRole('button', { name: 'Enviar planilha' }).click();
+  const alerta = page.getByRole('alert').filter({ hasText: '5 MB' });
+  await expect(alerta).toHaveText('A planilha passa de 5 MB. Divida o arquivo.');
+  await expect(alerta).toBeFocused();
+});

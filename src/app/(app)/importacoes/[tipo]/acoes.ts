@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { obterDb } from '@/db';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { obterDefinicao } from '@/modules/importacao/definicoes';
+import { MENSAGEM_PLANILHA_GRANDE, TAMANHO_MAXIMO_BYTES } from '@/modules/importacao/limites';
 import { ErroPlanilha, lerPlanilha } from '@/modules/importacao/planilha';
 import {
   confirmarImportacao,
@@ -12,7 +13,6 @@ import {
   ErroImportacao,
   obterImportacao,
   registrarUpload,
-  TAMANHO_MAXIMO_BYTES,
 } from '@/modules/importacao/servico';
 
 // `erros` (lista) para reaproveitar useEnvioFormulario: foco e rolagem até a mensagem, e os campos não são limpos.
@@ -34,8 +34,8 @@ export async function enviarPlanilhaAcao(tipo: string, _anterior: EstadoUpload, 
   const usuario = await exigirPermissao(def.acao);
   const arquivo = dados.get('arquivo');
   if (!(arquivo instanceof File) || arquivo.size === 0) return { erros: ['Escolha a planilha.'] };
-  // Antes de ler o arquivo: um arquivo grande não deve ocupar memória só para ser recusado.
-  if (arquivo.size > TAMANHO_MAXIMO_BYTES) return { erros: ['A planilha passa de 5 MB. Divida o arquivo.'] };
+  // Retaguarda: o formulário já confere no cliente (acima de ~6 MB o Next recusa o corpo antes da ação). Antes de ler o arquivo: um arquivo grande não deve ocupar memória só para ser recusado.
+  if (arquivo.size > TAMANHO_MAXIMO_BYTES) return { erros: [MENSAGEM_PLANILHA_GRANDE] };
   let id: string;
   try {
     const planilha = await lerPlanilha(arquivo.name, await arquivo.arrayBuffer());
@@ -56,6 +56,7 @@ export async function definirMapeamentoAcao(tipo: string, id: string, dados: For
   try {
     await definirMapeamento(db, def, imp, mapeamentoDoFormulario(def.campos.map((c) => c.chave), dados));
   } catch (erro) {
+    // Engolir é seguro: o único ErroImportacao aqui é "já concluída", e a página volta a mostrar o resumo.
     if (!(erro instanceof ErroImportacao)) throw erro;
   }
   revalidatePath(`/importacoes/${def.tipo}/${id}`);

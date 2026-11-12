@@ -3,12 +3,19 @@
 import { ListaErros } from '@/components/ListaErros';
 import { BOTAO_PRIMARIO, CARTAO, ROTULO } from '@/components/estilos';
 import { useEnvioFormulario } from '@/components/useEnvioFormulario';
+import { MENSAGEM_PLANILHA_GRANDE, TAMANHO_MAXIMO_BYTES } from '@/modules/importacao/limites';
 import type { EstadoUpload } from './acoes';
 
 type Props = { acao: (anterior: EstadoUpload, dados: FormData) => Promise<EstadoUpload> };
 
 export function FormularioUpload({ acao }: Props) {
-  const [estado, aoEnviar, pendente] = useEnvioFormulario(acao, { erros: [] });
+  // Confere o tamanho antes de enviar: acima de ~6 MB o Next (ou o nginx) recusa o corpo e o usuário veria um erro genérico.
+  async function acaoComLimite(anterior: EstadoUpload, dados: FormData): Promise<EstadoUpload> {
+    const arquivo = dados.get('arquivo');
+    if (arquivo instanceof File && arquivo.size > TAMANHO_MAXIMO_BYTES) return { erros: [MENSAGEM_PLANILHA_GRANDE] };
+    return acao(anterior, dados);
+  }
+  const [estado, aoEnviar, pendente] = useEnvioFormulario(acaoComLimite, { erros: [] });
   return (
     <form onSubmit={aoEnviar} className={`${CARTAO} flex flex-col gap-4`}>
       <div className="flex flex-col gap-1.5">
