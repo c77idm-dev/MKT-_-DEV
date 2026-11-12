@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ caminho: '/fluxo' }));
@@ -40,5 +40,12 @@ describe('NavAbas rótulo curto', () => {
     render(<NavAbas abas={[{ rotulo: 'Produtos e Fornecedores', href: '/cadastros' }]} />);
     const link = screen.getByRole('link', { name: 'Produtos e Fornecedores' });
     expect(link.getAttribute('data-curto')).toBe('Cadastros');
+    // (a) o texto completo está no DOM, escondido só visualmente no celular
+    expect(within(link).getByText('Produtos e Fornecedores').className).toContain('max-md:sr-only');
+    // (b) o rótulo curto aparece no celular (::after) e some a partir de md
+    expect(link.className).toContain('after:content-[attr(data-curto)]');
+    expect(link.className).toContain('md:after:hidden');
+    // (c) nome acessível continua o completo
+    expect(link.getAttribute('aria-label')).toBe('Produtos e Fornecedores');
   });
 });
