@@ -23,7 +23,7 @@ describe('CartaoDevolucao', () => {
   it('mostra código, canal, produto, rastreio e selos, e o cartão inteiro leva ao detalhe', () => {
     render(<CartaoDevolucao devolucao={BASE} />);
     expect(screen.getByRole('link').getAttribute('href')).toBe('/fluxo/devolucoes/DEV-000001');
-    for (const texto of ['DEV-000001', 'Shopee', 'Fone Bluetooth + 2 unidades', 'BR123', 'Entregue (ML)']) {
+    for (const texto of ['DEV-000001', 'Shopee', 'Fone Bluetooth + 2 unidades', 'BR123', 'Entregue (ML)', 'Pendente de chegada']) {
       expect(screen.getByText(texto)).toBeTruthy();
     }
   });

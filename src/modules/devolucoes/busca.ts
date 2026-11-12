@@ -1,30 +1,12 @@
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  exists,
-  ilike,
-  inArray,
-  like,
-  or,
-  sql,
-  type SQL,
-} from "drizzle-orm";
-import type { DbOuTx } from "@/db/client";
-import {
-  devolucoes,
-  fornecedores,
-  itensDevolucao,
-  produtos,
-} from "@/db/schema";
-import { escaparLike } from "@/lib/texto";
-import { somenteDigitos } from "@/modules/catalogo/documentos";
-import type { Canal, StatusDevolucao } from "./dominio";
-import { POR_PAGINA_DEVOLUCOES, type FiltrosBusca } from "./filtros";
-import { normalizarRastreio } from "./rastreio";
-import { selosDaDevolucao, type DadosSelo } from "./selos";
+import { and, asc, count, desc, eq, exists, ilike, inArray, like, or, sql, type SQL } from 'drizzle-orm';
+import type { DbOuTx } from '@/db/client';
+import { devolucoes, fornecedores, itensDevolucao, produtos } from '@/db/schema';
+import { escaparLike } from '@/lib/texto';
+import { somenteDigitos } from '@/modules/catalogo/documentos';
+import type { Canal, StatusDevolucao } from './dominio';
+import { POR_PAGINA_DEVOLUCOES, type FiltrosBusca } from './filtros';
+import { normalizarRastreio } from './rastreio';
+import { selosDaDevolucao, type DadosSelo } from './selos';
 
 export type ResumoDevolucao = {
   id: string;
@@ -46,7 +28,7 @@ export type OpcoesBusca = {
   /** Status da etapa da lista. Sem isso, busca em todos. */
   status?: readonly StatusDevolucao[];
   /** "recentes": "Entregue (ML)" no topo e depois as mais novas (spec §5.2). "chegada": quem chegou primeiro. */
-  ordem?: "recentes" | "chegada";
+  ordem?: 'recentes' | 'chegada';
   pagina?: number;
   porPagina?: number;
   agora?: Date;
@@ -54,53 +36,27 @@ export type OpcoesBusca = {
 
 function condicoes(db: DbOuTx, f: FiltrosBusca): SQL[] {
   const lista: SQL[] = [];
-  if (f.rastreio)
-    lista.push(
-      ilike(
-        devolucoes.rastreio,
-        `%${escaparLike(normalizarRastreio(f.rastreio))}%`,
-      ),
-    );
-  if (f.pedido)
-    lista.push(
-      sql`array_to_string(${devolucoes.pedidosExternos}, ' ') ilike ${`%${escaparLike(f.pedido.trim())}%`}`,
-    );
-  if (f.reclamacao)
-    lista.push(
-      ilike(devolucoes.reclamacaoId, `%${escaparLike(f.reclamacao.trim())}%`),
-    );
+  if (f.rastreio) lista.push(ilike(devolucoes.rastreio, `%${escaparLike(normalizarRastreio(f.rastreio))}%`));
+  if (f.pedido) lista.push(sql`array_to_string(${devolucoes.pedidosExternos}, ' ') ilike ${`%${escaparLike(f.pedido.trim())}%`}`);
+  if (f.reclamacao) lista.push(ilike(devolucoes.reclamacaoId, `%${escaparLike(f.reclamacao.trim())}%`));
   if (f.canal) lista.push(eq(devolucoes.canal, f.canal));
   if (f.status) lista.push(eq(devolucoes.status, f.status));
-  if (f.de)
-    lista.push(
-      sql`${devolucoes.criadaEm} >= (${f.de}::date::timestamp at time zone 'America/Sao_Paulo')`,
-    );
-  if (f.ate)
-    lista.push(
-      sql`${devolucoes.criadaEm} < ((${f.ate}::date + 1)::timestamp at time zone 'America/Sao_Paulo')`,
-    );
+  if (f.de) lista.push(sql`${devolucoes.criadaEm} >= (${f.de}::date::timestamp at time zone 'America/Sao_Paulo')`);
+  if (f.ate) lista.push(sql`${devolucoes.criadaEm} < ((${f.ate}::date + 1)::timestamp at time zone 'America/Sao_Paulo')`);
   if (f.fornecedor) {
     const termo = `%${escaparLike(f.fornecedor.trim())}%`;
-    const documento = f.fornecedor.toUpperCase().replace(/[^0-9A-Z]/g, "");
+    const documento = f.fornecedor.toUpperCase().replace(/[^0-9A-Z]/g, '');
     lista.push(
       exists(
         db
           .select({ um: sql`1` })
           .from(itensDevolucao)
-          .innerJoin(
-            produtos,
-            eq(produtos.id, itensDevolucao.produtoEsperadoId),
-          )
+          .innerJoin(produtos, eq(produtos.id, itensDevolucao.produtoEsperadoId))
           .innerJoin(fornecedores, eq(fornecedores.id, produtos.fornecedorId))
           .where(
             and(
               eq(itensDevolucao.devolucaoId, devolucoes.id),
-              or(
-                ilike(fornecedores.razaoSocial, termo),
-                documento
-                  ? like(fornecedores.cnpj, `${documento}%`)
-                  : undefined,
-              ),
+              or(ilike(fornecedores.razaoSocial, termo), documento ? like(fornecedores.cnpj, `${documento}%`) : undefined),
             ),
           ),
       ),
@@ -108,7 +64,7 @@ function condicoes(db: DbOuTx, f: FiltrosBusca): SQL[] {
   }
   if (f.codigo) {
     const codigo = f.codigo.trim();
-    const digitos = somenteDigitos(codigo);
+    const ean = /^[0-9]+$/.test(codigo) ? somenteDigitos(codigo) : '';
     lista.push(
       exists(
         db
@@ -119,8 +75,9 @@ function condicoes(db: DbOuTx, f: FiltrosBusca): SQL[] {
             and(
               eq(itensDevolucao.devolucaoId, devolucoes.id),
               or(
-                digitos ? eq(produtos.ean, digitos) : undefined,
+                ean ? eq(produtos.ean, ean) : undefined,
                 sql`upper(${itensDevolucao.serial}) = upper(${codigo})`,
+                sql`upper(${itensDevolucao.sku}) = upper(${codigo})`,
               ),
             ),
           ),
@@ -138,25 +95,14 @@ export async function buscarDevolucoes(
   const porPagina = opcoes.porPagina ?? POR_PAGINA_DEVOLUCOES;
   const pagina = Math.max(1, opcoes.pagina ?? 1);
   const lista = condicoes(db, filtros);
-  if (opcoes.status)
-    lista.push(
-      opcoes.status.length > 0
-        ? inArray(devolucoes.status, [...opcoes.status])
-        : sql`false`,
-    );
+  if (opcoes.status) lista.push(opcoes.status.length > 0 ? inArray(devolucoes.status, [...opcoes.status]) : sql`false`);
   const onde = lista.length > 0 ? and(...lista) : undefined;
 
-  const [{ total }] = await db
-    .select({ total: count() })
-    .from(devolucoes)
-    .where(onde);
+  const [{ total }] = await db.select({ total: count() }).from(devolucoes).where(onde);
   const ordem =
-    opcoes.ordem === "chegada"
+    opcoes.ordem === 'chegada'
       ? [asc(devolucoes.recebidaEm), asc(devolucoes.numero)]
-      : [
-          sql`${devolucoes.entregueSegundoCanalEm} is null`,
-          desc(devolucoes.numero),
-        ];
+      : [sql`${devolucoes.entregueSegundoCanalEm} is null`, desc(devolucoes.numero)];
 
   const linhas = await db
     .select({
@@ -191,20 +137,18 @@ export async function buscarDevolucoes(
   const agora = opcoes.agora ?? new Date();
   return {
     total,
-    devolucoes: linhas.map(
-      ({ entregueSegundoCanalEm, prazoConferenciaCanal, ...resto }) => ({
-        ...resto,
-        selos: selosDaDevolucao(
-          {
-            canal: resto.canal,
-            status: resto.status,
-            naoIdentificada: resto.naoIdentificada,
-            entregueSegundoCanalEm,
-            prazoConferenciaCanal,
-          },
-          agora,
-        ),
-      }),
-    ),
+    devolucoes: linhas.map(({ entregueSegundoCanalEm, prazoConferenciaCanal, ...resto }) => ({
+      ...resto,
+      selos: selosDaDevolucao(
+        {
+          canal: resto.canal,
+          status: resto.status,
+          naoIdentificada: resto.naoIdentificada,
+          entregueSegundoCanalEm,
+          prazoConferenciaCanal,
+        },
+        agora,
+      ),
+    })),
   };
 }

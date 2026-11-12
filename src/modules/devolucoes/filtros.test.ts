@@ -10,6 +10,12 @@ describe('filtros da Busca Avançada', () => {
     expect(temFiltro({ status: 'CANCELADA' })).toBe(true);
   });
 
+  it('descarta datas impossíveis em vez de quebrar a consulta', () => {
+    expect(lerFiltros({ de: '2026-02-30' })).toEqual({});
+    expect(lerFiltros({ ate: '2026-13-45' })).toEqual({});
+    expect(lerFiltros({ de: '2028-02-29' })).toEqual({ de: '2028-02-29' });
+  });
+
   it('volta para a URL, com parâmetros extras', () => {
     expect(filtrosParaQuery({ rastreio: 'BR 1', canal: 'SHOPEE' }, { pagina: '2' })).toBe('?rastreio=BR+1&canal=SHOPEE&pagina=2');
     expect(filtrosParaQuery({})).toBe('');

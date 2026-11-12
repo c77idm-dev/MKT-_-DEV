@@ -1,5 +1,6 @@
 import { formatarDataIso } from '@/lib/formatar';
 import { primeiroValor, type ParametrosBusca } from '@/lib/parametros';
+import { interpretarData } from '@/lib/valores';
 import { ehCanal, ehStatus, ROTULO_CANAL, ROTULO_STATUS, type Canal, type StatusDevolucao } from './dominio';
 
 export const POR_PAGINA_DEVOLUCOES = 30;
@@ -46,7 +47,7 @@ export function lerFiltros(parametros: ParametrosBusca): FiltrosBusca {
   if (ehStatus(status)) f.status = status;
   for (const chave of ['de', 'ate'] as const) {
     const valor = primeiroValor(parametros[chave]);
-    if (DATA.test(valor)) f[chave] = valor;
+    if (DATA.test(valor) && interpretarData(valor) === valor) f[chave] = valor;
   }
   return f;
 }

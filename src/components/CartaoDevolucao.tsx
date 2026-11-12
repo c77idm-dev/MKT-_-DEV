@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ResumoDevolucao } from '@/modules/devolucoes/busca';
-import { ROTULO_CANAL } from '@/modules/devolucoes/dominio';
+import { ROTULO_CANAL, ROTULO_STATUS } from '@/modules/devolucoes/dominio';
+import { TOM_DO_STATUS } from '@/modules/devolucoes/selos';
 import { Selo } from './Selo';
 
 /** Cartão do quadro e das listas (protótipo C-Painel): código, canal, produto, rastreio e selos. O cartão inteiro é o link. */
@@ -20,13 +21,12 @@ export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }
         {outras > 0 ? ` + ${outras} ${outras === 1 ? 'unidade' : 'unidades'}` : ''}
       </span>
       <span className="break-all font-mono text-xs text-texto-2">{d.rastreio ?? 'Sem rastreio'}</span>
-      {d.selos.length > 0 && (
-        <span className="flex flex-wrap gap-1.5">
-          {d.selos.map((s) => (
-            <Selo key={s.texto} texto={s.texto} tom={s.tom} />
-          ))}
-        </span>
-      )}
+      <span className="flex flex-wrap gap-1.5">
+        <Selo texto={ROTULO_STATUS[d.status]} tom={TOM_DO_STATUS[d.status]} />
+        {d.selos.map((s) => (
+          <Selo key={s.texto} texto={s.texto} tom={s.tom} />
+        ))}
+      </span>
     </Link>
   );
 }
