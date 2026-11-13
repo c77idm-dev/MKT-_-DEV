@@ -1,4 +1,15 @@
+import { renovarTokensML, sincronizarReclamacao, varrerReclamacoes } from '@/modules/mercado-livre/tarefas';
 import type { Manipuladores } from '../tipos';
 
-/** Fase 3: ml.*. Só a Fase 3 edita este arquivo. */
-export const manipuladoresMercadoLivre: Manipuladores = {};
+/** Fase 3 (contrato §5.1). Cada manipulador é idempotente; lançar = nova tentativa. */
+export const manipuladoresMercadoLivre: Manipuladores = {
+  'ml.sincronizar-reclamacao': async ({ claimId }, ctx) => {
+    await sincronizarReclamacao(ctx.db, ctx.fila, claimId, ctx.agora);
+  },
+  'ml.varredura': async (_dados, ctx) => {
+    await varrerReclamacoes(ctx.db, ctx.fila, ctx.agora);
+  },
+  'ml.renovar-token': async (_dados, ctx) => {
+    await renovarTokensML(ctx.db, ctx.agora);
+  },
+};
