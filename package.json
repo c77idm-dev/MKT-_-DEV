@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",
+    "@tus/file-store": "2.1.1",
+    "@tus/server": "2.4.6",
     "barcode-detector": "3.2.3",
     "drizzle-orm": "^0.45.4",
     "fflate": "0.8.2",

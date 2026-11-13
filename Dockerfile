@@ -12,8 +12,8 @@ RUN npm run build && npm run build:scripts
 
 FROM node:24-bookworm-slim AS runner
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
-RUN groupadd --system app && useradd --system --gid app app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 MIDIA_DIR=/data/midia MIDIA_TMP_DIR=/data/tmp
+RUN groupadd --system app && useradd --system --gid app app && mkdir -p /data/midia /data/tmp && chown -R app:app /data
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
