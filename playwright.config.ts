@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
-import { PORTA_E2E as PORTA, URL_E2E } from './tests/e2e/dados';
+import { AMBIENTE_E2E, PORTA_E2E as PORTA, URL_E2E } from './tests/e2e/dados';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -29,7 +29,12 @@ export default defineConfig({
     url: `${URL_E2E}/api/saude`,
     reuseExistingServer: false,
     timeout: MODO_DEV ? 120_000 : 300_000,
-    // O Next não sobrescreve variáveis já definidas, então o servidor de teste usa o banco de testes.
-    env: { DATABASE_URL: process.env.DATABASE_URL_TEST ?? '', ...(MODO_DEV ? {} : { NEXT_DIST_DIR: '.next-e2e' }) },
+    // O Next não sobrescreve variáveis já definidas: o servidor de teste usa o banco de testes, o disco do e2e e os falsos.
+    // AMBIENTE_E2E traz PERMITIR_FALSOS=1: só com ele o build de produção do e2e aceita os falsos (contrato §10, E1).
+    env: {
+      DATABASE_URL: process.env.DATABASE_URL_TEST ?? '',
+      ...AMBIENTE_E2E,
+      ...(MODO_DEV ? {} : { NEXT_DIST_DIR: '.next-e2e' }),
+    },
   },
 });

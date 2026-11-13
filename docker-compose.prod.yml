@@ -18,6 +18,22 @@ services:
         limits:
           memory: 512m
 
+  worker:
+    # Mesma imagem do web, outro ponto de entrada. Não migra o banco: quem migra é o web, na subida.
+    image: ghcr.io/c77idm-dev/devolucoes:${IMAGEM_TAG:-main}
+    restart: unless-stopped
+    env_file: .env.producao
+    command: ["node", "dist/worker.mjs"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Dá tempo à tarefa em andamento de terminar (o worker para com graceful).
+    stop_grace_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
