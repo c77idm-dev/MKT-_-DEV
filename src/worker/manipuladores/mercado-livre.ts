@@ -1,3 +1,4 @@
+import { processarResultadoConferencia } from '@/modules/mercado-livre/resultado';
 import { renovarTokensML, sincronizarReclamacao, varrerReclamacoes } from '@/modules/mercado-livre/tarefas';
 import type { Manipuladores } from '../tipos';
 
@@ -11,5 +12,8 @@ export const manipuladoresMercadoLivre: Manipuladores = {
   },
   'ml.renovar-token': async (_dados, ctx) => {
     await renovarTokensML(ctx.db, ctx.agora);
+  },
+  'ml.enviar-resultado': async ({ devolucaoId }, ctx) => {
+    await processarResultadoConferencia(ctx.db, devolucaoId, ctx.agora);
   },
 };

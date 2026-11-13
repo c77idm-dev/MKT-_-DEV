@@ -1,9 +1,17 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
+import { asc, eq } from 'drizzle-orm';
 import { ErroML } from '@/conectores/marketplace/mercadolivre/cliente';
 import { ErroReclamacaoSemDevolucao } from '@/conectores/marketplace/mercadolivre/conector';
 import type { ConectorMercadoLivre, DadosDevolucaoML, ReclamacaoAtualizada } from '@/conectores/marketplace/mercadolivre/tipos';
 import type { DevolucaoExterna, ResultadoConferencia } from '@/conectores/marketplace/tipos';
 import type { TokensML } from '@/conectores/marketplace/mercadolivre/oauth';
 import type { DbOuTx } from '@/db/client';
+import { devolucoes, evidencias, itensDevolucao } from '@/db/schema';
+import { criarDevolucao, type DadosNovaDevolucao } from '@/modules/devolucoes/criar';
+import type { MotivoItem } from '@/modules/devolucoes/dominio';
+import { obterArmazenamento } from '@/modules/midia/armazenamento';
+import { dadosCanal } from '@/modules/mercado-livre/sincronizar';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import type { ConfigML } from '@/modules/mercado-livre/config';
 import { conectarConta } from '@/modules/mercado-livre/contas';
@@ -135,4 +143,93 @@ export class ConectorMLMemoria implements ConectorMercadoLivre {
   async obterXmlNotaVenda(): Promise<string | null> {
     return null;
   }
+}
+
+export type ItemConferenciaTeste = { sku?: string; destino: 'BOM' | 'PROBLEMA' | null; motivo?: MotivoItem | null; observacao?: string | null };
+
+/**
+ * Devolução do ML no estado do fim da conferência (contrato §5.6), gravado direto nas colunas da P2:
+ * - BOM ou PROBLEMA: o item vai a AGUARDANDO_NF, com o destino (e o motivo, no PROBLEMA);
+ * - `destino: null`: o item fica AUSENTE, com motivo AUSENTE.
+ * A devolução vai a AGUARDANDO_NF, ou a CONCLUIDA se todos os itens forem AUSENTE.
+ * `externa: null` = cadastro manual do ML, sem vínculo.
+ */
+export async function devolucaoMLConferidaTeste(
+  db: DbOuTx,
+  p: { itens: ItemConferenciaTeste[]; externa?: Partial<DevolucaoExterna> | null; usuario?: UsuarioSessao },
+): Promise<{ id: string; codigo: string; itens: { id: string; unidade: number }[]; externa: DevolucaoExterna | null }> {
+  const externa = p.externa === null ? null : devolucaoExternaTeste({ itens: [], ...p.externa });
+  const dados: DadosNovaDevolucao = {
+    canal: 'MERCADO_LIVRE',
+    pedido: externa?.pedidos[0] ?? `PED-MANUAL-${marca()}`,
+    reclamacaoId: externa?.reclamacaoId ?? null,
+    rastreio: externa?.rastreio ?? null,
+    transportadora: 'Correios',
+    motivoCliente: null,
+    postadaEm: null,
+    itens: p.itens.map((item, i) => ({ sku: item.sku ?? `SKU-ML-${i + 1}`, quantidade: 1 })),
+  };
+  const criada = externa
+    ? await criarDevolucao(db, dados, { origem: 'API', usuario: null, canal: dadosCanal(externa) })
+    : await criarDevolucao(db, dados, { origem: 'MANUAL', usuario: p.usuario ?? (await criarUsuarioTeste(db, 'OPERADOR')) });
+  const itens = await db
+    .select({ id: itensDevolucao.id, unidade: itensDevolucao.unidade })
+    .from(itensDevolucao)
+    .where(eq(itensDevolucao.devolucaoId, criada.id))
+    .orderBy(asc(itensDevolucao.unidade));
+  for (const [i, item] of itens.entries()) {
+    const c = p.itens[i];
+    const ausente = c.destino === null;
+    await db
+      .update(itensDevolucao)
+      .set({
+        status: ausente ? 'AUSENTE' : 'AGUARDANDO_NF',
+        destino: c.destino,
+        motivo: ausente ? 'AUSENTE' : c.destino === 'PROBLEMA' ? (c.motivo ?? 'OUTRO') : null,
+        observacao: c.observacao ?? null,
+      })
+      .where(eq(itensDevolucao.id, item.id));
+  }
+  const todosAusentes = p.itens.every((i) => i.destino === null);
+  const agora = new Date();
+  await db
+    .update(devolucoes)
+    .set({ status: todosAusentes ? 'CONCLUIDA' : 'AGUARDANDO_NF', conferidaEm: agora, ...(todosAusentes ? { concluidaEm: agora } : {}) })
+    .where(eq(devolucoes.id, criada.id));
+  return { id: criada.id, codigo: criada.codigo, itens, externa };
+}
+
+type TipoEvidenciaTeste = 'FOTO_1_ETIQUETA' | 'FOTO_2_EMBALAGEM' | 'FOTO_3_PRODUTO' | 'FOTO_4_CODIGO_SERIAL' | 'VIDEO_PROVA' | 'EXTRA';
+
+/** Evidência gravada como a Fase 2 deixaria. PRONTA = arquivo salvo no armazenamento (o de memória, nos testes de integração). */
+export async function fotoTeste(
+  db: DbOuTx,
+  p: { devolucaoId: string; tipo: TipoEvidenciaTeste; itemId?: string | null; situacao?: 'RECEBIDA' | 'PROCESSANDO' | 'PRONTA' | 'FALHOU'; conteudo?: Buffer },
+): Promise<{ id: string; conteudo: Buffer }> {
+  const id = randomUUID();
+  const video = p.tipo === 'VIDEO_PROVA';
+  const tipoConteudo = video ? 'video/mp4' : 'image/jpeg';
+  const conteudo = p.conteudo ?? Buffer.from(`evidencia-de-teste-${id}`);
+  const situacao = p.situacao ?? 'PRONTA';
+  const pronta = situacao === 'PRONTA';
+  const caminho = `evidencias/${p.devolucaoId}/${id}.${video ? 'mp4' : 'jpg'}`;
+  if (pronta) await obterArmazenamento().salvar(caminho, Readable.from([conteudo]), { tipoConteudo, tamanho: conteudo.length });
+  const sha = createHash('sha256').update(conteudo).digest('hex');
+  await db.insert(evidencias).values({
+    id,
+    devolucaoId: p.devolucaoId,
+    itemId: p.itemId ?? null,
+    tipo: p.tipo,
+    tipoConteudo,
+    caminho: pronta ? caminho : null,
+    provedor: pronta ? 'disco' : null,
+    tamanhoOriginal: conteudo.length,
+    tamanho: pronta ? conteudo.length : null,
+    sha256Original: sha,
+    sha256Final: pronta ? sha : null,
+    situacaoProcessamento: situacao,
+    idCliente: randomUUID(),
+    processadoEm: pronta ? new Date() : null,
+  });
+  return { id, conteudo };
 }
