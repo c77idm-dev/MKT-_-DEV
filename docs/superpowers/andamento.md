@@ -12,6 +12,7 @@ Atualizado em 12/11/2026. Mantenha este arquivo em dia ao fechar cada etapa e en
     - Fase 3: [plans/2026-11-12-fase-3-mercado-livre.md](plans/2026-11-12-fase-3-mercado-livre.md)
     - Fase 4: [plans/2026-11-12-fase-4-fiscal.md](plans/2026-11-12-fase-4-fiscal.md)
   - Um plano está incompleto se tiver um marcador `<!-- CONTINUA -->` ou se ainda não estiver no repositório. Nesse caso, continue a partir da última tarefa escrita, seguindo o contrato.
+- **Atenção ao publicar a Parte A na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500.
 - **Próximos passos, em ordem:**
   1. Executar a **Parte A da Fase 2** no `main`.
   2. Criar as worktrees e os bancos (contrato §6).
