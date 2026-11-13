@@ -12,12 +12,21 @@ async function main() {
   const parar = async () => {
     if (parando) return;
     parando = true;
-    await worker.parar();
-    process.exit(0);
+    try {
+      await worker.parar();
+    } finally {
+      process.exit(0);
+    }
   };
   process.on('SIGTERM', () => void parar());
   process.on('SIGINT', () => void parar());
 }
+
+// Só a mensagem: nunca payloads nem tokens.
+process.on('unhandledRejection', (erro) => {
+  console.error('Promessa rejeitada sem tratamento:', erro instanceof Error ? erro.message : 'erro desconhecido');
+  process.exit(1);
+});
 
 main().catch((erro) => {
   console.error(erro);

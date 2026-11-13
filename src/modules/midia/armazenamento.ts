@@ -10,6 +10,8 @@ export interface ArmazenamentoArquivos {
   urlTemporaria(caminho: string, segundos: number): Promise<string>;
   apagar(caminho: string): Promise<void>;
   existe(caminho: string): Promise<boolean>;
+  /** Nome do provedor (usado nos testes para refletir o falso instalado). */
+  readonly provedor?: ProvedorArmazenamento;
 }
 
 export type ProvedorArmazenamento = 'disco' | 's3' | 'memoria';
@@ -43,7 +45,7 @@ export function armazenamentoDoProvedor(provedor: string): ArmazenamentoArquivos
 
 /** Onde os arquivos novos são gravados (ARMAZENAMENTO no .env). */
 export function provedorAtual(): ProvedorArmazenamento {
-  return paraTestes ? 'memoria' : lerEnv().ARMAZENAMENTO;
+  return paraTestes ? (paraTestes.provedor ?? 'memoria') : lerEnv().ARMAZENAMENTO;
 }
 
 export function obterArmazenamento(): ArmazenamentoArquivos {

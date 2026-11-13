@@ -20,13 +20,11 @@ function comPrazo<T>(promessa: Promise<T>, ms: number): Promise<T> {
 
 /** Spec §11: o /saude verifica o banco e a fila. Cada verificação tem um prazo, para o /saude nunca travar. */
 export async function verificarSaude(sql: Sql, verificarFila: () => Promise<void>, prazoMs = 5000): Promise<ResultadoSaude> {
-  const banco = await comPrazo(Promise.resolve(sql`select 1`), prazoMs).then(
-    () => 'ok' as const,
-    () => 'falhou' as const,
-  );
-  const fila = await comPrazo(verificarFila(), prazoMs).then(
-    () => 'ok' as const,
-    () => 'falhou' as const,
-  );
+  const verificar = (tarefa: () => Promise<unknown>) =>
+    comPrazo(Promise.resolve().then(tarefa), prazoMs).then(
+      () => 'ok' as const,
+      () => 'falhou' as const,
+    );
+  const [banco, fila] = await Promise.all([verificar(() => Promise.resolve(sql`select 1`)), verificar(verificarFila)]);
   return { status: banco === 'ok' && fila === 'ok' ? 'ok' : 'erro', banco, fila };
 }

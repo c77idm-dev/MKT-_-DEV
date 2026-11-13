@@ -15,7 +15,11 @@ describe('interpretarRange (vídeo no navegador pede pedaços)', () => {
     expect(interpretarRange(cabecalho, 100)).toEqual(esperado);
   });
 
-  it.each(['bytes=100-', 'bytes=20-10', 'bytes=-0', 'bytes=-', 'itens=0-1', 'bytes=0-1,5-6'])('%s é inválido', (cabecalho) => {
+  it.each(['bytes=100-', 'bytes=20-10', 'bytes=-0', 'bytes=999999-'])('%s é válido na sintaxe mas insatisfazível: 416', (cabecalho) => {
     expect(interpretarRange(cabecalho, 100)).toBe('invalido');
+  });
+
+  it.each(['bytes=a-b', 'bytes=-', 'itens=0-1', 'bytes=0-1,5-6', 'lixo'])('%s é malformado: ignorado (arquivo inteiro)', (cabecalho) => {
+    expect(interpretarRange(cabecalho, 100)).toBeNull();
   });
 });

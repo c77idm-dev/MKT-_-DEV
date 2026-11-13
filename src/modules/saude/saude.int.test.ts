@@ -24,7 +24,23 @@ describe('verificarSaude (spec §11: banco e fila)', () => {
   });
 
   it('responde erro quando a fila falha ou não responde a tempo', async () => {
-    expect(await verificarSaude(sql, async () => Promise.reject(new Error('fora')))).toEqual({ status: 'erro', banco: 'ok', fila: 'falhou' });
+    expect(await verificarSaude(sql, async () => Promise.reject(new Error('fora')))).toEqual({
+      status: 'erro',
+      banco: 'ok',
+      fila: 'falhou',
+    });
     expect(await verificarSaude(sql, () => new Promise<void>(() => {}), 50)).toEqual({ status: 'erro', banco: 'ok', fila: 'falhou' });
+  });
+
+  it('verifica banco e fila ao mesmo tempo (pior caso = um prazo, não dois)', async () => {
+    const quebrado = postgres('postgres://ninguem:nada@127.0.0.1:1/nada', { max: 1, connect_timeout: 5 });
+    try {
+      const inicio = Date.now();
+      const r = await verificarSaude(quebrado, () => new Promise<void>(() => {}), 300);
+      expect(r).toEqual({ status: 'erro', banco: 'falhou', fila: 'falhou' });
+      expect(Date.now() - inicio).toBeLessThan(550);
+    } finally {
+      await quebrado.end({ timeout: 0 });
+    }
   });
 });

@@ -4,6 +4,7 @@ import { Readable } from 'node:stream';
 import { lerEnv } from '@/lib/env';
 import { usuarioAtual } from '@/modules/auth/servidor';
 import { discoLocal } from '@/modules/midia/armazenamento';
+import { cabecalhosDoArquivo } from '@/modules/midia/cabecalhos';
 import { tipoConteudoPorExtensao } from '@/modules/midia/chaves';
 import { verificarLink } from '@/modules/midia/links';
 import { interpretarRange } from '@/modules/midia/range';
@@ -11,7 +12,15 @@ import { interpretarRange } from '@/modules/midia/range';
 export const dynamic = 'force-dynamic';
 
 function texto(status: number, mensagem: string, extras: Record<string, string> = {}): Response {
-  return new Response(mensagem, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...extras } });
+  return new Response(mensagem, {
+    status,
+    headers: {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+      'content-security-policy': "sandbox; default-src 'none'",
+      ...extras,
+    },
+  });
 }
 
 /** Link temporário das mídias guardadas no disco (spec §9): sessão + assinatura + prazo. Responde a Range (vídeo). */
@@ -38,16 +47,15 @@ export async function GET(req: Request): Promise<Response> {
   const inicio = intervalo?.inicio ?? 0;
   const fim = intervalo?.fim ?? info.size - 1;
   const corpo =
-    info.size === 0 ? null : (Readable.toWeb(createReadStream(absoluto, { start: inicio, end: fim })) as unknown as ReadableStream<Uint8Array>);
+    info.size === 0
+      ? null
+      : (Readable.toWeb(createReadStream(absoluto, { start: inicio, end: fim })) as unknown as ReadableStream<Uint8Array>);
   return new Response(corpo, {
     status: intervalo ? 206 : 200,
     headers: {
-      'content-type': tipoConteudoPorExtensao(link.caminho),
+      ...cabecalhosDoArquivo(tipoConteudoPorExtensao(link.caminho), segundosRestantes),
       'content-length': String(info.size === 0 ? 0 : fim - inicio + 1),
       'accept-ranges': 'bytes',
-      'cache-control': `private, max-age=${segundosRestantes}`,
-      'content-disposition': 'inline',
-      'x-content-type-options': 'nosniff',
       ...(intervalo ? { 'content-range': `bytes ${inicio}-${fim}/${info.size}` } : {}),
     },
   });

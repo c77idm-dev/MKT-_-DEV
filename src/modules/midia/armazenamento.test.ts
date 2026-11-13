@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ArmazenamentoArquivos } from './armazenamento';
+import { type ArmazenamentoArquivos, definirArmazenamentoParaTestes, provedorAtual } from './armazenamento';
 import { ArmazenamentoDisco } from './armazenamento-disco';
 import { ArmazenamentoMemoria } from './armazenamento-memoria';
 import { ErroArquivoNaoEncontrado, ErroChaveInvalida } from './erros';
@@ -68,5 +68,16 @@ describe('ArmazenamentoDisco', () => {
     const a = new ArmazenamentoDisco(raiz, SEGREDO);
     await a.salvar('evidencias/d1/e2.mp4', Readable.from([Buffer.from('video')]));
     expect(await readdir(join(raiz, 'evidencias', 'd1'))).toEqual(['e2.mp4']);
+  });
+});
+
+describe('provedorAtual com o armazenamento dos testes', () => {
+  afterEach(() => definirArmazenamentoParaTestes(null));
+
+  it('devolve o provedor do próprio falso instalado', () => {
+    definirArmazenamentoParaTestes(new ArmazenamentoDisco(raiz, SEGREDO));
+    expect(provedorAtual()).toBe('disco');
+    definirArmazenamentoParaTestes(new ArmazenamentoMemoria());
+    expect(provedorAtual()).toBe('memoria');
   });
 });

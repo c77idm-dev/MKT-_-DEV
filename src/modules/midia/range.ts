@@ -2,12 +2,14 @@ export type Intervalo = { inicio: number; fim: number };
 
 /**
  * Cabeçalho Range com um único intervalo ("bytes=0-", "bytes=100-199", "bytes=-500").
- * null = arquivo inteiro; 'invalido' = responder 416.
+ * null = arquivo inteiro (sem cabeçalho ou malformado: ignorado, RFC 7233 §3.1); 'invalido' = sintaxe válida mas
+ * insatisfazível, responder 416.
  */
 export function interpretarRange(cabecalho: string | null, tamanho: number): Intervalo | null | 'invalido' {
   if (!cabecalho) return null;
   const m = /^bytes=(\d*)-(\d*)$/.exec(cabecalho.trim());
-  if (!m || (m[1] === '' && m[2] === '') || tamanho === 0) return 'invalido';
+  if (!m || (m[1] === '' && m[2] === '')) return null;
+  if (tamanho === 0) return 'invalido';
   let inicio: number;
   let fim: number;
   if (m[1] === '') {
