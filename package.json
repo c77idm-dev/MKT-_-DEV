@@ -24,6 +24,8 @@
     "prebuild": "node scripts/copiar-zxing.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/s3-request-presigner": "3.1161.0",
     "@node-rs/argon2": "^2.2.2",
     "@tus/file-store": "2.1.1",
     "@tus/server": "2.4.6",
