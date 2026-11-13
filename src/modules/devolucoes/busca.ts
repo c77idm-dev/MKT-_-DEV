@@ -77,6 +77,7 @@ function condicoes(db: DbOuTx, f: FiltrosBusca): SQL[] {
               or(
                 ean ? eq(produtos.ean, ean) : undefined,
                 sql`upper(${itensDevolucao.serial}) = upper(${codigo})`,
+                sql`upper(${itensDevolucao.eanLido}) = upper(${codigo})`,
                 sql`upper(${itensDevolucao.sku}) = upper(${codigo})`,
               ),
             ),

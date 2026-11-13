@@ -164,3 +164,13 @@ describe('buscarDevolucoes (Busca Avançada, spec §6.7)', () => {
     expect(r.devolucoes.map((d) => d.codigo)).toEqual([b.codigo, a.codigo, c.codigo]);
   });
 });
+
+describe('Código de Barras: EAN lido na conferência', () => {
+  it('acha pelo ean_lido da unidade, sem diferenciar maiúsculas', async () => {
+    const [item] = await db.select({ id: itensDevolucao.id }).from(itensDevolucao).where(eq(itensDevolucao.devolucaoId, c.id));
+    await db.update(itensDevolucao).set({ eanLido: '7899999999993' }).where(eq(itensDevolucao.id, item.id));
+    expect(await codigos({ codigo: '7899999999993' })).toEqual([c.codigo]);
+    await db.update(itensDevolucao).set({ eanLido: 'INT-ABC' }).where(eq(itensDevolucao.id, item.id));
+    expect(await codigos({ codigo: 'int-abc' })).toEqual([c.codigo]);
+  });
+});

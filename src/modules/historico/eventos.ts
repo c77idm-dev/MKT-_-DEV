@@ -1,8 +1,23 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { eventosHistorico, usuarios } from '@/db/schema';
+import { ROTULOS_ACABAMENTO } from './rotulos/acabamento';
+import { ROTULOS_BASE } from './rotulos/base';
+import { ROTULOS_CONFERENCIA } from './rotulos/conferencia';
+import { ROTULOS_FISCAL } from './rotulos/fiscal';
+import { ROTULOS_LOTES } from './rotulos/lotes';
+import { ROTULOS_MERCADO_LIVRE } from './rotulos/mercado-livre';
 
-export type EntidadeHistorico = 'devolucao' | 'usuario';
+/** Contrato §4.7. Evidência registra evento na devolução (dados: evidenciaId, tipo, itemId e os hashes). */
+export type EntidadeHistorico =
+  | 'devolucao'
+  | 'item'
+  | 'usuario'
+  | 'configuracao'
+  | 'conta_marketplace'
+  | 'contestacao'
+  | 'nota_fiscal'
+  | 'lote';
 
 export type NovoEvento = {
   entidade: EntidadeHistorico;
@@ -57,17 +72,14 @@ export async function listarEventos(db: DbOuTx, entidade: EntidadeHistorico, ent
     .orderBy(asc(eventosHistorico.id));
 }
 
+/** Junção dos rótulos de cada fase (contrato §3: cada fase só edita o próprio arquivo em rotulos/). */
 export const ROTULO_ACAO: Record<string, string> = {
-  criada: 'Devolução cadastrada',
-  criada_nao_identificada: 'Pacote não identificado registrado',
-  recebida: 'Chegada registrada',
-  identificada: 'Devolução identificada',
-  cancelada: 'Devolução cancelada',
-  extraviada: 'Devolução marcada como extraviada',
-  usuario_criado: 'Usuário criado',
-  perfil_alterado: 'Perfil alterado',
-  usuario_desativado: 'Usuário desativado',
-  usuario_reativado: 'Usuário reativado',
+  ...ROTULOS_BASE,
+  ...ROTULOS_CONFERENCIA,
+  ...ROTULOS_MERCADO_LIVRE,
+  ...ROTULOS_FISCAL,
+  ...ROTULOS_LOTES,
+  ...ROTULOS_ACABAMENTO,
 };
 
 export function rotuloDaAcao(acao: string): string {
