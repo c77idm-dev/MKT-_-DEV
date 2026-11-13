@@ -135,3 +135,5 @@ export async function reenviarNota(db: Db, notaFiscalId: string, usuario: Usuari
     await obterFila().enviar('nfe.emitir', { notaFiscalId }, { tx });
   });
 }
+
+export { cancelarNota } from './cancelamento';
