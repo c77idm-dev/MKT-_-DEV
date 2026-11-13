@@ -13,8 +13,8 @@ RUN npm run build && npm run build:scripts
 FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 MIDIA_DIR=/data/midia MIDIA_TMP_DIR=/data/tmp MALLOC_ARENA_MAX=2
-# Fonte do carimbo das fotos: sem ela o texto do sharp sai em branco (a bookworm-slim não tem fontes).
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+# ffmpeg (Vídeo de Prova, spec §9; traz o ffprobe) e a fonte do carimbo das fotos (sem ela o texto do sharp sai em branco).
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system app && useradd --system --gid app app && mkdir -p /data/midia /data/tmp && chown -R app:app /data
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static

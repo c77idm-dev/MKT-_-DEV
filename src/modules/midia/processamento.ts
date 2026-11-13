@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { readFile, rm, stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Db } from '@/db/client';
@@ -8,7 +9,8 @@ import { registrarEvento } from '@/modules/historico/eventos';
 import { obterArmazenamento, provedorAtual } from './armazenamento';
 import { carimbarFoto } from './carimbo';
 import { chaveEvidencia } from './chaves';
-import { sha256DoBuffer } from './hash';
+import { binariosFfmpeg, conferirTranscodificacao, sondar, transcodificar, type Binarios } from './ffmpeg';
+import { sha256DoArquivo, sha256DoBuffer } from './hash';
 import { apagarTemporario } from './temporarios';
 
 export type ContextoProcessamento = { tentativa: number; agora: Date };
@@ -127,6 +129,40 @@ export async function processarFoto(db: Db, evidenciaId: string, ctx: ContextoPr
     await apagarTemporario(e.caminhoTemporario);
   } catch (erro) {
     await registrarErro(db, e, 'midia.processar-foto', erro, ctx);
+    throw erro;
+  }
+}
+
+/** Tarefa midia.transcodificar (spec §9): H.264 720p; o original só é apagado depois do sucesso. */
+export async function transcodificarVideo(
+  db: Db,
+  evidenciaId: string,
+  ctx: ContextoProcessamento,
+  binarios: Binarios = binariosFfmpeg(),
+): Promise<void> {
+  const e = await comecar(db, evidenciaId);
+  if (!e) return;
+  const saida = `${e.caminhoTemporario}.saida.mp4`;
+  try {
+    const antes = await sondar(binarios.ffprobe, e.caminhoTemporario);
+    await transcodificar(binarios.ffmpeg, e.caminhoTemporario, saida);
+    const problema = conferirTranscodificacao(antes, await sondar(binarios.ffprobe, saida));
+    if (problema) throw new Error(problema);
+    const { size: tamanho } = await stat(saida);
+    const sha256Final = await sha256DoArquivo(saida);
+    const chave = chaveEvidencia(e.devolucaoId, e.id, 'mp4');
+    const armazenamento = obterArmazenamento();
+    await armazenamento.salvar(chave, createReadStream(saida), { tipoConteudo: 'video/mp4', tamanho });
+    const ok = await concluirProcessamento(db, e, { chave, tipoConteudo: 'video/mp4', tamanho, sha256Final }, ctx.agora);
+    await rm(saida, { force: true });
+    if (!ok) {
+      await armazenamento.apagar(chave);
+      return;
+    }
+    await apagarTemporario(e.caminhoTemporario);
+  } catch (erro) {
+    await rm(saida, { force: true });
+    await registrarErro(db, e, 'midia.transcodificar', erro, ctx);
     throw erro;
   }
 }
