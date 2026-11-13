@@ -1,9 +1,13 @@
 import { asc, eq } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
-import { devolucoes, itensDevolucao } from '@/db/schema';
+import { configuracoes, devolucoes, itensDevolucao, regrasFiscais } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import type { DevolucaoCriada } from '@/modules/devolucoes/criar';
 import type { Canal } from '@/modules/devolucoes/dominio';
+import type { RegimeTributario } from '@/modules/configuracoes/dominio';
+import { salvarAmbiente, salvarDadosEmpresa, type DadosEmpresa } from '@/modules/fiscal/configuracao';
+import { OPERACOES_FISCAIS, TIPOS_NOTA, type OperacaoFiscal } from '@/modules/fiscal/dominio';
+import { salvarRegra, sugestaoDeRegra } from '@/modules/fiscal/regras';
 import { criarDevolucaoTeste } from './fabricas';
 
 /**
@@ -57,4 +61,63 @@ export async function criarDevolucaoNoEstoqueTeste(
   const agora = opcoes.agora ?? new Date();
   await db.update(devolucoes).set({ status: 'AGUARDANDO_NF', recebidaEm: agora, conferidaEm: agora }).where(eq(devolucoes.id, criada.id));
   return { ...criada, itens };
+}
+
+/** A empresa dos testes: CNPJ e IE válidos, em SP, no Simples, série 1 (a mesma que o emissor falso devolve). */
+export const EMPRESA_TESTE: DadosEmpresa = {
+  razaoSocial: 'Empresa Teste Ltda',
+  cnpj: '11444777000161',
+  ie: '110042490114',
+  logradouro: 'Rua A',
+  numero: '100',
+  complemento: null,
+  bairro: 'Centro',
+  cidade: 'Sao Paulo',
+  uf: 'SP',
+  cep: '01001000',
+  regime: 'SIMPLES',
+  serie: '1',
+};
+
+/**
+ * Deixa a emissão pronta: dados da empresa, homologação e as 6 regras sugeridas. `naturezas` troca a natureza das regras de
+ * devolução (ex.: "REJEITAR" faz o emissor falso rejeitar). `semRegras` apaga as regras (D13: a emissão fica recusada).
+ */
+export async function configurarFiscalTeste(
+  db: DbOuTx,
+  gestor: UsuarioSessao,
+  opcoes: { regime?: RegimeTributario; uf?: string; serie?: string; naturezas?: Partial<Record<OperacaoFiscal, string>>; semRegras?: boolean } = {},
+): Promise<void> {
+  const regime = opcoes.regime ?? 'SIMPLES';
+  await salvarDadosEmpresa(db, { ...EMPRESA_TESTE, regime, uf: opcoes.uf ?? EMPRESA_TESTE.uf, serie: opcoes.serie ?? EMPRESA_TESTE.serie }, gestor);
+  await salvarAmbiente(db, 'HOMOLOGACAO', gestor);
+  await db.delete(regrasFiscais);
+  if (opcoes.semRegras) return;
+  for (const tipo of TIPOS_NOTA) {
+    for (const operacao of OPERACOES_FISCAIS) {
+      const regra = sugestaoDeRegra(tipo, operacao, regime);
+      const natureza = tipo === 'DEVOLUCAO_VENDA' ? opcoes.naturezas?.[operacao] : undefined;
+      await salvarRegra(db, { ...regra, naturezaOperacao: natureza ?? regra.naturezaOperacao }, gestor);
+    }
+  }
+}
+
+/** Volta ao começo: sem regras e sem dados da empresa (a linha de configurações continua existindo). */
+export async function limparFiscalTeste(db: DbOuTx): Promise<void> {
+  await db.delete(regrasFiscais);
+  await db.update(configuracoes).set({
+    razaoSocial: null,
+    cnpj: null,
+    ie: null,
+    logradouro: null,
+    numero: null,
+    complemento: null,
+    bairro: null,
+    cidade: null,
+    uf: null,
+    cep: null,
+    regimeTributario: null,
+    serieNfe: null,
+    ambienteNfe: 'HOMOLOGACAO',
+  });
 }
