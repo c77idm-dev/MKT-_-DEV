@@ -85,6 +85,28 @@ describe('upload pelo tus (route handler /api/midia)', () => {
     expect(existsSync(join(pasta, b.id!))).toBe(false);
   });
 
+  it('repetir o registro do MESMO upload devolve a mesma evidência e mantém o arquivo no disco', async () => {
+    const d = await criarDevolucaoEmConferencia(db, operador);
+    const r = await enviar(Buffer.from('original'), { idCliente: randomUUID(), devolucaoId: d.id, tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg' });
+    const primeira = await registrarEnvio(db, tus.armazem, r.id!, operador);
+    expect(await registrarEnvio(db, tus.armazem, r.id!, operador)).toEqual(primeira);
+    expect(existsSync(join(pasta, r.id!))).toBe(true);
+  });
+
+  it('retry depois que o worker já removeu o temporário: com o idCliente devolve a evidência existente, sem 404', async () => {
+    const d = await criarDevolucaoEmConferencia(db, operador);
+    const idCliente = randomUUID();
+    const r = await enviar(Buffer.from('original'), { idCliente, devolucaoId: d.id, tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg' });
+    const primeira = await registrarEnvio(db, tus.armazem, r.id!, operador);
+    await rm(join(pasta, r.id!), { force: true });
+    await rm(join(pasta, `${r.id!}.json`), { force: true });
+    expect(await registrarEnvio(db, tus.armazem, r.id!, operador, new Date(), idCliente)).toEqual(primeira);
+    // Sem o idCliente, ou com o de outra pessoa, continua não achando.
+    await expect(registrarEnvio(db, tus.armazem, r.id!, operador)).rejects.toMatchObject({ status: 404, definitivo: false });
+    const outro = await criarUsuarioTeste(db, 'OPERADOR');
+    await expect(registrarEnvio(db, tus.armazem, r.id!, outro, new Date(), idCliente)).rejects.toMatchObject({ status: 404 });
+  });
+
   it('sem sessão: 401; perfil sem permissão: 403; conferência de outra pessoa: 409', async () => {
     const d = await criarDevolucaoEmConferencia(db, operador);
     const campos = { idCliente: randomUUID(), devolucaoId: d.id, tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg' };

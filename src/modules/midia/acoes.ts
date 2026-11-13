@@ -9,10 +9,10 @@ import { armazemTus } from './tus';
 export type ResultadoRegistro = { ok: true; evidenciaId: string } | { ok: false; mensagem: string; definitivo: boolean };
 
 /** Chamada pela fila do celular quando o tus termina. Só o pedido pequeno passa por Server Action, nunca o arquivo. */
-export async function registrarEnvioAcao(uploadId: string): Promise<ResultadoRegistro> {
+export async function registrarEnvioAcao(uploadId: string, idCliente?: string): Promise<ResultadoRegistro> {
   const usuario = await exigirPermissao('operar_devolucoes');
   try {
-    const r = await registrarEnvio(obterDb(), armazemTus(), String(uploadId), usuario);
+    const r = await registrarEnvio(obterDb(), armazemTus(), String(uploadId), usuario, new Date(), idCliente ? String(idCliente) : undefined);
     return { ok: true, evidenciaId: r.evidenciaId };
   } catch (erro) {
     if (erro instanceof ErroEnvio) return { ok: false, mensagem: erro.message, definitivo: erro.definitivo };
