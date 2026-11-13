@@ -25,7 +25,7 @@ export function resultadoDoErro(status: number | null, corpo: string): Resultado
 }
 
 /** Envia pelo tus (retoma pela uploadUrl guardada) e, no fim, pede o registro da evidência ao servidor. */
-export function criarTransporteTus(registrar: (uploadId: string) => Promise<ResultadoRegistro>): Transporte {
+export function criarTransporteTus(registrar: (uploadId: string, idCliente: string) => Promise<ResultadoRegistro>): Transporte {
   return (r, eventos) =>
     new Promise<ResultadoTransporte>((resolver) => {
       const upload = new Upload(r.arquivo, {
@@ -59,7 +59,7 @@ export function criarTransporteTus(registrar: (uploadId: string) => Promise<Resu
         },
         async onSuccess() {
           try {
-            const reg = await registrar(idDoEnvio(upload.url ?? ''));
+            const reg = await registrar(idDoEnvio(upload.url ?? ''), r.idCliente);
             resolver(reg.ok ? { ok: true, evidenciaId: reg.evidenciaId } : { ok: false, definitivo: reg.definitivo, mensagem: reg.mensagem });
           } catch {
             resolver({ ok: false, definitivo: false, mensagem: SEM_CONEXAO });
