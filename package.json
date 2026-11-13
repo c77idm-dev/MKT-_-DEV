@@ -27,6 +27,7 @@
     "@node-rs/argon2": "^2.2.2",
     "barcode-detector": "3.2.3",
     "drizzle-orm": "^0.45.4",
+    "fast-xml-parser": "5.11.2",
     "fflate": "0.8.2",
     "next": "16.4.6",
     "papaparse": "5.7.0",

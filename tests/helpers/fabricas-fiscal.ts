@@ -1,6 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
-import { configuracoes, devolucoes, itensDevolucao, regrasFiscais } from '@/db/schema';
+import { configuracoes, devolucoes, itensDevolucao, notasVenda, regrasFiscais } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import type { DevolucaoCriada } from '@/modules/devolucoes/criar';
 import type { Canal } from '@/modules/devolucoes/dominio';
@@ -8,7 +8,9 @@ import type { RegimeTributario } from '@/modules/configuracoes/dominio';
 import { salvarAmbiente, salvarDadosEmpresa, type DadosEmpresa } from '@/modules/fiscal/configuracao';
 import { OPERACOES_FISCAIS, TIPOS_NOTA, type OperacaoFiscal } from '@/modules/fiscal/dominio';
 import { salvarRegra, sugestaoDeRegra } from '@/modules/fiscal/regras';
+import { interpretarXmlNotaVenda } from '@/modules/fiscal/xml-nota-venda';
 import { criarDevolucaoTeste } from './fabricas';
+import { xmlNotaVendaTeste, type OpcoesXmlVenda } from './xml-nfe';
 
 /**
  * Fábricas da Fase 4. O estado que a conferência (Fase 2) produz é gravado direto nas colunas (contrato §5.6),
@@ -120,4 +122,25 @@ export async function limparFiscalTeste(db: DbOuTx): Promise<void> {
     serieNfe: null,
     ambienteNfe: 'HOMOLOGACAO',
   });
+}
+
+/**
+ * Grava a NF de venda direto no banco (sem o arquivo no armazenamento), lida do XML de teste pelo mesmo leitor da produção.
+ * O e2e usa: o processo do teste e o servidor não compartilham o armazenamento em memória.
+ */
+export async function inserirNotaVendaTeste(db: DbOuTx, devolucaoId: string, opcoes: OpcoesXmlVenda): Promise<{ notaVendaId: string; chave: string }> {
+  const dados = interpretarXmlNotaVenda(xmlNotaVendaTeste(opcoes).xml);
+  const [nota] = await db
+    .insert(notasVenda)
+    .values({
+      devolucaoId,
+      chave: dados.chave,
+      origem: 'ANEXO',
+      xmlCaminho: `notas-venda/${devolucaoId}/teste-${dados.chave}.xml`,
+      destinatario: dados.destinatario,
+      itens: dados.itens,
+      emitidaEm: dados.emitidaEm,
+    })
+    .returning({ id: notasVenda.id });
+  return { notaVendaId: nota.id, chave: dados.chave };
 }
