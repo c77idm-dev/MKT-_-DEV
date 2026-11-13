@@ -90,3 +90,4 @@ export type ItemNota = {
     cofinsValor?: number;
   };
 };
+export { definirEmissorParaTestes, obterEmissorNFe } from './registro';
