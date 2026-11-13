@@ -23,16 +23,16 @@
 - Windows com Git Bash. O caminho tem espaço e "ç" no `main`; a worktree não, mas **use aspas sempre**. Todos os comandos deste plano rodam na pasta da worktree: `cd "/c/Users/idmpc/devolucoes-wt/fase-4"`.
 
 **Arquivos que esta fase pode editar (contrato §3)**
-- Cria ou edita: `src/db/schema/fiscal.ts`, `src/modules/fiscal/**`, `src/conectores/nfe/**`, `src/modules/lotes/porta.ts` (só a implementação "sem lotes"), `src/worker/manipuladores/fiscal.ts`, `src/modules/historico/rotulos/fiscal.ts`, `src/components/fiscal/**`, `src/app/(app)/configuracoes/fiscal/**`, `src/app/(app)/fluxo/etapa/4/**`, `src/app/api/fiscal/**`, `src/app/(app)/fluxo/devolucoes/[codigo]/secoes/SecaoFiscal.tsx` e o arquivo novo `secoes/acoes-fiscal.ts`.
+- Cria ou edita: `src/db/schema/fiscal.ts`, `src/modules/fiscal/**`, `src/conectores/nfe/**`, `src/modules/lotes/porta.ts` (só a implementação "sem lotes"), `src/worker/manipuladores/fiscal.ts`, `src/components/fiscal/**`, `src/app/(app)/configuracoes/fiscal/**`, `src/app/(app)/fluxo/etapa/4/**`, `src/app/api/fiscal/**`, `src/app/(app)/fluxo/devolucoes/[codigo]/secoes/SecaoFiscal.tsx` e o arquivo novo `secoes/acoes-fiscal.ts`.
 - Dono na janela: `src/modules/devolucoes/busca.ts`, `filtros.ts`, `selos.ts`, `quadro.ts`, `src/components/CartaoDevolucao.tsx`, `src/components/QuadroFluxo.tsx`, `src/app/(app)/fluxo/page.tsx` (e os testes desses arquivos).
 - Testes: `tests/helpers/fabricas-fiscal.ts`, `tests/helpers/xml-nfe.ts`, `tests/helpers/nota-teste.ts`, `tests/helpers/fila-fiscal.ts`, `tests/e2e/apoio-fiscal.ts`, `tests/e2e/fiscal-*.spec.ts`, `tests/e2e/integracao-fiscal.spec.ts`, e `src/**/*.test.ts(x)` novos.
-- **Nunca** (congelados): `src/lib/env.ts`, `.env.example`, `.env.producao.example`, `package.json` (scripts), `src/db/schema/index.ts`, `devolucoes.ts`, `catalogo.ts`, `auth.ts`, `dominio.ts` e `transicoes*.ts` das devoluções, `permissoes.ts`, `NavAbas.tsx`, `configuracoes/page.tsx`, `[codigo]/page.tsx`, `detalhe.ts`, `fluxo/etapa/[numero]/page.tsx`, `EtapasCelular.tsx`, `Selo.tsx` e os outros componentes existentes, `globals.css`, `tests/e2e/global-setup.ts`, `apoio.ts`, `dados.ts`, `tests/helpers/fabricas.ts`, `Dockerfile`, `docker-compose.prod.yml`, `README.md`.
+- **Nunca** (congelados): `src/lib/env.ts`, `.env.example`, `.env.producao.example`, `package.json` (scripts), `src/db/schema/index.ts`, `devolucoes.ts`, `catalogo.ts`, `auth.ts`, `dominio.ts` e `transicoes*.ts` das devoluções, `permissoes.ts`, `NavAbas.tsx`, `configuracoes/page.tsx`, `[codigo]/page.tsx`, `detalhe.ts`, `fluxo/etapa/[numero]/page.tsx`, `EtapasCelular.tsx` (use a prop `conteudoEtapa` da Parte A; contrato §10, E5), `Selo.tsx` e os outros componentes existentes, `globals.css`, `src/modules/historico/rotulos/*.ts` (a Parte A já trouxe as chaves desta fase; E3), `src/conectores/marketplace/tipos.ts`, `tests/e2e/global-setup.ts`, `apoio.ts`, `dados.ts`, `tests/helpers/fabricas.ts`, `Dockerfile`, `docker-compose.prod.yml`, `README.md`.
 
 **Ambiente e ferramentas**
 - Node 24 e npm. Next.js 16 tem mudanças (veja `AGENTS.md` e `node_modules/next/dist/docs/`): `params` e `searchParams` são **Promise**; `redirect()` lança exceção (chame **fora** do `try/catch`); arquivo com `'use server'` só exporta funções async (e `type`); `notFound()` e `redirect()` funcionam em Route Handlers.
 - Arquivos de `src/db/schema/` e **tudo o que eles importam em tempo de execução** usam imports relativos, nunca `@/` (o drizzle-kit não resolve o alias). Import só de tipo (`import type`) some na compilação e pode usar qualquer caminho.
 - Migrações: nesta branch, `npm run db:gerar -- --name fase4_fiscal` gera a migração do diff; ela é descartada e gerada de novo na Tarefa 11 (contrato §3, "Procedimento das migrações antes do merge").
-- Dependência nova com versão exata: `npm install fast-xml-parser@5.11.2 --save-exact` (publicada em 29/09/2026). O `npm audit` aponta um aviso **baixo** (GHSA-474x-hrwr-fgx4) que só vale com `stopNodes`, que este plano não usa.
+- Dependência nova com versão exata: `npm install fast-xml-parser@5.11.2 --save-exact` (publicada em 29/09/2026, há mais de 2 semanas; a 5.12.x é recente demais; contrato §10, E6). O `npm audit` aponta um aviso **baixo** (GHSA-474x-hrwr-fgx4) que só vale com `stopNodes`, que este plano não usa.
 
 **Produto e textos**
 - Interface só em português do Brasil. O título da etapa 4 é o do PDF: **"Destinação Fiscal e Estoque"**; as abas são **"Estoque Bom"** e **"Estoque Problema"** (spec §6.4).
@@ -52,7 +52,7 @@
 
 **Testes e commits**
 - TDD: teste que falha → implementação → teste passa. Unitário `npm test` (`src/**/*.test.{ts,tsx}`), integração `npm run test:int` (`src/**/*.int.test.ts`, banco `devolucoes_test_f4`), ponta a ponta `npm run test:e2e` (projetos `computador` e `celular`; porta 3104). Pare o `npm run dev` antes do e2e.
-- O e2e da Parte A sobe o servidor **e o worker** com os falsos (`EMISSOR_NFE=falso`). O emissor falso autoriza na **2ª consulta** (uns 10 s depois do envio) e rejeita quando a natureza da operação contém "REJEITAR".
+- O e2e da Parte A sobe o servidor **e o worker** com os falsos (`EMISSOR_NFE=falso`). Como o servidor do e2e é um build de produção, a Parte A libera os falsos com `PERMITIR_FALSOS=1`, definido só no `AMBIENTE_E2E` de `tests/e2e/dados.ts` (contrato §10, E1). Não ponha essa variável no `.env` da worktree. O emissor falso autoriza na **2ª consulta** (uns 10 s depois do envio) e rejeita quando a natureza da operação contém "REJEITAR".
 - Toda mensagem de commit termina com `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. **Nunca rode `git push`.**
 
 ## Decisões que a spec e o contrato não fixaram (o usuário pode vetar)
@@ -62,7 +62,7 @@
 3. **Consultas (D12):** a 1ª consulta vai logo depois do envio (pega a autorização síncrona da SEFAZ); as seguintes esperam 10 s, 30 s, 1 min, 2 min, 5 min e depois 10 min. Depois de 150 consultas (~24 h) a tarefa falha e vai para Falhas (Fase 6).
 4. **Validação antes de gravar:** `solicitarEmissao` monta a nota inteira antes de criar a linha (dados da empresa, regra, NF de venda, casamento dos itens), para o Fiscal ver o erro na hora. O worker monta de novo; se falhar, a nota vira REJEITADA com a mensagem.
 5. **NF de venda:** na devolução do ML, o "Emitir" busca no conector antes (contrato §5.8) e há o botão "Buscar no Mercado Livre"; senão o Fiscal anexa o XML. Só é aceito XML de NF-e (modelo 55) de saída, com protocolo de autorização (cStat 100 ou 150), emitida pelo CNPJ da empresa, até 1 MB.
-6. **Escolha do Fiscal (D14):** fica no próprio `notas_venda.itens[]` (campo `itensDevolucaoIds`, dentro do jsonb), sem coluna nova.
+6. **Escolha do Fiscal (D14):** fica no próprio `notas_venda.itens[]` (campo `itensDevolucaoIds`, dentro do jsonb), sem coluna nova. Aceito e registrado no contrato (D14 e §10, E13).
 7. **Itens da NF de devolução:** um item por item da NF de venda, com a quantidade de unidades casadas; valor unitário = `vUnCom` da venda; tributos proporcionais (por unidade × quantidade) só fora do Simples e só quando o CST da regra leva valor (ICMS 00, 10, 20, 51, 70, 90; PIS/COFINS 01, 02). O desconto da venda não é repassado (o contrato não tem o campo; o contador valida).
 8. **Destinatário** = o da NF de venda (várias NF de venda com destinatários diferentes → recusa). `consumidor_final` = 1 quando o indicador de IE é 9. `presenca_comprador` = 0 e `modalidade_frete` = 9. Em homologação o nome do destinatário vira o texto exigido pela SEFAZ (rejeição 598), só no cliente Focus.
 9. **Cancelamento:** síncrono na tela (a Focus responde na hora), só até 24 h depois da autorização. Depois do prazo o formulário some e a tela orienta "nota de estorno com o contador". O XML do cancelamento é baixado na hora; se falhar, `nfe.consultar` busca depois.
@@ -129,14 +129,14 @@ tests/
 **Arquivos:**
 - Criar: `src/modules/fiscal/dominio.ts`, `src/modules/fiscal/erros.ts`, `src/modules/fiscal/transicoes-nota.ts`, `src/modules/fiscal/chave.ts`, `src/conectores/nfe/tipos.ts`, `src/modules/lotes/porta.ts`, `tests/helpers/fabricas-fiscal.ts`
 - Modificar (substituir o `export {};`): `src/db/schema/fiscal.ts`
-- Modificar (acrescentar 2 chaves): `src/modules/historico/rotulos/fiscal.ts`
+- Só conferir (congelado; contrato §10, E3): `src/modules/historico/rotulos/fiscal.ts` já traz `nf_item_escolhido` e `nota_venda_removida`
 - Gerado: `drizzle/0007_fase4_fiscal.sql` (descartado e refeito na Tarefa 11)
 - Testes: `src/modules/fiscal/dominio.test.ts`, `src/modules/fiscal/transicoes-nota.test.ts`, `src/modules/fiscal/chave.test.ts`, `src/modules/lotes/porta.test.ts`, `src/modules/fiscal/schema.int.test.ts`
 
 **Interfaces:**
 - Consome (Parte A, contrato §4.1, §4.5, §5): `type AmbienteNfe`, `type RegimeTributario` (`src/modules/configuracoes/dominio.ts`); `ambienteNfeEnum` (`src/db/schema/configuracoes.ts`); colunas `itensDevolucao.destino`, `motivo`, `eanLido`, `produtoRecebidoId`, `devolucoes.conferidaEm`, `concluidaEm`; `criarDevolucaoTeste`, `criarUsuarioTeste` (Fase 1).
 - Produz:
-  - `dominio.ts`: `TIPOS_NOTA`, `type TipoNota`, `ROTULO_TIPO_NOTA`, `ehTipoNota`, `SITUACOES_NOTA`, `type SituacaoNotaFiscal`, `ROTULO_SITUACAO_NOTA`, `SELO_SITUACAO_NOTA`, `OPERACOES_FISCAIS`, `type OperacaoFiscal`, `ROTULO_OPERACAO`, `ehOperacao`, `ORIGENS_NOTA_VENDA`, `type OrigemNotaVenda`, `ROTULO_ORIGEM_NOTA_VENDA`, `ROTULO_REGIME`, `ROTULO_AMBIENTE`, `CSOSN`, `CST_ICMS`, `CST_PIS_COFINS`, `type DestinoEstoque = 'BOM' | 'PROBLEMA'`, `ABAS_ESTOQUE`, `type TributosUnitarios`, `type ItemNotaVenda`, `PRAZO_CANCELAMENTO_HORAS = 24`, `prazoDeCancelamento(autorizadaEm): Date`, `dentroDoPrazoDeCancelamento(autorizadaEm, agora): boolean`, `referenciaDaNota(id): string`
+  - `dominio.ts`: `TIPOS_NOTA`, `type TipoNota`, `ROTULO_TIPO_NOTA`, `ehTipoNota`, `SITUACOES_NOTA`, `type SituacaoNotaFiscal`, `ROTULO_SITUACAO_NOTA`, `SELO_SITUACAO_NOTA`, `OPERACOES_FISCAIS`, `type OperacaoFiscal`, `ROTULO_OPERACAO`, `ehOperacao`, `ORIGENS_NOTA_VENDA`, `type OrigemNotaVenda`, `ROTULO_ORIGEM_NOTA_VENDA`, `ROTULO_REGIME` e `ROTULO_AMBIENTE` (só **reexportados** de `configuracoes/dominio.ts` da Parte A, sem redefinir; contrato §10, E2), `CSOSN`, `CST_ICMS`, `CST_PIS_COFINS`, `type DestinoEstoque = DestinoItem` (apelido do tipo da Parte A), `ABAS_ESTOQUE` (rótulos de `ROTULO_DESTINO`), `type TributosUnitarios`, `type ItemNotaVenda`, `PRAZO_CANCELAMENTO_HORAS = 24`, `prazoDeCancelamento(autorizadaEm): Date`, `dentroDoPrazoDeCancelamento(autorizadaEm, agora): boolean`, `referenciaDaNota(id): string`
   - `erros.ts`: `class ErroFiscal extends Error`, `class ErroNotaVendaDuplicada extends ErroFiscal`
   - `transicoes-nota.ts`: `REGRAS_TRANSICAO_NOTA`, `podeTransitarNota({ de, para }): boolean`, `exigirTransicaoNota({ de, para }): void`
   - `chave.ts`: `CODIGO_UF`, `digitoChave(base43): string`, `chaveValida(chave): boolean`, `montarChave(p): string`, `semPrefixoNFe(chave): string`, `numeroDaChave(chave): string`
@@ -166,15 +166,19 @@ Esperado (nomes que este plano usa; todos vêm do contrato):
 
 | Onde | Nome |
 |---|---|
-| `src/modules/fila/fila.ts` | `obterFila`, `definirFilaParaTestes`, `class FilaMemoria` (com `enviadas`), `type Fila` |
+| `src/modules/fila/fila.ts` | `obterFila`, `definirFilaParaTestes`, `class FilaMemoria` (com `enviadas`), `type Fila`; `chaveUnica` = id fixo do job (2º envio com a mesma chave é ignorado enquanto o job existir, mesmo concluído; contrato §10, E4) |
 | `src/modules/fila/tarefas.ts` | `type DadosTarefa` com `'nfe.emitir'` e `'nfe.consultar'` |
-| `src/worker/tipos.ts` | `type Manipuladores`, `type ContextoTarefa` |
+| `src/worker/tipos.ts` | `type Manipuladores`, `type ContextoTarefa` (`tentativa` começa em 1) |
 | `src/worker/manipuladores/fiscal.ts` | `export const manipuladoresFiscal: Manipuladores = {}` |
 | `src/modules/midia/armazenamento.ts` | `obterArmazenamento` |
-| `src/conectores/marketplace/registro.ts` | `obterConector`, `definirConectorParaTestes` |
+| `src/conectores/marketplace/registro.ts` | `obterConector`, `definirConectorParaTestes` (com `null`, volta ao padrão; E8) |
 | `src/conectores/marketplace/tipos.ts` | `type MarketplaceConnector` |
 | `src/modules/configuracoes/ler.ts` | `lerConfiguracao(db)` → objeto com `razaoSocial`, `cnpj`, `ie`, `logradouro`, `numero`, `complemento`, `bairro`, `cidade`, `uf`, `cep`, `regimeTributario`, `serieNfe`, `ambienteNfe` |
-| `src/modules/configuracoes/dominio.ts` | `REGIMES_TRIBUTARIOS`, `type RegimeTributario`, `AMBIENTES_NFE`, `type AmbienteNfe` |
+| `src/modules/configuracoes/dominio.ts` | `REGIMES_TRIBUTARIOS`, `type RegimeTributario`, `ROTULO_REGIME`, `AMBIENTES_NFE`, `type AmbienteNfe`, `ROTULO_AMBIENTE` (homologação = "Homologação (sem valor fiscal)") |
+| `src/modules/devolucoes/dominio.ts` | `DESTINOS_ITEM`, `type DestinoItem`, `ROTULO_DESTINO` ("Estoque Bom", "Estoque Problema"), `type MotivoItem`, `ROTULO_MOTIVO` |
+| `src/modules/historico/rotulos/fiscal.ts` | `ROTULOS_FISCAL`, já com `nf_item_escolhido` e `nota_venda_removida` (congelado) |
+| `src/components/EtapasCelular.tsx` | prop opcional `conteudoEtapa?: Partial<Record<number, ReactNode>>` (topo da etapa escolhida) |
+| `src/lib/env.ts` (regra) | com `NODE_ENV=production`, `EMISSOR_NFE=falso` só passa com `PERMITIR_FALSOS=1` (só o e2e define) |
 | `src/db/schema/configuracoes.ts` | `configuracoes`, `ambienteNfeEnum` (o `pgEnum('ambiente_nfe', ...)`) |
 | `src/modules/devolucoes/transicoes-item.ts` | `exigirTransicaoItem({ de, para, ator })` |
 | `src/lib/env.ts` | `lerEnv().EMISSOR_NFE` (`'focus' \| 'falso'`), `FOCUS_TOKEN_HOMOLOGACAO`, `FOCUS_TOKEN_PRODUCAO` |
@@ -423,7 +427,10 @@ export type ItemNota = {
  * Também é importado por componentes de cliente: nada de banco aqui.
  */
 import type { Destinatario } from '../../conectores/nfe/tipos';
-import type { AmbienteNfe, RegimeTributario } from '../configuracoes/dominio';
+import { ROTULO_DESTINO, type DestinoItem } from '../devolucoes/dominio';
+
+/** Rótulos da Parte A (contrato §4.5 e §10, E2): reexportados, nunca redefinidos. */
+export { ROTULO_AMBIENTE, ROTULO_REGIME } from '../configuracoes/dominio';
 
 export const TIPOS_NOTA = ['DEVOLUCAO_VENDA', 'REMESSA_CONSERTO', 'REMESSA_TROCA_GARANTIA'] as const;
 export type TipoNota = (typeof TIPOS_NOTA)[number];
@@ -470,16 +477,6 @@ export const ROTULO_ORIGEM_NOTA_VENDA: Record<OrigemNotaVenda, string> = {
   ANEXO: 'XML anexado',
 };
 
-export const ROTULO_REGIME: Record<RegimeTributario, string> = {
-  SIMPLES: 'Simples Nacional',
-  PRESUMIDO: 'Lucro Presumido',
-  REAL: 'Lucro Real',
-};
-export const ROTULO_AMBIENTE: Record<AmbienteNfe, string> = {
-  HOMOLOGACAO: 'Homologação (sem valor fiscal)',
-  PRODUCAO: 'Produção',
-};
-
 /** Valores aceitos (pesquisa focus-nfe.md §2.1). No Simples o ICMS usa CSOSN; no Presumido e no Real, CST (spec §8.2). */
 export const CSOSN = ['101', '102', '103', '201', '202', '203', '300', '400', '500', '900'] as const;
 export const CST_ICMS = ['00', '02', '10', '15', '20', '30', '40', '41', '50', '51', '53', '60', '61', '70', '90'] as const;
@@ -489,10 +486,11 @@ export const CST_PIS_COFINS = [
 ] as const;
 
 /** Abas da etapa 4 (spec §6.4). Caminhos, e não ?aba=, porque a Busca Avançada (GET) apagaria o parâmetro. */
-export type DestinoEstoque = 'BOM' | 'PROBLEMA';
+/** Apelido do destino da Parte A (`DestinoItem`: BOM ou PROBLEMA); os rótulos são os de `ROTULO_DESTINO`. */
+export type DestinoEstoque = DestinoItem;
 export const ABAS_ESTOQUE: readonly { destino: DestinoEstoque; rotulo: string; href: string }[] = [
-  { destino: 'BOM', rotulo: 'Estoque Bom', href: '/fluxo/etapa/4' },
-  { destino: 'PROBLEMA', rotulo: 'Estoque Problema', href: '/fluxo/etapa/4/problema' },
+  { destino: 'BOM', rotulo: ROTULO_DESTINO.BOM, href: '/fluxo/etapa/4' },
+  { destino: 'PROBLEMA', rotulo: ROTULO_DESTINO.PROBLEMA, href: '/fluxo/etapa/4/problema' },
 ];
 export function rotulosDoEstoque(): string[] {
   return ABAS_ESTOQUE.map((a) => a.rotulo);
@@ -816,12 +814,13 @@ Esperado: `drizzle/0007_fase4_fiscal.sql` com os 4 `CREATE TYPE` (`tipo_nota`, `
 
 - [ ] **Passo 4: Rótulos do histórico**
 
-Em `src/modules/historico/rotulos/fiscal.ts` (criado pela Parte A com as chaves reservadas `nf_solicitada`, `nf_autorizada`, `nf_rejeitada`, `nf_reenviada`, `nf_cancelada`, `nota_venda_anexada`, `nota_venda_obtida_ml`, `devolucao_reaberta`), acrescente estas duas linhas dentro do objeto exportado, depois de `devolucao_reaberta`:
+Não edite: `src/modules/historico/rotulos/fiscal.ts` é congelado, e a Parte A já criou `ROTULOS_FISCAL` com todas as chaves desta fase (contrato §4.7 e §10, E3): `nf_solicitada`, `nf_autorizada`, `nf_rejeitada`, `nf_reenviada`, `nf_cancelada`, `nf_item_escolhido`, `nota_venda_anexada`, `nota_venda_obtida_ml`, `nota_venda_removida` e `devolucao_reaberta`. Só confira:
 
-```ts
-  nf_item_escolhido: 'Item da NF de venda escolhido',
-  nota_venda_removida: 'NF de venda removida',
+```bash
+grep -n "nf_item_escolhido\|nota_venda_removida" src/modules/historico/rotulos/fiscal.ts
 ```
+
+Esperado: as 2 linhas. Se faltar alguma, pare e peça a emenda no `main`.
 
 - [ ] **Passo 5: Fábrica da devolução "no estoque" e teste de integração das tabelas**
 
@@ -3060,8 +3059,10 @@ describe('obterEmissorNFe (contrato §5.7)', () => {
     expect(() => obterEmissorNFe('PRODUCAO')).toThrow('Falta o token da Focus NFe de produção (FOCUS_TOKEN_PRODUCAO) no .env do servidor.');
   });
 
-  it('em produção, o lerEnv recusa o emissor falso (D17, Parte A)', () => {
-    expect(() => lerEnv({ DATABASE_URL: 'postgres://teste', NODE_ENV: 'production', EMISSOR_NFE: 'falso' })).toThrow(/EMISSOR_NFE/);
+  it('em produção, o lerEnv recusa o emissor falso, a menos que PERMITIR_FALSOS=1 (só o e2e; D17, contrato §10, E1)', () => {
+    const producao = { DATABASE_URL: 'postgres://teste', NODE_ENV: 'production', SEGREDO_LINKS: 'x'.repeat(32), EMISSOR_NFE: 'falso' };
+    expect(() => lerEnv(producao)).toThrow(/EMISSOR_NFE/);
+    expect(lerEnv({ ...producao, PERMITIR_FALSOS: '1' }).EMISSOR_NFE).toBe('falso');
   });
 });
 ```
@@ -3521,7 +3522,7 @@ export function definirEmissorParaTestes(emissor: EmissorNFe | null): void {
 }
 ```
 
-Acrescente no **final** de `src/conectores/nfe/tipos.ts` (o contrato §5.7 lista as duas funções neste arquivo; os tipos são importados com `import type`, então não há ciclo em tempo de execução):
+Acrescente no **final** de `src/conectores/nfe/tipos.ts` (contrato §5.7 e §10, E10: as duas funções moram em `registro.ts` e `tipos.ts` só as reexporta; no código, importe de `@/conectores/nfe/registro`. Os tipos são importados com `import type`, então não há ciclo em tempo de execução):
 
 ```ts
 export { definirEmissorParaTestes, obterEmissorNFe } from './registro';
@@ -5122,7 +5123,7 @@ git commit -m "feat: casamento das unidades com a NF de venda (SKU, EAN, escolha
 **Como funciona (D12, contrato §5.1 e §5.7):**
 1. `solicitarEmissao`: Fiscal ou Gestor; dados da empresa e token do ambiente presentes; na devolução do ML sem NF de venda, pede ao conector; numa transação: devolução em AGUARDANDO_NF, sem NF ativa, **monta a nota inteira** (valida), grava a nota em PROCESSANDO com `ref` = id sem hífens, grava os eventos e envia `nfe.emitir` com `{ tx }`.
 2. `nfe.emitir`: monta de novo e envia; erro de montagem (`ErroFiscal`) ou recusa do emissor (`ErroEmissorRecusou`) viram REJEITADA (não lançam); depois faz a 1ª consulta na hora.
-3. `nfe.consultar`: PROCESSANDO → reagenda a consulta seguinte (10 s, 30 s, 1 min, 2 min, 5 min, depois 10 min; `chaveUnica` = `{id}:{n}`); AUTORIZADA → baixa XML e DANFE, salva, e numa transação aplica os efeitos; REJEITADA → grava o motivo. Erro passageiro lança (a fila tenta de novo).
+3. `nfe.consultar`: PROCESSANDO → reagenda a consulta seguinte (10 s, 30 s, 1 min, 2 min, 5 min, depois 10 min; `chaveUnica` = `{id}:{atualizadaEm em ms}:{n}`. A chave é o id fixo do job (contrato §10, E4): o `atualizadaEm` da nota muda a cada envio (criação e reenvio da REJEITADA) e não muda durante as consultas, então cada rodada tem a sua série e o reenvio não esbarra nas chaves da rodada anterior); AUTORIZADA → baixa XML e DANFE, salva, e numa transação aplica os efeitos; REJEITADA → grava o motivo. Erro passageiro lança (a fila tenta de novo).
 4. Efeitos da autorização (DEVOLUCAO_VENDA): itens BOM AGUARDANDO_NF → DISPONIVEL_VENDA (evento `item_status`), `portaLotes.alocarItensProblema` (não faz nada até a Fase 5, D11), devolução AGUARDANDO_NF → CONCLUIDA com `concluida_em`. REMESSA_*: `portaLotes.aoAutorizarRemessa`.
 5. `reenviarNota`: só REJEITADA; monta de novo (o Fiscal vê se a causa continua), volta para PROCESSANDO com o mesmo `ref` e o ambiente atual, e envia `nfe.emitir`.
 
@@ -5287,7 +5288,7 @@ describe('emissão da NF de devolução (spec §6.4, §8.6; contrato §5.7)', ()
     expect(fila.enviadas[1]).toMatchObject({
       nome: 'nfe.consultar',
       dados: { notaFiscalId, consulta: 2 },
-      opcoes: { chaveUnica: `${notaFiscalId}:2`, iniciarEm: new Date(AGORA.getTime() + 10_000) },
+      opcoes: { chaveUnica: expect.stringMatching(new RegExp(`^${notaFiscalId}:\\d+:2$`)), iniciarEm: new Date(AGORA.getTime() + 10_000) },
     });
 
     const nota = await notaDe(notaFiscalId);
@@ -5591,7 +5592,8 @@ export async function processarConsulta(db: Db, fila: Fila, notaFiscalId: string
       await fila.enviar(
         'nfe.consultar',
         { notaFiscalId, consulta: proxima },
-        { chaveUnica: `${notaFiscalId}:${proxima}`, iniciarEm: new Date(agora.getTime() + esperaAntesDaConsulta(proxima) * 1000) },
+        // Uma série de chaves por rodada de envio (contrato §10, E4): o reenvio da REJEITADA muda o atualizadaEm.
+        { chaveUnica: `${notaFiscalId}:${nota.atualizadaEm.getTime()}:${proxima}`, iniciarEm: new Date(agora.getTime() + esperaAntesDaConsulta(proxima) * 1000) },
       );
       return;
     }
@@ -6472,7 +6474,7 @@ git commit -m "feat: cancelamento da NF em até 24 h (desfaz itens e devolução
   - rotas `/fluxo/etapa/4` (Estoque Bom) e `/fluxo/etapa/4/problema` (Estoque Problema); ação `emitirNotasAcao` com `type EstadoEmissao = { erros: string[]; ok: string | null }` (caixa de erros `#erros-emissao`)
   - `apoio-fiscal.ts`: `prepararFiscal(opcoes?)`, `limparFiscal()`, `devolucaoNoEstoque({ destinos, comNotaVenda?, codigoNaVenda? })`
 
-**Telas (mobile-first, spec §6.4):** título do PDF "Destinação Fiscal e Estoque"; duas abas (links com `aria-current`) "Estoque Bom (N)" e "Estoque Problema (N)"; aviso "A emissão de NF está bloqueada" com as pendências (Fiscal e Gestor); Busca Avançada; cartões com uma caixa de seleção de 44 px à esquerda (só para quem emite e só nas devoluções sem NF ativa) e o botão "Emitir NF de devolução (N)" no rodapé fixo; "Baixar XMLs do período" num `<details>` no fim. No quadro, a coluna 4 mostra as duas contagens (o total do cabeçalho é de devoluções distintas) e os dois links trocam o "Ver lista"; no celular, a divisão aparece embaixo dos cartões da etapa 4 (o `EtapasCelular` é congelado na janela).
+**Telas (mobile-first, spec §6.4):** título do PDF "Destinação Fiscal e Estoque"; duas abas (links com `aria-current`) "Estoque Bom (N)" e "Estoque Problema (N)"; aviso "A emissão de NF está bloqueada" com as pendências (Fiscal e Gestor); Busca Avançada; cartões com uma caixa de seleção de 44 px à esquerda (só para quem emite e só nas devoluções sem NF ativa) e o botão "Emitir NF de devolução (N)" no rodapé fixo; "Baixar XMLs do período" num `<details>` no fim. No quadro, a coluna 4 mostra as duas contagens (o total do cabeçalho é de devoluções distintas) e os dois links trocam o "Ver lista"; no celular, a divisão aparece no **topo** da etapa 4, acima dos cartões, pela prop `conteudoEtapa` que a Parte A pôs no `EtapasCelular` (o componente é congelado; contrato §10, E5).
 
 - [ ] **Passo 1: Escrever os testes que falham**
 
@@ -6976,10 +6978,14 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
         )}
       </div>
       <BuscaAvancada acao="/fluxo/busca" filtros={{}} />
-      <div className="flex flex-col gap-3 md:hidden">
-        <EtapasCelular colunas={colunas} selecionada={selecionada} />
-        {/* O EtapasCelular é congelado na janela das fases: a divisão do estoque vem logo depois dele. */}
-        {selecionada === 4 && estoque && <DivisaoEstoque bom={estoque.bom} problema={estoque.problema} />}
+      <div className="md:hidden">
+        {/* Mobile-first: Estoque Bom / Estoque Problema no TOPO da etapa 4, acima dos cartões, pelo ponto de extensão
+            `conteudoEtapa` da Parte A (o EtapasCelular é congelado; contrato §10, E5). */}
+        <EtapasCelular
+          colunas={colunas}
+          selecionada={selecionada}
+          conteudoEtapa={estoque ? { 4: <DivisaoEstoque bom={estoque.bom} problema={estoque.problema} /> } : undefined}
+        />
       </div>
       <div className="hidden md:block">
         <QuadroFluxo colunas={colunas} />
@@ -7376,6 +7382,13 @@ test('a coluna 4 se divide em Estoque Bom e Estoque Problema; a devolução com 
   await page.goto(ehCelular(testInfo) ? '/fluxo?etapa=4' : '/fluxo');
   await expect(page.getByRole('link', { name: /^Estoque Bom: \d+ devoluç/ })).toBeVisible();
   await semRolagemLateral(page);
+  if (ehCelular(testInfo)) {
+    // Mobile-first (contrato §10, E5): a divisão fica no topo da etapa 4, antes do primeiro cartão.
+    const etapa = page.getByRole('region', { name: /^4\. / });
+    const divisao = await etapa.getByRole('navigation', { name: 'Estoque Bom e Estoque Problema' }).boundingBox();
+    const primeiroCartao = await etapa.getByRole('listitem').first().boundingBox();
+    expect(divisao !== null && primeiroCartao !== null && divisao.y < primeiroCartao.y).toBe(true);
+  }
 
   await page.getByRole('link', { name: /^Estoque Problema: \d+ devoluç/ }).click();
   await expect(page).toHaveURL(/\/fluxo\/etapa\/4\/problema$/);
@@ -7608,6 +7621,7 @@ import type { DbOuTx } from '@/db/client';
 import { devolucoes, notasFiscais } from '@/db/schema';
 import { formatarDataHora } from '@/lib/formatar';
 import { lerConfiguracao } from '@/modules/configuracoes/ler';
+import { ROTULO_DESTINO } from '@/modules/devolucoes/dominio';
 import type { TomSelo } from '@/modules/devolucoes/selos';
 import { capacidade, casarItens, chaveAlvo, vagasRestantes, type MotivoCasamento } from './casamento';
 import { numeroDaChave } from './chave';
@@ -7666,7 +7680,6 @@ export type SituacaoFiscal = {
 
 const TOM_NOTA: Record<SituacaoNotaFiscal, TomSelo> = { PROCESSANDO: 'destaque', AUTORIZADA: 'bom', REJEITADA: 'erro', CANCELADA: 'neutro' };
 const MOTIVO: Record<MotivoCasamento, string> = { ESCOLHA: 'Escolhido pelo Fiscal', SKU: 'Casado pelo SKU', EAN: 'Casado pelo EAN' };
-const ROTULO_DESTINO = { BOM: 'Estoque Bom', PROBLEMA: 'Estoque Problema' } as const;
 
 export function vistaDaNota(n: NotaFiscalLinha, serieConfigurada: string | null, agora: Date): VistaNota {
   const autorizada = n.situacao === 'AUTORIZADA' && n.autorizadaEm !== null;
@@ -8396,6 +8409,7 @@ Feita na worktree da Fase 4 **depois que as Fases 2 e 3 já estão no `main`** (
 - Nenhum arquivo congelado (contrato §3) muda nesta tarefa.
 
 **Interfaces:**
+- **Opcional (contrato §7.3 e §10, E11):** com a Fase 2 no `main`, a conferência do teste ponta a ponta pode ser feita pela tela com `conferirDevolucao(page, codigo, ['BOM', { problema: 'AVARIADO' }])` de `tests/e2e/apoio-conferencia.ts` (dona: Fase 2), no lugar do `concluirConferencia` direto. O caminho por serviço abaixo continua valendo; use-o se o apoio não estiver no `main`.
 - Consome (das fases já mergeadas, pelas assinaturas do contrato): `concluirConferencia(db, devolucaoId, usuario, agora?)` (Fase 2, contrato §5.4); tabela `evidencias` (contrato §4.1); `obterConector(db, 'MERCADO_LIVRE')` com o conector falso da Fase 3 e a tabela `contas_marketplace` (contrato §4.2 e §5.3); `interpretarXmlNotaVenda` (Tarefa 5); fábricas e apoio desta fase.
 - Produz: a branch `fase-4-fiscal` pronta para `git merge --no-ff` no `main`, com a suíte inteira passando.
 

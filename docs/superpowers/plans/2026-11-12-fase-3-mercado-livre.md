@@ -5746,14 +5746,14 @@ git commit -m "feat: resultado da conferência no ML (OK automático, contestaç
   - `TIPOS_FOTO_CONTESTACAO`, `LIMITE_MENSAGEM`, `MAX_FOTOS_CONTESTACAO` e `TEXTO_MOTIVO_ITEM` (Tarefa 11);
   - `obterConectorML` e `ErroContaML` (Tarefa 7), `ehUltimaTentativa` (Tarefa 10);
   - `ErroMotivoIndisponivel`, `ehRecusaDefinitiva`, `mensagemErroML` e `logErroML` (Tarefa 2);
-  - `obterArmazenamento().ler` (P2), `type DadosSelo` e `type TomSelo` (`@/modules/devolucoes/selos`).
+  - `armazenamentoDoProvedor(provedor).ler` e `provedorAtual()` (P2; a foto é lida de onde foi gravada, contrato §10, E15), `type DadosSelo` e `type TomSelo` (`@/modules/devolucoes/selos`).
 - Produz:
   - em `selos.ts`: `seloPrazoML(prazo: Date | null, agora: Date): DadosSelo | null`, `TOM_STATUS_CONTESTACAO: Record<StatusContestacao, TomSelo>`;
   - em `contestacoes.ts`:
     - `LIMITE_FOTO_ML_BYTES`, `class ErroContestacao { erros: string[] }`, `rotuloFoto(tipo, unidade): string`;
     - `type CartaoContestacao = { id; devolucaoId; codigo; motivo: MotivoCanal; status; enviando: boolean; prazo; selo: DadosSelo | null; fotos: number; erro }`;
     - `listarContestacoes(db, status, agora?): Promise<CartaoContestacao[]>`, `contarContestacoes(db): Promise<Record<StatusContestacao, number>>`;
-    - `type FotoCandidata = { id; tipo; rotulo; caminho: string | null; selecionada: boolean }`, `type DetalheContestacao`, `obterContestacao(db, id, agora?): Promise<DetalheContestacao | null>`;
+    - `type FotoCandidata = { id; tipo; rotulo; caminho: string | null; provedor: string | null; selecionada: boolean }`, `type DetalheContestacao`, `obterContestacao(db, id, agora?): Promise<DetalheContestacao | null>`;
     - `type EntradaRevisao = { motivo: string; mensagem: string; evidencias: string[] }`, `validarRevisao(e, fotosPermitidas: ReadonlySet<string>): { dados; erros }`;
     - `revisarEEnviar(db, fila, id, e, usuario, agora): Promise<void>`;
     - `type ResultadoEnvio = 'enviada' | 'falhou' | 'ignorada'`, `enviarContestacao(db, id, o: { agora: Date; ultimaTentativa: boolean }): Promise<ResultadoEnvio>`.
@@ -6074,6 +6074,7 @@ import type { DadosSelo } from '@/modules/devolucoes/selos';
 import type { Fila } from '@/modules/fila/fila';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { armazenamentoDoProvedor, provedorAtual } from '@/modules/midia/armazenamento';
+import { ehTipoEvidencia, ROTULO_EVIDENCIA } from '@/modules/midia/dominio';
 import { obterConectorML } from './conector';
 import { ErroContaML } from './contas';
 import { ehMotivoCanal, MOTIVOS_COM_FOTO_OBRIGATORIA, ROTULO_MOTIVO_CANAL, type StatusContestacao } from './dominio';
@@ -6094,16 +6095,9 @@ export class ErroContestacao extends Error {
 }
 
 /** Nomes do PDF (spec §6.3). */
-const ROTULO_FOTO: Record<string, string> = {
-  FOTO_1_ETIQUETA: 'Foto 1',
-  FOTO_2_EMBALAGEM: 'Foto 2',
-  FOTO_3_PRODUTO: 'Foto 3',
-  FOTO_4_CODIGO_SERIAL: 'Foto 4',
-  EXTRA: 'Extra',
-};
-
+/** Os nomes do PDF vêm da Parte A (`ROTULO_EVIDENCIA`; contrato §4.5 e §10, E2). */
 export function rotuloFoto(tipo: string, unidade: number | null): string {
-  const nome = ROTULO_FOTO[tipo] ?? tipo;
+  const nome = ehTipoEvidencia(tipo) ? ROTULO_EVIDENCIA[tipo] : tipo;
   return unidade === null ? nome : `${nome} · unidade ${unidade}`;
 }
 
@@ -6174,6 +6168,7 @@ async function fotosDaDevolucao(db: DbOuTx, devolucaoId: string) {
       id: evidencias.id,
       tipo: evidencias.tipo,
       caminho: evidencias.caminho,
+      provedor: evidencias.provedor,
       situacao: evidencias.situacaoProcessamento,
       unidade: itensDevolucao.unidade,
     })
@@ -6190,7 +6185,8 @@ async function fotosDaDevolucao(db: DbOuTx, devolucaoId: string) {
     .orderBy(asc(evidencias.tipo), asc(itensDevolucao.unidade), asc(evidencias.enviadoEm));
 }
 
-export type FotoCandidata = { id: string; tipo: string; rotulo: string; caminho: string | null; selecionada: boolean };
+/** `provedor`: onde o arquivo está (disco ou s3); o link usa armazenamentoDoProvedor (contrato §10, E15). */
+export type FotoCandidata = { id: string; tipo: string; rotulo: string; caminho: string | null; provedor: string | null; selecionada: boolean };
 
 export type DetalheContestacao = {
   id: string;
@@ -6279,6 +6275,7 @@ export async function obterContestacao(db: DbOuTx, id: string, agora: Date = new
       tipo: f.tipo,
       rotulo: rotuloFoto(f.tipo, f.unidade),
       caminho: f.situacao === 'PRONTA' ? f.caminho : null,
+      provedor: f.provedor,
       selecionada: c.evidencias.includes(f.id),
     })),
   };
@@ -6521,7 +6518,7 @@ git commit -m "feat: contestação revisada pelo Gestor e enviada ao ML com as f
 - Consome:
   - `listarContestacoes`, `contarContestacoes`, `obterContestacao`, `revisarEEnviar` e `ErroContestacao` (Tarefa 12), `seloPrazoML` e `TOM_STATUS_CONTESTACAO` (Tarefa 12);
   - `LIMITE_MENSAGEM` (Tarefa 11), `MOTIVOS_CANAL`, `ROTULO_MOTIVO_CANAL`, `ROTULO_STATUS_CONTESTACAO` e `MOTIVOS_COM_FOTO_OBRIGATORIA` (Tarefa 1);
-  - `obterArmazenamento().urlTemporaria` (P2), `obterFila` (P2);
+  - `armazenamentoDoProvedor(provedor).urlTemporaria` e `provedorAtual()` (P2; contrato §10, E15), `obterFila` (P2);
   - os componentes da Fase 1: `Selo`, `ListaErros`, `RodapeFormulario`, `MensagemSucesso`, `useEnvioFormulario` e `estilos`.
 - Produz:
   - `BotaoConfirmar({ rotulo, rotuloConfirmar, desabilitado?, className })`: o 1º toque pede confirmação, o 2º envia o formulário, e depois de 5 s volta ao normal;
@@ -6952,7 +6949,7 @@ import { obterContestacao } from '@/modules/mercado-livre/contestacoes';
 import { ROTULO_MOTIVO_CANAL, ROTULO_STATUS_CONTESTACAO } from '@/modules/mercado-livre/dominio';
 import { LIMITE_MENSAGEM } from '@/modules/mercado-livre/resultado';
 import { TOM_STATUS_CONTESTACAO } from '@/modules/mercado-livre/selos';
-import { obterArmazenamento } from '@/modules/midia/armazenamento';
+import { armazenamentoDoProvedor, provedorAtual } from '@/modules/midia/armazenamento';
 import { enviarAcao } from './acoes';
 import { FormularioContestacao } from './FormularioContestacao';
 
@@ -6969,13 +6966,13 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
   const c = await obterContestacao(obterDb(), id);
   if (!c) notFound();
   const pedido = primeiroValor((await searchParams).ok) === 'solicitado';
-  const armazenamento = obterArmazenamento();
+  // Cada foto pelo provedor onde foi gravada (disco ou s3; contrato §10, E15).
   const fotos = await Promise.all(
     c.fotos.map(async (f) => ({
       id: f.id,
       rotulo: f.rotulo,
       selecionada: f.selecionada,
-      url: f.caminho ? await armazenamento.urlTemporaria(f.caminho, VALIDADE_LINK_S) : null,
+      url: f.caminho ? await armazenamentoDoProvedor(f.provedor ?? provedorAtual()).urlTemporaria(f.caminho, VALIDADE_LINK_S) : null,
     })),
   );
   const podeEditar = (c.status === 'AGUARDANDO_GESTOR' && !c.enviando) || c.status === 'FALHOU';
@@ -8056,7 +8053,7 @@ git commit -m "feat: Configurações › Mercado Livre com OAuth (state em cooki
 
 > **Pré-requisitos da P2** (contrato §2, item 10):
 > - O `tests/e2e/global-setup.ts` sobe o worker com o banco de testes e os falsos (`ML_CONECTOR=falso` vem do `.env` da worktree).
-> - O servidor do e2e (`next start`, NODE_ENV=production) também precisa aceitar o falso: o `lerEnv` da P2 deve liberar os falsos no e2e. Se isso não acontecer, é emenda no `main`, não mudança aqui.
+> - O servidor do e2e (`next start`, NODE_ENV=production) também precisa aceitar o falso: a Parte A libera com `PERMITIR_FALSOS=1`, que o `AMBIENTE_E2E` (`tests/e2e/dados.ts`) passa ao servidor e ao worker do e2e (contrato §10, E1). Não defina `PERMITIR_FALSOS` no `.env` da worktree. Se o falso for recusado no e2e, é emenda no `main`, não mudança aqui.
 >
 > **O spec é pulado** (`test.skip`) se o `.env` estiver com `ML_CONECTOR=api`: o e2e nunca fala com o ML real.
 >
@@ -8359,6 +8356,7 @@ Feita na worktree da Fase 3, **depois** que a Fase 2 já foi mergeada no `main` 
   - da **Fase 1 (real)**: `receberPorRastreio`;
   - da **Fase 3**: `sincronizarReclamacao`, `revisarEEnviar`, `criarConectorMLDaConta`, `manipuladoresMercadoLivre`, `fetchFalsoML` e as fábricas.
 - Produz: o teste de integração entre as Fases 2 e 3 pedido no contrato §7.3.
+- **Opcional (e2e, contrato §10, E11):** com a Fase 2 no `main`, `conferirDevolucao(page, codigo, unidades)` de `tests/e2e/apoio-conferencia.ts` faz a conferência pela tela. Um `tests/e2e/integracao-ml.spec.ts` pode usá-lo assim: devolução do ML falso → `receberPorRastreio` → `conferirDevolucao(page, codigo, ['BOM'])` → "OK" enviado; ou `[{ problema: 'AVARIADO' }]` → contestação na tela "Contestações ML". O teste por serviço abaixo continua sendo o obrigatório.
 
 - [ ] **Passo 1: Trazer o `main` e resolver conflitos (contrato §3)**
 
@@ -8404,7 +8402,8 @@ Esperado:
  * Contrato §7.3 (Fase 3, já com a 2 no main), com o ML falso (o fetch, não o conector):
  * aviso → devolução do ML → recepção (Fase 1) → conferência concluída pela Fase 2 (código real) →
  * todos BOM: "OK" ao ML; com PROBLEMA: contestação com as Fotos → "Enviar ao ML" sobe as fotos e manda a revisão.
- * O início da conferência é gravado direto: o contrato não fixa o nome da função da Fase 2 que abre a conferência.
+ * O início da conferência é gravado direto. Também valeria `iniciarConferencia(db, id, usuario)` de `src/modules/conferencia/trava.ts`
+ * (Fase 2; contrato §7.3, E11), mas a gravação direta não depende da trava.
  */
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
