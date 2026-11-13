@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { colunasDaDecisao, compararEan, decisaoDoItem, entradaDoItem, MOTIVOS_PROBLEMA, validarItem, type EntradaItem } from './regras';
+import {
+  colunasDaDecisao,
+  compararEan,
+  decisaoDoItem,
+  entradaDoItem,
+  MOTIVOS_PROBLEMA,
+  pendenciasDaConclusao,
+  validarItem,
+  videoExigido,
+  type EntradaItem,
+  type EvidenciaRegra,
+  type ItemRegra,
+} from './regras';
 
 const VAZIA: EntradaItem = { serial: '', loteFabricacao: '', validade: '', decisao: null, motivo: null, observacao: '' };
 
@@ -63,5 +75,54 @@ describe('compararEan (spec §6.3: EAN diferente do esperado sugere "Divergente"
     expect(compararEan({ esperado: semEan, lido: '7891000000014', achado: { id: 'p2' } })).toEqual({ situacao: 'diverge', produtoRecebidoId: 'p2', sugerirMotivo: 'DIVERGENTE' });
     expect(compararEan({ esperado: semEan, lido: '7891000000014', achado: null })).toEqual({ situacao: 'sem_referencia', produtoRecebidoId: 'p1', sugerirMotivo: null });
     expect(compararEan({ esperado: null, lido: '7891000000014', achado: null })).toEqual({ situacao: 'sem_referencia', produtoRecebidoId: null, sugerirMotivo: null });
+  });
+});
+
+describe('pendenciasDaConclusao (spec §6.3 e contrato §5.4)', () => {
+  const PACOTE: EvidenciaRegra[] = [
+    { tipo: 'FOTO_1_ETIQUETA', itemId: null },
+    { tipo: 'FOTO_2_EMBALAGEM', itemId: null },
+  ];
+  const fotosDa = (itemId: string): EvidenciaRegra[] => [
+    { tipo: 'FOTO_3_PRODUTO', itemId },
+    { tipo: 'FOTO_4_CODIGO_SERIAL', itemId },
+  ];
+  const bom: ItemRegra = { id: 'i1', unidade: 1, destino: 'BOM', motivo: null };
+  const problema: ItemRegra = { id: 'i2', unidade: 2, destino: 'PROBLEMA', motivo: 'USADO' };
+  const ausente: ItemRegra = { id: 'i3', unidade: 3, destino: null, motivo: 'AUSENTE' };
+
+  it('nada falta: Fotos 1 e 2, Fotos 3 e 4 de cada unidade presente, destino de todas e o vídeo', () => {
+    expect(
+      pendenciasDaConclusao({
+        itens: [bom, ausente],
+        evidencias: [...PACOTE, ...fotosDa('i1'), { tipo: 'VIDEO_PROVA', itemId: null }],
+        videoObrigatorio: 'SEMPRE',
+      }),
+    ).toEqual([]);
+  });
+
+  it('lista o que falta, na ordem do assistente', () => {
+    expect(
+      pendenciasDaConclusao({
+        itens: [{ ...bom, destino: null }, problema],
+        evidencias: [{ tipo: 'FOTO_2_EMBALAGEM', itemId: null }, { tipo: 'FOTO_3_PRODUTO', itemId: 'i2' }],
+        videoObrigatorio: 'SEMPRE',
+      }),
+    ).toEqual([
+      'Foto 1 (etiqueta de rastreio e declaração de conteúdo)',
+      'Foto 3 da unidade 1',
+      'Foto 4 da unidade 1',
+      'Destino da unidade 1',
+      'Foto 4 da unidade 2',
+      'Vídeo de Prova',
+    ]);
+  });
+
+  it('vídeo SO_PROBLEMA: só quando alguma unidade for Estoque Problema ou ausente (contrato D5)', () => {
+    expect(videoExigido('SO_PROBLEMA', [bom])).toBe(false);
+    expect(videoExigido('SO_PROBLEMA', [bom, problema])).toBe(true);
+    expect(videoExigido('SO_PROBLEMA', [ausente])).toBe(true);
+    expect(videoExigido('SEMPRE', [bom])).toBe(true);
+    expect(pendenciasDaConclusao({ itens: [bom], evidencias: [...PACOTE, ...fotosDa('i1')], videoObrigatorio: 'SO_PROBLEMA' })).toEqual([]);
   });
 });

@@ -3,6 +3,8 @@
  * então este arquivo só importa vocabulário (dominio.ts), nunca o banco.
  */
 import { MOTIVOS_ITEM, type DestinoItem, type MotivoItem } from '@/modules/devolucoes/dominio';
+import type { VideoObrigatorio } from '@/modules/configuracoes/dominio';
+import type { TipoEvidencia } from '@/modules/midia/dominio';
 
 /** Estoque Bom, Estoque Problema ou ausente (contrato D4: ausente não tem destino, só o motivo AUSENTE). */
 export const DECISOES = ['BOM', 'PROBLEMA', 'AUSENTE'] as const;
@@ -106,4 +108,31 @@ export function compararEan(p: {
     return { situacao: 'diverge', produtoRecebidoId: p.achado.id, sugerirMotivo: 'DIVERGENTE' };
   }
   return { situacao: 'sem_referencia', produtoRecebidoId: p.achado?.id ?? p.esperado?.id ?? null, sugerirMotivo: null };
+}
+
+export type ItemRegra = { id: string; unidade: number; destino: DestinoItem | null; motivo: MotivoItem | null };
+export type EvidenciaRegra = { tipo: TipoEvidencia; itemId: string | null };
+
+/** Contrato D5: com SO_PROBLEMA, o vídeo é exigido se alguma unidade for Estoque Problema ou ausente. */
+export function videoExigido(config: VideoObrigatorio, itens: Pick<ItemRegra, 'destino' | 'motivo'>[]): boolean {
+  return config === 'SEMPRE' || itens.some((i) => i.destino === 'PROBLEMA' || i.motivo === 'AUSENTE');
+}
+
+/**
+ * O que ainda falta para concluir (spec §6.3; contrato §5.4): Fotos 1 e 2 sempre; Fotos 3 e 4 e o destino de cada
+ * unidade que não é ausente; o Vídeo de Prova conforme a configuração. `evidencias` = só as que subiram e não falharam.
+ */
+export function pendenciasDaConclusao(e: { itens: ItemRegra[]; evidencias: EvidenciaRegra[]; videoObrigatorio: VideoObrigatorio }): string[] {
+  const tem = (tipo: TipoEvidencia, itemId: string | null = null) => e.evidencias.some((x) => x.tipo === tipo && x.itemId === itemId);
+  const falta: string[] = [];
+  if (!tem('FOTO_1_ETIQUETA')) falta.push('Foto 1 (etiqueta de rastreio e declaração de conteúdo)');
+  if (!tem('FOTO_2_EMBALAGEM')) falta.push('Foto 2 (embalagem externa)');
+  for (const item of e.itens) {
+    if (item.motivo === 'AUSENTE') continue;
+    if (!tem('FOTO_3_PRODUTO', item.id)) falta.push(`Foto 3 da unidade ${item.unidade}`);
+    if (!tem('FOTO_4_CODIGO_SERIAL', item.id)) falta.push(`Foto 4 da unidade ${item.unidade}`);
+    if (!item.destino) falta.push(`Destino da unidade ${item.unidade}`);
+  }
+  if (videoExigido(e.videoObrigatorio, e.itens) && !tem('VIDEO_PROVA')) falta.push('Vídeo de Prova');
+  return falta;
 }
