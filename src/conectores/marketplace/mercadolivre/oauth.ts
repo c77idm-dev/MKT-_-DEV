@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { z } from 'zod';
 import { ErroML } from './cliente';
 
 export const URL_AUTORIZACAO_ML = 'https://auth.mercadolivre.com.br/authorization';
@@ -12,8 +13,6 @@ export type TokensML = {
   userId: number;
   escopo: string;
 };
-
-type RespostaToken = { access_token: string; refresh_token: string; expires_in: number; user_id: number; scope: string };
 
 export function gerarPkce(): { verifier: string; challenge: string } {
   const verifier = randomBytes(32).toString('base64url');
@@ -39,6 +38,14 @@ export function montarUrlAutorizacao(p: {
   return url.toString();
 }
 
+const esquemaRespostaToken = z.object({
+  access_token: z.string().min(1),
+  refresh_token: z.string().min(1),
+  expires_in: z.number().int().positive(),
+  user_id: z.coerce.number().int().positive(),
+  scope: z.string().default(''),
+});
+
 async function pedirToken(corpo: Record<string, string>, fetchFn: typeof fetch, agora: Date): Promise<TokensML> {
   const resposta = await fetchFn(URL_TOKEN_ML, {
     method: 'POST',
@@ -47,12 +54,19 @@ async function pedirToken(corpo: Record<string, string>, fetchFn: typeof fetch, 
   });
   const texto = await resposta.text();
   if (!resposta.ok) throw new ErroML(resposta.status, texto, '/oauth/token');
-  let d: RespostaToken;
+  let bruto: unknown;
   try {
-    d = JSON.parse(texto) as RespostaToken;
+    bruto = JSON.parse(texto);
   } catch {
-    throw new ErroML(resposta.status, texto, '/oauth/token');
+    throw new ErroML(resposta.status, '[resposta do token não é JSON]', '/oauth/token');
   }
+  const lido = esquemaRespostaToken.safeParse(bruto);
+  // Nunca guarde o corpo no erro: ele pode trazer o access_token.
+  if (!lido.success) {
+    const campos = lido.error.issues.map((i) => i.path.join('.') || '(raiz)').join(', ');
+    throw new ErroML(resposta.status, `[resposta do token fora do formato: ${campos}]`, '/oauth/token');
+  }
+  const d = lido.data;
   return {
     accessToken: d.access_token,
     refreshToken: d.refresh_token,
