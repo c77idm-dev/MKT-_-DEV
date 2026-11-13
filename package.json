@@ -29,6 +29,7 @@
     "fflate": "0.8.2",
     "next": "16.4.6",
     "papaparse": "5.7.0",
+    "pg-boss": "12.38.0",
     "postgres": "^4.1.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
