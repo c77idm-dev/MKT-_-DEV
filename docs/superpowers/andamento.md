@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 13/11/2026 (Fase 4 com as tarefas prontas). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 13/11/2026, 19h (os três times pararam no limite de uso; retomar depois das 19h50). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Fases 0 e 1:** prontas, no `main` e publicadas na VPS (https://devolucoes.179-199-128-100.sslip.io).
@@ -13,9 +13,30 @@ Atualizado em 13/11/2026 (Fase 4 com as tarefas prontas). Mantenha este arquivo 
   - Inclui: variáveis de ambiente, migração 0006, vocabulário e rótulos, fila pg-boss com o worker, armazenamento com links assinados, tipos dos conectores e esqueletos das telas.
   - Testes: 293 de unidade, 144 de integração, 69 no navegador.
 - **Times das Fases 2, 3 e 4:** trabalham em paralelo desde 13/11, cada um na sua worktree: `C:/Users/idmpc/devolucoes-wt/fase-2`, `fase-3` e `fase-4`, nas branches `fase-2-conferencia`, `fase-3-mercado-livre` e `fase-4-fiscal`, todas a partir do `main` `f38e320`. Cada uma tem `.env` próprio (banco, banco de testes e porta), conforme o contrato §6. O que cada tarefa já fechou fica na branch, no GitHub.
-  - **Fase 4:** as tarefas 1 a 10 estão prontas e foram aprovadas na revisão sem precisar de correção (`27dc4cd`). Agora roda a revisão final da fase (servidor e telas) com a rodada de correções, pelo fluxo [workflows/fase-final.js](workflows/fase-final.js). Depois disso, a Fase 4 só espera a vez dela na junção (contrato §7).
-  - **Fases 2 e 3:** as tarefas seguem uma a uma. Veja o que já entrou com `git log` na branch de cada fase.
-  - Ainda há um `git stash` antigo nas worktrees das Fases 3 e 4, com o trabalho parcial de antes do limite de uso. Ele não serve mais: as tarefas foram refeitas.
+  - **13/11 às 19h: os três times pararam no limite de uso da conta (volta às 19h50).** Nada foi perdido. O estado de cada um:
+
+    | Fase | Prontas e revisadas | Onde parou | No GitHub |
+    |---|---|---|---|
+    | 2, conferência | Tarefas 9 a 17 (`fe9aa75`) | **T18** (assistente da conferência no celular). O agente chegou a fazer o commit `55de648`, mas parou antes de rodar as suítes e escrever o relatório. O resumo da T18 ganhou uma nota de retomada: partir do `55de648`, com base `fe9aa75`. | `55de648` |
+    | 3, Mercado Livre | Tarefas 1 a 13 (`c87ec79`) | **T14**. O trabalho parcial (`consultas.ts` e o teste) ficou num `git stash`; a tarefa recomeça do zero. | `c87ec79` |
+    | 4, fiscal | Tarefas 1 a 10 (`27dc4cd`) | **Revisão final**: as duas revisões terminaram e pediram 5 correções; o corretor do servidor parou antes de mudar qualquer coisa. | `27dc4cd` |
+
+  - **As 5 correções da revisão final da Fase 4:**
+    - **Telas, importantes:**
+      - O botão "Remover" da NF de venda apaga com um só toque. Ele precisa de confirmação, porque um toque errado no celular apaga a NF e as escolhas de item.
+      - O Fiscal não consegue trocar o item da NF de venda quando o casamento automático (pelo SKU ou pelo EAN) errou.
+    - **Telas, menor:** no celular, o botão "Emitir NF de devolução" aparece antes dos blocos "NF de venda" e "Itens".
+    - **Servidor, menores:**
+      - O XML do cancelamento que ainda não está disponível na Focus precisa voltar para a fila, e não sumir. Do contrário, o ZIP do período sai sem esse cancelamento.
+      - Falta um teste que prove que a chave das consultas muda a cada reenvio (E4).
+    - As revisões completas estão em `.superpowers/sdd/fases-2-6/f4-final-servidor.md` e `f4-final-telas.md`, só neste PC. As revisões também listam o que fica de propósito e por quê.
+  - **Para retomar depois das 19h50:** relance os três fluxos com `resumeFromRunId`. As tarefas já feitas voltam do cache, e só o que parou roda de novo.
+    - Fase 2: `wf_3b9280f3-f70`, com o script do fluxo dos times.
+    - Fase 3: `wf_c5c15a75-faa`, com o script do fluxo dos times.
+    - Fase 4: `wf_1a3f0cc6-104`, com o script da revisão final ([workflows/fase-final.js](workflows/fase-final.js)).
+    - Os argumentos são os mesmos de antes (veja abaixo).
+    - Em outro computador ou em outra sessão não há cache: rode o fluxo só com as tarefas que faltam, a Fase 2 com `[18,…,22]` e a Fase 3 com `[14,15,16]`. Para a Fase 4, rode o fluxo da revisão final do zero.
+  - Os `git stash` "parcial da T1", nas Fases 3 e 4, são antigos e não servem mais. O "parcial da T14" da Fase 3 também pode ser descartado: a T14 será refeita.
 - **Decisões tomadas no caminho:**
   - Citar o ERP **Bitbrain** nas telas está certo (spec §8 e §8.7): a NF de venda é baixada dele, o ZIP de XMLs é importado nele, e a série não pode colidir com a dele. A regra é só não usar domínio nem marca bitbrain no sistema.
 - **Pergunta em aberto para o usuário:** a empresa tem Inscrição Estadual ou é isenta? Hoje a configuração fiscal só aceita o número. Se for isenta, é preciso aceitar "ISENTO".
@@ -29,7 +50,7 @@ Atualizado em 13/11/2026 (Fase 4 com as tarefas prontas). Mantenha este arquivo 
   - Quando um time termina as tarefas, rode o fluxo [workflows/fase-final.js](workflows/fase-final.js) na fase. Ele faz a revisão final (servidor e telas), as correções, a re-revisão e o push. Argumentos: os mesmos do outro fluxo, mais `"base":"f38e320"`, `"plano":"docs/superpowers/plans/<plano da fase>.md"` e, se precisar, `"decisoes"` (texto com decisões já tomadas).
 - **Atenção ao publicar na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500.
 - **Próximos passos, em ordem:**
-  1. Retomar os três times (Fases 2, 3 e 4 em paralelo).
+  1. Retomar os três times depois das 19h50 (veja acima). Quando a Fase 2 terminar a T22 e a Fase 3 a T16, rode a revisão final de cada uma.
   2. Juntar na ordem 2 → 3 → 4, com a Integração de cada uma (contrato §7).
   3. Fase 5.
   4. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação, B2 e domínio.
