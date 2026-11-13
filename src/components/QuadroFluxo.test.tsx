@@ -54,3 +54,11 @@ describe('QuadroFluxo', () => {
     expect(screen.queryByText('Nenhuma devolução nesta etapa.')).toBeNull();
   });
 });
+
+describe('QuadroFluxo: coluna 4 (D16)', () => {
+  it('divide em Estoque Bom e Estoque Problema, com um link para cada aba', () => {
+    render(<QuadroFluxo colunas={[{ numero: 4, titulo: 'Destinação Fiscal e Estoque', total: 3, estoque: { bom: 2, problema: 1 } }]} />);
+    expect(screen.getByRole('link', { name: 'Estoque Bom: 2 devoluções' }).getAttribute('href')).toBe('/fluxo/etapa/4');
+    expect(screen.getByRole('link', { name: 'Estoque Problema: 1 devolução' }).getAttribute('href')).toBe('/fluxo/etapa/4/problema');
+  });
+});

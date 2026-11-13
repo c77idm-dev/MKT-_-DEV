@@ -3,6 +3,7 @@ import type { DbOuTx } from '@/db/client';
 import { devolucoes, fornecedores, itensDevolucao, produtos } from '@/db/schema';
 import { escaparLike } from '@/lib/texto';
 import { somenteDigitos } from '@/modules/catalogo/documentos';
+import type { DestinoEstoque, SituacaoNotaFiscal } from '@/modules/fiscal/dominio';
 import type { Canal, StatusDevolucao } from './dominio';
 import { POR_PAGINA_DEVOLUCOES, type FiltrosBusca } from './filtros';
 import { normalizarRastreio } from './rastreio';
@@ -22,6 +23,10 @@ export type ResumoDevolucao = {
   criadaEm: Date;
   recebidaEm: Date | null;
   selos: DadosSelo[];
+  /** Unidades em AGUARDANDO_NF por destino (spec §6.4); zero fora da etapa 4. */
+  destinos?: { bom: number; problema: number };
+  /** A NF de devolução que não está cancelada (null = nenhuma). */
+  situacaoNota?: SituacaoNotaFiscal | null;
 };
 
 export type OpcoesBusca = {
@@ -32,6 +37,8 @@ export type OpcoesBusca = {
   pagina?: number;
   porPagina?: number;
   agora?: Date;
+  /** Etapa 4: só as devoluções com unidade AGUARDANDO_NF neste destino (abas Estoque Bom e Estoque Problema). */
+  destino?: DestinoEstoque;
 };
 
 function condicoes(db: DbOuTx, f: FiltrosBusca): SQL[] {
@@ -97,6 +104,11 @@ export async function buscarDevolucoes(
   const pagina = Math.max(1, opcoes.pagina ?? 1);
   const lista = condicoes(db, filtros);
   if (opcoes.status) lista.push(opcoes.status.length > 0 ? inArray(devolucoes.status, [...opcoes.status]) : sql`false`);
+  if (opcoes.destino) {
+    lista.push(
+      sql`exists (select 1 from "itens_devolucao" where "itens_devolucao"."devolucao_id" = "devolucoes"."id" and "itens_devolucao"."status" = 'AGUARDANDO_NF' and "itens_devolucao"."destino" = ${opcoes.destino}::destino_item)`,
+    );
+  }
   const onde = lista.length > 0 ? and(...lista) : undefined;
 
   const [{ total }] = await db.select({ total: count() }).from(devolucoes).where(onde);
@@ -128,6 +140,9 @@ export async function buscarDevolucoes(
         limit 1
       )`,
       unidades: sql<number>`(select count(*) from "itens_devolucao" where "itens_devolucao"."devolucao_id" = "devolucoes"."id")::int`,
+      estoqueBom: sql<number>`(select count(*) from "itens_devolucao" where "itens_devolucao"."devolucao_id" = "devolucoes"."id" and "itens_devolucao"."status" = 'AGUARDANDO_NF' and "itens_devolucao"."destino" = 'BOM')::int`,
+      estoqueProblema: sql<number>`(select count(*) from "itens_devolucao" where "itens_devolucao"."devolucao_id" = "devolucoes"."id" and "itens_devolucao"."status" = 'AGUARDANDO_NF' and "itens_devolucao"."destino" = 'PROBLEMA')::int`,
+      situacaoNota: sql<SituacaoNotaFiscal | null>`(select "notas_fiscais"."situacao" from "notas_fiscais" where "notas_fiscais"."devolucao_id" = "devolucoes"."id" and "notas_fiscais"."situacao" <> 'CANCELADA' limit 1)`,
     })
     .from(devolucoes)
     .where(onde)
@@ -138,8 +153,9 @@ export async function buscarDevolucoes(
   const agora = opcoes.agora ?? new Date();
   return {
     total,
-    devolucoes: linhas.map(({ entregueSegundoCanalEm, prazoConferenciaCanal, ...resto }) => ({
+    devolucoes: linhas.map(({ entregueSegundoCanalEm, prazoConferenciaCanal, estoqueBom, estoqueProblema, ...resto }) => ({
       ...resto,
+      destinos: { bom: estoqueBom, problema: estoqueProblema },
       selos: selosDaDevolucao(
         {
           canal: resto.canal,
@@ -147,6 +163,7 @@ export async function buscarDevolucoes(
           naoIdentificada: resto.naoIdentificada,
           entregueSegundoCanalEm,
           prazoConferenciaCanal,
+          situacaoNota: resto.situacaoNota,
         },
         agora,
       ),

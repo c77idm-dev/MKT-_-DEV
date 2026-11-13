@@ -4,9 +4,12 @@ import { ROTULO_CANAL, ROTULO_STATUS } from '@/modules/devolucoes/dominio';
 import { TOM_DO_STATUS } from '@/modules/devolucoes/selos';
 import { Selo } from './Selo';
 
-/** Cartão do quadro e das listas (protótipo C-Painel): código, canal, produto, rastreio e selos. O cartão inteiro é o link. */
+const CONTAGEM = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold';
+
+/** Cartão do quadro e das listas (protótipo C-Painel): código, canal, produto, rastreio, selos e, na etapa 4, o estoque. */
 export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }) {
   const outras = d.unidades - 1;
+  const destinos = d.destinos && (d.destinos.bom > 0 || d.destinos.problema > 0) ? d.destinos : null;
   return (
     <Link
       href={`/fluxo/devolucoes/${d.codigo}`}
@@ -27,6 +30,12 @@ export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }
           <Selo key={s.texto} texto={s.texto} tom={s.tom} />
         ))}
       </span>
+      {destinos && (
+        <span className="flex flex-wrap gap-1.5">
+          {destinos.bom > 0 && <span className={`${CONTAGEM} bg-bom-suave text-bom`}>{`Estoque Bom: ${destinos.bom}`}</span>}
+          {destinos.problema > 0 && <span className={`${CONTAGEM} bg-problema-suave text-problema`}>{`Estoque Problema: ${destinos.problema}`}</span>}
+        </span>
+      )}
     </Link>
   );
 }
