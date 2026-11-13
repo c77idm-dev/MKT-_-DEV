@@ -52,3 +52,7 @@ next-env.d.ts
 
 # .wasm do leitor de código, copiado de node_modules (scripts/copiar-zxing.mjs)
 /public/zxing
+
+# Mídias locais (desenvolvimento) e do e2e
+/.dados/
+/.dados-e2e/
