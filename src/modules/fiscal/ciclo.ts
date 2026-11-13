@@ -185,7 +185,10 @@ async function completarCancelamento(db: Db, nota: NotaFiscalLinha): Promise<voi
   if (nota.xmlCancelamentoCaminho || !nota.xmlCaminho) return;
   const emissor = obterEmissorNFe(nota.ambiente);
   const situacao = await emissor.consultar(nota.referenciaEmissor);
-  if (situacao.situacao !== 'CANCELADA' || !situacao.urlXmlCancelamento) return;
+  if (situacao.situacao !== 'CANCELADA' || !situacao.urlXmlCancelamento) {
+    // Lança para a fila tentar de novo e, no limite, a tarefa ir para Falhas: sem o XML, o ZIP do período sai sem este cancelamento.
+    throw new Error(`O XML do cancelamento da NF ${nota.referenciaEmissor} ainda não está disponível no emissor.`);
+  }
   const caminho = caminhoDoCancelamento(nota.xmlCaminho);
   await salvarArquivo(caminho, await emissor.baixar(situacao.urlXmlCancelamento), 'application/xml');
   await db.update(notasFiscais).set({ xmlCancelamentoCaminho: caminho }).where(eq(notasFiscais.id, nota.id));

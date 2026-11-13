@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { ErroEmissorIndisponivel } from '@/conectores/nfe/erros';
 import { EmissorFalso } from '@/conectores/nfe/falso';
 import { definirEmissorParaTestes } from '@/conectores/nfe/registro';
+import type { SituacaoNota } from '@/conectores/nfe/tipos';
 import { devolucoes, itensDevolucao, notasFiscais } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { definirFilaParaTestes, FilaMemoria } from '@/modules/fila/fila';
@@ -140,5 +141,22 @@ describe('cancelarNota (spec §8.6)', () => {
     emissor.falhar = false;
     await rodarTarefasFiscais(db, fila, AUTORIZADA_EM);
     expect((await notaDe(notaFiscalId)).xmlCancelamentoCaminho).toBe(`nfe/2026/11/${notaFiscalId}-cancelamento.xml`);
+  });
+
+  it('se a consulta não devolve o XML do cancelamento, a tarefa falha (vai para Falhas) e o caminho continua nulo', async () => {
+    class EmissorSemUrlDeCancelamento extends EmissorSemArquivoDeCancelamento {
+      semUrl = false;
+      override async consultar(referencia: string): Promise<SituacaoNota> {
+        if (this.semUrl) return { situacao: 'CANCELADA', urlXmlCancelamento: null };
+        return super.consultar(referencia);
+      }
+    }
+    const emissor = new EmissorSemUrlDeCancelamento();
+    definirEmissorParaTestes(emissor);
+    const { notaFiscalId } = await devolucaoAutorizada();
+    await cancelarNota(db, notaFiscalId, JUSTIFICATIVA, fiscal, AUTORIZADA_EM);
+    emissor.semUrl = true;
+    await expect(rodarTarefasFiscais(db, fila, AUTORIZADA_EM)).rejects.toThrow('O XML do cancelamento da NF');
+    expect((await notaDe(notaFiscalId)).xmlCancelamentoCaminho).toBeNull();
   });
 });
