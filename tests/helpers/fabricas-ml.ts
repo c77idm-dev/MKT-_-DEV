@@ -1,3 +1,7 @@
+import { ErroML } from '@/conectores/marketplace/mercadolivre/cliente';
+import { ErroReclamacaoSemDevolucao } from '@/conectores/marketplace/mercadolivre/conector';
+import type { ConectorMercadoLivre, DadosDevolucaoML, ReclamacaoAtualizada } from '@/conectores/marketplace/mercadolivre/tipos';
+import type { DevolucaoExterna, ResultadoConferencia } from '@/conectores/marketplace/tipos';
 import type { TokensML } from '@/conectores/marketplace/mercadolivre/oauth';
 import type { DbOuTx } from '@/db/client';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
@@ -39,4 +43,96 @@ export async function contaMLTeste(
   const gestor = p.gestor ?? (await criarUsuarioTeste(db, 'GESTOR'));
   const { contaId } = await conectarConta(db, p.tokens ?? tokensTeste(), gestor, p.config ?? configMLTeste(), new Date());
   return { contaId, gestor };
+}
+
+let sequencia = 0;
+function marca(): string {
+  sequencia += 1;
+  return `${Date.now().toString(36).toUpperCase()}${sequencia}`;
+}
+
+export function devolucaoExternaTeste(m: Partial<DevolucaoExterna> = {}): DevolucaoExterna {
+  const id = marca();
+  const pedido = `PED-ML-${id}`;
+  return {
+    canal: 'MERCADO_LIVRE',
+    devolucaoExternaId: `RET-${id}`,
+    reclamacaoId: `CLM-${id}`,
+    tipo: 'DEVOLUCAO',
+    semEnvioFisico: false,
+    pedidos: [pedido],
+    statusCanal: 'shipped/shipped',
+    destinoEnvio: 'VENDEDOR',
+    reenvioDaTriagem: false,
+    rastreio: `ML${id}BR`,
+    transportadora: 'Correios',
+    entregueEm: null,
+    prazoConferencia: new Date(Date.now() + 3 * 86_400_000),
+    atualizadaEm: new Date(),
+    itens: [{ pedido, sku: 'SKU-ML-1', ean: null, quantidade: 1 }],
+    ...m,
+  };
+}
+
+export function dadosDevolucaoMLTeste(
+  devolucao: DevolucaoExterna | null,
+  extra: Partial<Omit<DadosDevolucaoML, 'devolucao'>> = {},
+): DadosDevolucaoML {
+  return {
+    reclamacaoId: devolucao?.reclamacaoId ?? `CLM-${marca()}`,
+    statusReclamacao: 'opened',
+    subtipo: devolucao === null ? null : devolucao.semEnvioFisico ? 'low_cost' : 'return_total',
+    statusDevolucao: devolucao ? devolucao.statusCanal.split('/')[0] : null,
+    atualizadaEm: new Date(),
+    devolucao,
+    ...extra,
+  };
+}
+
+/** Conector do ML em memória para os testes de integração (o falso de src/ troca o fetch; este troca o conector inteiro). */
+export class ConectorMLMemoria implements ConectorMercadoLivre {
+  readonly canal = 'MERCADO_LIVRE' as const;
+  readonly sellerId = VENDEDOR_TESTE;
+  readonly reclamacoes = new Map<string, DadosDevolucaoML>();
+  readonly enviados: { devolucaoExternaId: string; resultado: ResultadoConferencia }[] = [];
+  readonly buscas: Date[] = [];
+  falhaNoEnvio: unknown = null;
+
+  guardar(dados: DadosDevolucaoML): this {
+    this.reclamacoes.set(dados.reclamacaoId, dados);
+    return this;
+  }
+
+  async obterReclamacao(reclamacaoId: string): Promise<DadosDevolucaoML> {
+    const dados = this.reclamacoes.get(reclamacaoId);
+    if (!dados) throw new ErroML(404, '{"message":"not_found"}', `/post-purchase/v1/claims/${reclamacaoId}`);
+    return dados;
+  }
+
+  async obter(reclamacaoId: string): Promise<DevolucaoExterna> {
+    const dados = await this.obterReclamacao(reclamacaoId);
+    if (!dados.devolucao) throw new ErroReclamacaoSemDevolucao(reclamacaoId);
+    return dados.devolucao;
+  }
+
+  async *reclamacoesAtualizadasDesde(desde: Date): AsyncGenerator<ReclamacaoAtualizada> {
+    this.buscas.push(desde);
+    for (const dados of this.reclamacoes.values()) yield { reclamacaoId: dados.reclamacaoId, atualizadaEm: dados.atualizadaEm };
+  }
+
+  async *listarAtualizadasDesde(desde: Date): AsyncGenerator<DevolucaoExterna> {
+    for await (const r of this.reclamacoesAtualizadasDesde(desde)) {
+      const dados = this.reclamacoes.get(r.reclamacaoId);
+      if (dados?.devolucao) yield dados.devolucao;
+    }
+  }
+
+  async enviarResultadoConferencia(devolucaoExternaId: string, resultado: ResultadoConferencia): Promise<void> {
+    if (this.falhaNoEnvio) throw this.falhaNoEnvio;
+    this.enviados.push({ devolucaoExternaId, resultado });
+  }
+
+  async obterXmlNotaVenda(): Promise<string | null> {
+    return null;
+  }
 }
