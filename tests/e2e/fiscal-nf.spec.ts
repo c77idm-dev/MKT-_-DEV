@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { unzipSync } from 'fflate';
-import { EMPRESA_TESTE } from '../helpers/fabricas-fiscal';
+import { EMPRESA_TESTE, inserirNotaVendaTeste } from '../helpers/fabricas-fiscal';
 import { xmlNotaVendaTeste } from '../helpers/xml-nfe';
-import { codigoUnico, entrarComo, semRolagemLateral } from './apoio';
+import { codigoUnico, comBanco, entrarComo, semRolagemLateral } from './apoio';
 import { devolucaoNoEstoque, prepararFiscal } from './apoio-fiscal';
 import { USUARIOS_E2E } from './dados';
 
@@ -55,6 +55,47 @@ test('Fiscal anexa o XML da NF de venda, escolhe o item (D14) e emite; a NF é a
   const arquivo = await download;
   const zip = unzipSync(new Uint8Array(readFileSync(await arquivo.path())));
   expect(Object.keys(zip)).toContain(`${chave}-nfe.xml`);
+});
+
+test('Fiscal remove a NF de venda só depois de confirmar', async ({ page }) => {
+  await prepararFiscal();
+  const dev = await devolucaoNoEstoque({ destinos: ['BOM'], comNotaVenda: false });
+  const { xml } = xmlNotaVendaTeste({
+    cnpjEmitente: EMPRESA_TESTE.cnpj,
+    itens: [{ codigo: codigoUnico('VENDA'), descricao: 'Fone de teste', valorUnitario: 80 }],
+  });
+  await entrarComo(page, USUARIOS_E2E.fiscal);
+  await page.goto(`/fluxo/devolucoes/${dev.codigo}`);
+  const secao = page.getByRole('region', { name: 'Fiscal' });
+  await secao.getByLabel('Arquivo XML da NF de venda').setInputFiles({ name: 'venda.xml', mimeType: 'application/xml', buffer: Buffer.from(xml) });
+  await secao.getByRole('button', { name: 'Anexar XML' }).click();
+  await expect(secao.getByRole('status')).toHaveText('NF de venda anexada.');
+
+  // Um toque não apaga nada: é preciso abrir a confirmação.
+  await expect(secao.getByRole('button', { name: /^Remover NF de venda/ })).toBeHidden();
+  await secao.getByText('Remover esta NF de venda').click();
+  await expect(secao.getByText('O XML e as escolhas de item desta nota serão apagados.')).toBeVisible();
+  await secao.getByRole('button', { name: /^Remover NF de venda/ }).click();
+  await expect(secao.getByRole('status')).toHaveText('NF de venda removida.');
+  await expect(secao.getByText('Nenhuma NF de venda.')).toBeVisible();
+  await semRolagemLateral(page);
+});
+
+test('Fiscal troca o item da NF de venda de uma unidade já casada pelo SKU', async ({ page }) => {
+  await prepararFiscal();
+  const dev = await devolucaoNoEstoque({ destinos: ['BOM'], comNotaVenda: false });
+  await comBanco((db) =>
+    inserirNotaVendaTeste(db, dev.id, { itens: [{ codigo: dev.sku, descricao: 'Casado' }, { codigo: codigoUnico('OUTRO'), descricao: 'Outro item' }] }),
+  );
+  await entrarComo(page, USUARIOS_E2E.fiscal);
+  await page.goto(`/fluxo/devolucoes/${dev.codigo}`);
+  const secao = page.getByRole('region', { name: 'Fiscal' });
+  await expect(secao.getByText(/Casado pelo SKU/)).toBeVisible();
+  await secao.getByText('Trocar o item da NF de venda').click();
+  await secao.getByLabel('Item da NF de venda (unidade 1)').selectOption({ index: 2 });
+  await secao.getByRole('button', { name: /^Salvar escolha/ }).click();
+  await expect(secao.getByText(/Escolhido pelo Fiscal/)).toBeVisible();
+  await semRolagemLateral(page);
 });
 
 test('Gestor corrige a regra depois da rejeição e reenvia a mesma NF', async ({ page }) => {

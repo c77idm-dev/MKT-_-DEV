@@ -181,13 +181,19 @@ export function BlocoNotaVenda({ acao, notas, podeAnexar, podeBuscarMl, podeRemo
               <span className="break-all font-mono text-[13px]">{n.chave}</span>
               <span className="text-sm">{n.itens.join(' · ')}</span>
               {podeRemover && (
-                <form onSubmit={aoEnviar}>
-                  <input type="hidden" name="operacao" value="remover" />
-                  <input type="hidden" name="notaVenda" value={n.id} />
-                  <button type="submit" disabled={pendente} className={`${BOTAO_SECUNDARIO} ${LARGURA}`}>
-                    Remover<span className="sr-only">{` a NF de venda com chave final ${n.chave.slice(-8)}`}</span>
-                  </button>
-                </form>
+                <details className="rounded-lg border border-borda px-3">
+                  <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-erro">
+                    Remover esta NF de venda<span className="sr-only">{` (chave final ${n.chave.slice(-8)})`}</span>
+                  </summary>
+                  <form onSubmit={aoEnviar} className="flex flex-col gap-3 pb-3">
+                    <p className="text-sm text-texto-2">O XML e as escolhas de item desta nota serão apagados.</p>
+                    <input type="hidden" name="operacao" value="remover" />
+                    <input type="hidden" name="notaVenda" value={n.id} />
+                    <button type="submit" disabled={pendente} className={BOTAO_PERIGO}>
+                      {pendente ? 'Removendo…' : 'Remover NF de venda'}
+                    </button>
+                  </form>
+                </details>
               )}
             </li>
           ))}
@@ -246,14 +252,17 @@ export function BlocoItensVenda({ acao, unidades, opcoes, podeEscolher }: PropsI
           <li key={u.itemId} className={CAIXA}>
             <span className="text-sm font-semibold">{u.titulo}</span>
             <span className="text-xs text-texto-2">{`${u.destino} · ${u.casamento}`}</span>
-            {podeEscolher && (u.precisaEscolher || u.escolhida) && (
+            {podeEscolher &&
+              (!u.precisaEscolher && !u.escolhida ? (
+                <details>
+                  <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold">Trocar o item da NF de venda</summary>
               <form onSubmit={aoEnviar} className="flex flex-col gap-2">
                 <input type="hidden" name="item" value={u.itemId} />
                 <label htmlFor={`alvo-${u.itemId}`} className={ROTULO}>
                   {`Item da NF de venda (${u.rotuloCurto})`}
                 </label>
-                <select id={`alvo-${u.itemId}`} name="alvo" defaultValue={u.valorAtual} className={CAMPO}>
-                  <option value="">Escolha o item…</option>
+                <select id={`alvo-${u.itemId}`} name="alvo" defaultValue={u.valorAtual} required={u.precisaEscolher} className={CAMPO}>
+                  <option value="">{u.precisaEscolher ? 'Escolha o item…' : 'Automático (SKU/EAN)'}</option>
                   {opcoes.map((o) => (
                     <option key={o.valor} value={o.valor}>
                       {o.rotulo}
@@ -264,7 +273,26 @@ export function BlocoItensVenda({ acao, unidades, opcoes, podeEscolher }: PropsI
                   Salvar escolha<span className="sr-only">{` (${u.rotuloCurto})`}</span>
                 </button>
               </form>
-            )}
+                </details>
+              ) : (
+              <form onSubmit={aoEnviar} className="flex flex-col gap-2">
+                <input type="hidden" name="item" value={u.itemId} />
+                <label htmlFor={`alvo-${u.itemId}`} className={ROTULO}>
+                  {`Item da NF de venda (${u.rotuloCurto})`}
+                </label>
+                <select id={`alvo-${u.itemId}`} name="alvo" defaultValue={u.valorAtual} required={u.precisaEscolher} className={CAMPO}>
+                  <option value="">{u.precisaEscolher ? 'Escolha o item…' : 'Automático (SKU/EAN)'}</option>
+                  {opcoes.map((o) => (
+                    <option key={o.valor} value={o.valor}>
+                      {o.rotulo}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" disabled={pendente} className={`${BOTAO_SECUNDARIO} ${LARGURA}`}>
+                  Salvar escolha<span className="sr-only">{` (${u.rotuloCurto})`}</span>
+                </button>
+              </form>
+              ))}
           </li>
         ))}
       </ul>

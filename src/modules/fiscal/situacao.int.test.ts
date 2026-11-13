@@ -6,6 +6,7 @@ import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { configurarFiscalTeste, criarDevolucaoNoEstoqueTeste, inserirNotaVendaTeste } from '../../../tests/helpers/fabricas-fiscal';
 import { referenciaDaNota } from './dominio';
+import { escolherItemNotaVenda } from './escolha';
 import { notaPertenceADevolucao, obterSituacaoFiscal } from './situacao';
 
 const { db, sql } = criarDbTeste();
@@ -54,6 +55,18 @@ describe('obterSituacaoFiscal (Seção Fiscal)', () => {
       },
     ]);
     expect(s.opcoes).toEqual([{ valor: `${notaVendaId}:1`, rotulo: 'NF 101 · item 1 · FONE-01 · Fone (1 de 2 livres)' }]);
+  });
+
+  it('a unidade casada pelo SKU pode ser trocada pelo Fiscal: a escolha vale mais que o SKU', async () => {
+    const dev = await criarDevolucaoNoEstoqueTeste(db, gestor, { unidades: [{ sku: 'FONE-01', destino: 'BOM' }] });
+    const { notaVendaId } = await inserirNotaVendaTeste(db, dev.id, {
+      itens: [{ codigo: 'FONE-01', descricao: 'Fone' }, { codigo: 'FONE-02', descricao: 'Fone B' }],
+    });
+    const antes = await obterSituacaoFiscal(db, dev.id, AGORA);
+    expect(antes.unidades[0]).toMatchObject({ casamento: expect.stringContaining('Casado pelo SKU'), precisaEscolher: false, escolhida: false });
+    await escolherItemNotaVenda(db, dev.id, dev.itens[0].id, { notaVendaId, numeroItem: 2 }, gestor);
+    const depois = await obterSituacaoFiscal(db, dev.id, AGORA);
+    expect(depois.unidades[0]).toMatchObject({ casamento: expect.stringContaining('Escolhido pelo Fiscal'), valorAtual: `${notaVendaId}:2`, escolhida: true });
   });
 
   it('NF autorizada: prazo de cancelamento, aviso de série e, depois de 24 h, só a orientação', async () => {

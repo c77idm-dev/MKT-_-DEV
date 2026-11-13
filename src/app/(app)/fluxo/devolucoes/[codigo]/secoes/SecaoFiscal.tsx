@@ -38,15 +38,6 @@ export async function SecaoFiscal({ devolucaoId, codigo, status, usuario }: Prop
       <h2 id="titulo-fiscal" className="text-base font-bold">
         Fiscal
       </h2>
-      <BlocoNotaDevolucao
-        acao={acaoNotaDevolucao.bind(null, devolucaoId, codigo)}
-        nota={nota}
-        anteriores={s.anteriores}
-        links={links}
-        podeEmitir={podeFiscal && aguardando && !nota}
-        podeReenviar={podeFiscal && nota?.situacao === 'REJEITADA'}
-        podeCancelar={podeFiscal && nota?.podeCancelar === true}
-      />
       <BlocoNotaVenda
         acao={acaoNotaVenda.bind(null, devolucaoId, codigo)}
         notas={s.notasVenda}
@@ -57,6 +48,15 @@ export async function SecaoFiscal({ devolucaoId, codigo, status, usuario }: Prop
       {aguardando && s.notasVenda.length > 0 && s.unidades.length > 0 && (
         <BlocoItensVenda acao={acaoEscolherItem.bind(null, devolucaoId, codigo)} unidades={s.unidades} opcoes={s.opcoes} podeEscolher={podeMexer} />
       )}
+      <BlocoNotaDevolucao
+        acao={acaoNotaDevolucao.bind(null, devolucaoId, codigo)}
+        nota={nota}
+        anteriores={s.anteriores}
+        links={links}
+        podeEmitir={podeFiscal && aguardando && !nota}
+        podeReenviar={podeFiscal && nota?.situacao === 'REJEITADA'}
+        podeCancelar={podeFiscal && nota?.podeCancelar === true}
+      />
     </section>
   );
 }
