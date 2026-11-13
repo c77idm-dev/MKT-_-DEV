@@ -1,0 +1,22 @@
+{
+  "id": 2000008003035430,
+  "status": "paid",
+  "date_created": "2026-10-28T09:00:00.000-03:00",
+  "order_items": [
+    {
+      "item": {
+        "id": "MLB3456789012",
+        "title": "Fone de Ouvido Bluetooth",
+        "variation_id": 178234567890,
+        "seller_sku": "fone-01",
+        "seller_custom_field": null
+      },
+      "quantity": 1,
+      "unit_price": 129.9,
+      "currency_id": "BRL"
+    }
+  ],
+  "shipping": { "id": 41800000001 },
+  "seller": { "id": 123456789 },
+  "buyer": { "id": 987654321 }
+}

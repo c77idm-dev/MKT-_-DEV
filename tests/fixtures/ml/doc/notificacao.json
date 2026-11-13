@@ -1,0 +1,11 @@
+{
+  "_id": "f9f08571-1f65-4c46-9e0a-c0f43faac529",
+  "resource": "/post-purchase/v1/claims/5292183123",
+  "user_id": 123456789,
+  "topic": "post_purchase",
+  "actions": ["claims"],
+  "application_id": 2069392825111111,
+  "attempts": 1,
+  "sent": "2026-11-10T12:00:00.123Z",
+  "received": "2026-11-10T12:00:00.100Z"
+}
