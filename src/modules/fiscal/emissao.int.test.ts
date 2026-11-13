@@ -191,6 +191,44 @@ describe('emissão da NF de devolução (spec §6.4, §8.6; contrato §5.7)', ()
     await expect(reenviarNota(db, notaFiscalId, fiscal)).rejects.toThrow('Só uma NF rejeitada pode ser corrigida e reenviada.');
   });
 
+  it('as consultas de cada rodada têm chaves próprias (E4): o reenvio não reaproveita as da rodada anterior', async () => {
+    class EmissorRejeitaNaSegunda extends EmissorFalso {
+      rodada1 = true;
+      private chamadas = 0;
+      override async consultar(referencia: string): Promise<SituacaoNota> {
+        if (!this.rodada1) return super.consultar(referencia);
+        this.chamadas += 1;
+        return this.chamadas === 1 ? { situacao: 'PROCESSANDO' } : { situacao: 'REJEITADA', codigo: '999', motivo: 'Rejeição simulada' };
+      }
+    }
+    const emissorRodadas = new EmissorRejeitaNaSegunda();
+    definirEmissorParaTestes(emissorRodadas);
+    const { dev } = await devolucaoPronta();
+    const { notaFiscalId } = await pedir(dev.id);
+    const solicitada = await notaDe(notaFiscalId);
+    const chavesDasConsultas = () =>
+      fila.enviadas.filter((t) => t.nome === 'nfe.consultar').map((t) => t.opcoes?.chaveUnica as string);
+
+    await rodarTarefasFiscais(db, fila, AGORA);
+    const rejeitada = await notaDe(notaFiscalId);
+    expect(rejeitada.situacao).toBe('REJEITADA');
+    const chavesAntes = chavesDasConsultas();
+    expect(chavesAntes.length).toBeGreaterThan(0);
+
+    emissorRodadas.rodada1 = false;
+    await reenviarNota(db, notaFiscalId, fiscal);
+    const reenviada = await notaDe(notaFiscalId);
+    expect(reenviada.atualizadaEm.getTime()).not.toBe(rejeitada.atualizadaEm.getTime());
+    await rodarTarefasFiscais(db, fila, AGORA);
+    expect((await notaDe(notaFiscalId)).situacao).toBe('AUTORIZADA');
+    const chavesDepois = chavesDasConsultas().filter((c) => !chavesAntes.includes(c));
+    expect(chavesDepois.length).toBeGreaterThan(0);
+
+    expect(chavesAntes.filter((c) => chavesDepois.includes(c))).toEqual([]);
+    for (const c of chavesAntes) expect(c.startsWith(`${notaFiscalId}:${solicitada.atualizadaEm.getTime()}:`)).toBe(true);
+    for (const c of chavesDepois) expect(c.startsWith(`${notaFiscalId}:${reenviada.atualizadaEm.getTime()}:`)).toBe(true);
+  });
+
   it('se a montagem falhar no worker (regra apagada depois do pedido), a nota vira rejeitada com a mensagem', async () => {
     const { dev } = await devolucaoPronta();
     const { notaFiscalId } = await pedir(dev.id);
