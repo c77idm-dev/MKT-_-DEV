@@ -43,6 +43,13 @@
       "when": 1794500084650,
       "tag": "0005_parallel_luckman",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794583421842,
+      "tag": "0006_fundacao",
+      "breakpoints": true
     }
   ]
 }

@@ -99,3 +99,21 @@ export const LIMITE_QUANTIDADE = 50;
  * e estourar o limite de parâmetros do postgres.js (erro 500 e tudo desfeito).
  */
 export const LIMITE_UNIDADES_DEVOLUCAO = 200;
+
+/** Destino de cada unidade na conferência (spec §6.3). Ausente não tem destino: fica com o motivo AUSENTE. */
+export const DESTINOS_ITEM = ['BOM', 'PROBLEMA'] as const;
+export type DestinoItem = (typeof DESTINOS_ITEM)[number];
+export const ROTULO_DESTINO: Record<DestinoItem, string> = { BOM: 'Estoque Bom', PROBLEMA: 'Estoque Problema' };
+
+/** Motivos da spec §5.1 (ItemDevolucao.motivo). */
+export const MOTIVOS_ITEM = ['AVARIADO', 'USADO', 'DIVERGENTE', 'INCOMPLETO', 'COM_DEFEITO', 'AUSENTE', 'OUTRO'] as const;
+export type MotivoItem = (typeof MOTIVOS_ITEM)[number];
+export const ROTULO_MOTIVO: Record<MotivoItem, string> = {
+  AVARIADO: 'Avariado',
+  USADO: 'Usado',
+  DIVERGENTE: 'Divergente',
+  INCOMPLETO: 'Incompleto',
+  COM_DEFEITO: 'Com defeito',
+  AUSENTE: 'Ausente',
+  OUTRO: 'Outro',
+};

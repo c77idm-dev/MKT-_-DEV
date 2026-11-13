@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { interpretarCanal } from './canais';
-import { ehCanal, rotuloStatus, statusDaEtapa } from './dominio';
+import { DESTINOS_ITEM, MOTIVOS_ITEM, ROTULO_DESTINO, ROTULO_MOTIVO, ehCanal, rotuloStatus, statusDaEtapa } from './dominio';
 import { normalizarRastreio } from './rastreio';
 
 describe('vocabulário das devoluções', () => {
@@ -44,5 +44,20 @@ describe('interpretarCanal', () => {
 describe('normalizarRastreio', () => {
   it('tira espaços e põe em maiúsculas', () => {
     expect(normalizarRastreio(' br 123 456 789 br ')).toBe('BR123456789BR');
+  });
+});
+
+describe('vocabulário da conferência (contrato §4.5)', () => {
+  it('destinos e motivos com os nomes da tela', () => {
+    expect(DESTINOS_ITEM.map((d) => ROTULO_DESTINO[d])).toEqual(['Estoque Bom', 'Estoque Problema']);
+    expect(MOTIVOS_ITEM.map((m) => ROTULO_MOTIVO[m])).toEqual([
+      'Avariado',
+      'Usado',
+      'Divergente',
+      'Incompleto',
+      'Com defeito',
+      'Ausente',
+      'Outro',
+    ]);
   });
 });

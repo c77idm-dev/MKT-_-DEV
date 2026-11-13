@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { CANAIS, ORIGENS, STATUS_DEVOLUCAO, STATUS_ITEM, TIPOS_DEVOLUCAO } from '../../modules/devolucoes/dominio';
+import { CANAIS, DESTINOS_ITEM, MOTIVOS_ITEM, ORIGENS, STATUS_DEVOLUCAO, STATUS_ITEM, TIPOS_DEVOLUCAO } from '../../modules/devolucoes/dominio';
 import { usuarios } from './auth';
 import { produtos } from './catalogo';
 
@@ -22,6 +22,8 @@ export const origemDevolucaoEnum = pgEnum('origem_devolucao', ORIGENS);
 export const tipoDevolucaoEnum = pgEnum('tipo_devolucao', TIPOS_DEVOLUCAO);
 export const statusDevolucaoEnum = pgEnum('status_devolucao', STATUS_DEVOLUCAO);
 export const statusItemEnum = pgEnum('status_item', STATUS_ITEM);
+export const destinoItemEnum = pgEnum('destino_item', DESTINOS_ITEM);
+export const motivoItemEnum = pgEnum('motivo_item', MOTIVOS_ITEM);
 
 /** Spec §5.1 (Devolucao): o pacote. A trava e as datas da conferência entram na Fase 2. */
 export const devolucoes = pgTable(
@@ -55,6 +57,13 @@ export const devolucoes = pgTable(
     criadaEm: timestamp('criada_em', { withTimezone: true }).notNull().defaultNow(),
     recebidaEm: timestamp('recebida_em', { withTimezone: true }),
     recebidaPor: uuid('recebida_por').references(() => usuarios.id, { onDelete: 'set null' }),
+    /** Trava da conferência (spec §5.1, §11). Fica gravado depois de concluir. */
+    conferenteId: uuid('conferente_id').references(() => usuarios.id, { onDelete: 'set null' }),
+    conferenciaIniciadaEm: timestamp('conferencia_iniciada_em', { withTimezone: true }),
+    /** EM_CONFERENCIA → AGUARDANDO_NF. */
+    conferidaEm: timestamp('conferida_em', { withTimezone: true }),
+    /** → CONCLUIDA. */
+    concluidaEm: timestamp('concluida_em', { withTimezone: true }),
     atualizadaEm: timestamp('atualizada_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -81,6 +90,16 @@ export const itensDevolucao = pgTable(
     produtoEsperadoId: uuid('produto_esperado_id').references(() => produtos.id, { onDelete: 'set null' }),
     /** Preenchido na conferência (Fase 2); já existe para o filtro "Serial Number" da Busca Avançada. */
     serial: text('serial'),
+    produtoRecebidoId: uuid('produto_recebido_id').references(() => produtos.id, { onDelete: 'set null' }),
+    eanLido: text('ean_lido'),
+    /** O "Lote" da Foto 4 (não confundir com o lote de remessa da Fase 5). */
+    loteFabricacao: text('lote_fabricacao'),
+    /** Como está impresso (ex.: 12/2027). */
+    validade: text('validade'),
+    /** Vazio até a decisão; vazio também quando a unidade é AUSENTE. */
+    destino: destinoItemEnum('destino'),
+    motivo: motivoItemEnum('motivo'),
+    observacao: text('observacao'),
     status: statusItemEnum('status').notNull().default('PENDENTE'),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -88,5 +107,12 @@ export const itensDevolucao = pgTable(
     index('itens_devolucao_devolucao_idx').on(t.devolucaoId),
     index('itens_devolucao_produto_esperado_idx').on(t.produtoEsperadoId),
     uniqueIndex('itens_devolucao_unidade_uq').on(t.devolucaoId, t.unidade),
+    index('itens_devolucao_produto_recebido_idx').on(t.produtoRecebidoId),
+    check(
+      'itens_destino_motivo',
+      sql`("destino" is not null and "destino" = 'BOM' and "motivo" is null)
+        or ("destino" is not null and "destino" = 'PROBLEMA' and "motivo" is not null and "motivo" <> 'AUSENTE')
+        or ("destino" is null and ("motivo" is null or "motivo" = 'AUSENTE'))`,
+    ),
   ],
 );
