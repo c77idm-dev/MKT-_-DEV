@@ -57,4 +57,16 @@ describe('EtapasCelular', () => {
     const { container } = render(<EtapasCelular colunas={[]} selecionada={1} />);
     expect(container.firstChild).toBeNull();
   });
+
+  it('conteudoEtapa aparece no topo da etapa escolhida, antes dos cartões, e só nela', () => {
+    const { rerender } = render(
+      <EtapasCelular colunas={COLUNAS} selecionada={2} conteudoEtapa={{ 2: <nav aria-label="Extra da etapa 2">extra</nav> }} />,
+    );
+    const extra = screen.getByRole('navigation', { name: 'Extra da etapa 2' });
+    const cartao = screen.getByRole('link', { name: /DEV-000001/ });
+    // O extra vem antes do cartão na ordem do documento.
+    expect(extra.compareDocumentPosition(cartao) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    rerender(<EtapasCelular colunas={COLUNAS} selecionada={3} conteudoEtapa={{ 2: <nav aria-label="Extra da etapa 2">extra</nav> }} />);
+    expect(screen.queryByRole('navigation', { name: 'Extra da etapa 2' })).toBeNull();
+  });
 });

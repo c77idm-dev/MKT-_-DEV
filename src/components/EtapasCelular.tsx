@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { CartaoDevolucao } from './CartaoDevolucao';
 import { rotuloTotal, type ColunaFluxo } from './QuadroFluxo';
 import { BOTAO_SECUNDARIO, VAZIO } from './estilos';
@@ -7,7 +8,16 @@ import { BOTAO_SECUNDARIO, VAZIO } from './estilos';
  * Quadro no celular (mobile-first): as 5 etapas viram botões com número e total, e os cartões da etapa
  * escolhida aparecem embaixo, um por linha. O nome acessível de cada botão traz o nome da etapa do PDF.
  */
-export function EtapasCelular({ colunas, selecionada }: { colunas: ColunaFluxo[]; selecionada: number }) {
+export function EtapasCelular({
+  colunas,
+  selecionada,
+  conteudoEtapa,
+}: {
+  colunas: ColunaFluxo[];
+  selecionada: number;
+  /** Conteúdo extra por número de etapa, no topo da etapa escolhida (ex.: Estoque Bom / Estoque Problema na 4, Fase 4). */
+  conteudoEtapa?: Partial<Record<number, ReactNode>>;
+}) {
   const atual = colunas.find((c) => c.numero === selecionada) ?? colunas[0];
   if (!atual) return null;
   const cartoes = atual.cartoes ?? [];
@@ -42,6 +52,7 @@ export function EtapasCelular({ colunas, selecionada }: { colunas: ColunaFluxo[]
         <h2 id="etapa-selecionada" className="text-base font-bold">
           {atual.numero}. {atual.titulo}
         </h2>
+        {conteudoEtapa?.[atual.numero]}
         {cartoes.length === 0 ? (
           <p className={VAZIO}>{atual.nota ?? 'Nenhuma devolução nesta etapa.'}</p>
         ) : (
