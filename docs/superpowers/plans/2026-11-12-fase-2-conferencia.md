@@ -10,7 +10,7 @@
 - Toda mudança de status passa por `exigirTransicao` (devolução) ou `exigirTransicaoItem` (item) e grava um evento no histórico. A trava da conferência (`conferente_id`) é conferida no servidor em toda gravação da bancada.
 - Os serviços externos ficam atrás de interfaces (`ArmazenamentoArquivos`, `Fila`, `MarketplaceConnector`). Os testes de integração usam os falsos em memória; o e2e roda o servidor e o worker de verdade, com disco local.
 
-**Tecnologias:** Next.js 16.4.6 (App Router), React 19.3, TypeScript strict, Tailwind v4, Drizzle ORM 0.45 + postgres.js, zod 4, Vitest 5, Testing Library, Playwright. Novas (versão exata): `pg-boss@12.38.2` (Parte A); `@tus/server@2.4.6`, `@tus/file-store@2.1.1`, `tus-js-client@4.3.1`, `idb-keyval@6.3.0`, `sharp@0.35.5`, `@aws-sdk/client-s3@3.1167.0`, `@aws-sdk/s3-request-presigner@3.1167.0` (Parte B). Fora do npm: ffmpeg (Windows: `winget install Gyan.FFmpeg`; imagem: `apt-get install ffmpeg`) e `fonts-dejavu-core` na imagem.
+**Tecnologias:** Next.js 16.4.6 (App Router), React 19.3, TypeScript strict, Tailwind v4, Drizzle ORM 0.45 + postgres.js, zod 4, Vitest 5, Testing Library, Playwright. Novas (versão exata): `pg-boss@12.38.0` (Parte A); `@tus/server@2.4.6`, `@tus/file-store@2.1.1`, `tus-js-client@4.3.1`, `idb-keyval@6.3.0`, `sharp@0.35.5`, `@aws-sdk/client-s3@3.1161.0`, `@aws-sdk/s3-request-presigner@3.1161.0` (Parte B). Todas publicadas até 30/10/2026 (contrato §10, E6). Fora do npm: ffmpeg (Windows: `winget install Gyan.FFmpeg`; imagem: `apt-get install ffmpeg`) e `fonts-dejavu-core` na imagem.
 
 **Spec:** [docs/superpowers/specs/2026-11-11-gestao-devolucoes-design.md](../specs/2026-11-11-gestao-devolucoes-design.md). Leia §3, §4.3, §5.1 a §5.3, §6.0, §6.2, §6.3, §6.8, §6.9, §9, §10, §11, §12 e §13 antes de começar.
 
@@ -29,7 +29,7 @@
 - Os arquivos de `src/db/schema/` e **tudo o que eles importam** (os `dominio.ts`) usam **imports relativos**, nunca `@/`.
 - Código que roda no **worker** (`src/worker/**` e tudo o que ele importa) **não** importa `server-only`, `next/*`, `@/db` (o `index.ts`) nem `@/modules/auth/servidor`: o worker é Node puro, empacotado com esbuild.
 - Componentes de cliente (`'use client'`) só importam **valores** de módulos puros (`dominio.ts`, `regras.ts`); de módulos do servidor, só `import type`.
-- Bibliotecas novas com **versão exata** (`npm install --save-exact pacote@versão`) e publicadas há mais de 2 semanas (exceção: `pg-boss@12.38.2` e `@aws-sdk/*@3.1167.0`, fixadas pelo contrato).
+- Bibliotecas novas com **versão exata** (`npm install --save-exact pacote@versão`) e publicadas há mais de 2 semanas, sem exceção (`pg-boss@12.38.0` e `@aws-sdk/*@3.1161.0`, contrato §10, E6).
 
 **Produto e textos**
 - Interface só em **português do Brasil**. Nomes **exatamente** como no PDF e na spec: "Foto 1", "Foto 2", "Foto 3", "Foto 4", "Vídeo de Prova", "Estoque Bom", "Estoque Problema", e as etapas de `ETAPAS` (`src/modules/devolucoes/etapas.ts`), como "Em Conferência / Triagem & Registro de Evidências".
@@ -60,8 +60,8 @@
 
 ## Decisões que a spec e o contrato não fixaram (registradas aqui para o usuário poder vetar)
 
-1. **Servidor do e2e e os falsos.** O contrato manda o `lerEnv` recusar `falso` em produção, mas o e2e roda um build de produção (`next start`) com os falsos. A "produção de verdade" é `NODE_ENV=production` **sem** `PORTA_E2E` (essa variável só existe no PC de desenvolvimento, no `.env` e no `webServer` do Playwright; na VPS ela não existe).
-2. **`chaveUnica` da fila** vira o `id` do job no pg-boss, calculado a partir de (tarefa, chave). O pg-boss ignora o segundo envio com o mesmo id (`ON CONFLICT DO NOTHING`), sem depender da política da fila.
+1. **Servidor do e2e e os falsos (contrato §10, E1).** O e2e roda um build de produção (`next build && next start`, `NODE_ENV=production`) com os falsos. A liberação é **explícita**: `PERMITIR_FALSOS=1`, que só o `AMBIENTE_E2E` define (o `webServer.env` do Playwright e o worker do e2e). Com `NODE_ENV=production` e sem `PERMITIR_FALSOS=1`, o `lerEnv` recusa `ML_CONECTOR=falso` e `EMISSOR_NFE=falso`. O `PORTA_E2E` não libera nada.
+2. **`chaveUnica` da fila** vira o `id` do job no pg-boss, calculado a partir de (tarefa, chave). O pg-boss ignora o segundo envio com o mesmo id (`ON CONFLICT DO NOTHING`), sem depender da política da fila. Isso vale **enquanto o job existir, mesmo concluído** (o pg-boss só apaga o job dias depois): a chave serve para "uma vez por evento"; um reenvio legítimo usa uma chave nova (contrato §5.1 e §10, E4).
 3. **Registro do envio separado do tus.** O tus só recebe os bytes. Quando o upload termina, o celular chama a Server Action `registrarEnvioAcao(uploadId)`, que confere tudo, calcula o SHA-256 e grava a evidência (idempotente por `id_cliente`). Assim, uma queda depois do último pedaço não perde o registro: o celular só tira o arquivo da fila depois que o servidor confirma.
 4. **`caminho_temporario`** guarda o caminho absoluto do arquivo do tus (em `MIDIA_TMP_DIR/tus`). Web e worker enxergam o mesmo caminho (no Docker, o volume `/data` é o mesmo).
 5. **Fotos aceitas no servidor:** JPEG, PNG ou WebP até 15 MB (o celular já manda JPEG de ~1600 px). **Vídeo:** qualquer `video/*` até 300 MB (pesquisa §1.3). A tela orienta "grave em 1080p, até 2 minutos".
@@ -137,9 +137,9 @@ Dockerfile, docker-compose.prod.yml, docker/nginx/devolucoes.conf, next.config.t
 **Interfaces:**
 - Consome: nada novo.
 - Produz:
-  - `lerEnv(fonte?: Record<string, string | undefined>): Env`, com todas as variáveis do contrato §3: `DATABASE_URL`, `NODE_ENV`, `PORTA_E2E?: number`, `ARMAZENAMENTO: 'disco' | 's3'`, `MIDIA_DIR` (padrão `.dados/midia`), `MIDIA_TMP_DIR` (padrão `.dados/tmp`), `SEGREDO_LINKS: string` (no desenvolvimento, `SEGREDO_LINKS_DESENVOLVIMENTO`), `S3_ENDPOINT?`, `S3_REGIAO?`, `S3_BUCKET?`, `S3_CHAVE_ID?`, `S3_CHAVE_SECRETA?`, `FFMPEG_PATH` (padrão `ffmpeg`), `FFPROBE_PATH` (padrão `ffprobe`), `ML_CONECTOR: 'api' | 'falso'` (padrão `api`), `ML_CLIENT_ID?`, `ML_CLIENT_SECRET?`, `ML_REDIRECT_URI?`, `ML_USAR_PKCE: 'true' | 'false'`, `CHAVE_CRIPTOGRAFIA?`, `EMISSOR_NFE: 'focus' | 'falso'` (padrão `focus`), `FOCUS_TOKEN_HOMOLOGACAO?`, `FOCUS_TOKEN_PRODUCAO?`
+  - `lerEnv(fonte?: Record<string, string | undefined>): Env`, com todas as variáveis do contrato §3: `DATABASE_URL`, `NODE_ENV`, `PORTA_E2E?: number`, `PERMITIR_FALSOS: '0' | '1'` (padrão `0`), `ARMAZENAMENTO: 'disco' | 's3'`, `MIDIA_DIR` (padrão `.dados/midia`), `MIDIA_TMP_DIR` (padrão `.dados/tmp`), `SEGREDO_LINKS: string` (no desenvolvimento, `SEGREDO_LINKS_DESENVOLVIMENTO`), `S3_ENDPOINT?`, `S3_REGIAO?`, `S3_BUCKET?`, `S3_CHAVE_ID?`, `S3_CHAVE_SECRETA?`, `FFMPEG_PATH` (padrão `ffmpeg`), `FFPROBE_PATH` (padrão `ffprobe`), `ML_CONECTOR: 'api' | 'falso'` (padrão `api`), `ML_CLIENT_ID?`, `ML_CLIENT_SECRET?`, `ML_REDIRECT_URI?`, `ML_USAR_PKCE: 'true' | 'false'`, `CHAVE_CRIPTOGRAFIA?`, `EMISSOR_NFE: 'focus' | 'falso'` (padrão `focus`), `FOCUS_TOKEN_HOMOLOGACAO?`, `FOCUS_TOKEN_PRODUCAO?`
   - `type Env`, `SEGREDO_LINKS_DESENVOLVIMENTO`
-  - Regras: em produção de verdade (`NODE_ENV=production` sem `PORTA_E2E`) recusa `ML_CONECTOR=falso`, `EMISSOR_NFE=falso` e `SEGREDO_LINKS` com menos de 32 caracteres; `ARMAZENAMENTO=s3` exige as cinco `S3_*`; `CHAVE_CRIPTOGRAFIA`, quando existe, tem 32 bytes em base64.
+  - Regras: com `NODE_ENV=production` recusa `SEGREDO_LINKS` com menos de 32 caracteres e, **se `PERMITIR_FALSOS` não for `1`**, recusa `ML_CONECTOR=falso` e `EMISSOR_NFE=falso` (contrato §10, E1); `ARMAZENAMENTO=s3` exige as cinco `S3_*`; `CHAVE_CRIPTOGRAFIA`, quando existe, tem 32 bytes em base64.
 
 - [ ] **Passo 1: Escrever o teste que falha**
 
@@ -169,6 +169,7 @@ describe('lerEnv', () => {
       ML_CONECTOR: 'api',
       ML_USAR_PKCE: 'false',
       EMISSOR_NFE: 'focus',
+      PERMITIR_FALSOS: '0',
     });
   });
 
@@ -189,10 +190,15 @@ describe('lerEnv', () => {
     expect(env.SEGREDO_LINKS).toBe('x'.repeat(32));
   });
 
-  it('o servidor do e2e (build de produção com PORTA_E2E) aceita os falsos', () => {
-    const env = lerEnv({ ...BASE, NODE_ENV: 'production', PORTA_E2E: '3100', ML_CONECTOR: 'falso', EMISSOR_NFE: 'falso' });
+  it('só PERMITIR_FALSOS=1 libera os falsos num build de produção (o e2e); PORTA_E2E não libera nada', () => {
+    const E2E = { ...BASE, NODE_ENV: 'production', SEGREDO_LINKS: 'x'.repeat(32), ML_CONECTOR: 'falso', EMISSOR_NFE: 'falso' };
+    const env = lerEnv({ ...E2E, PERMITIR_FALSOS: '1' });
     expect(env.ML_CONECTOR).toBe('falso');
-    expect(env.PORTA_E2E).toBe(3100);
+    expect(env.EMISSOR_NFE).toBe('falso');
+    expect(() => lerEnv({ ...E2E, PORTA_E2E: '3100' })).toThrow(/ML_CONECTOR.*EMISSOR_NFE/);
+    expect(() => lerEnv({ ...E2E, PERMITIR_FALSOS: '0' })).toThrow(/ML_CONECTOR/);
+    // PERMITIR_FALSOS não afrouxa o SEGREDO_LINKS.
+    expect(() => lerEnv({ ...BASE, NODE_ENV: 'production', PERMITIR_FALSOS: '1' })).toThrow(/SEGREDO_LINKS/);
   });
 
   it('ARMAZENAMENTO=s3 exige as cinco variáveis do S3', () => {
@@ -206,6 +212,7 @@ describe('lerEnv', () => {
 
   it('recusa valor fora da lista', () => {
     expect(() => lerEnv({ ...BASE, ARMAZENAMENTO: 'ftp' })).toThrow(/ARMAZENAMENTO/);
+    expect(() => lerEnv({ ...BASE, PERMITIR_FALSOS: 'sim' })).toThrow(/PERMITIR_FALSOS/);
   });
 });
 ```
@@ -237,8 +244,10 @@ export const SEGREDO_LINKS_DESENVOLVIMENTO = 'segredo-de-desenvolvimento-nao-usa
 const esquema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL é obrigatório'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  /** Só existe no PC de desenvolvimento: marca o servidor do e2e (build de produção com os falsos). */
+  /** Porta do servidor do e2e (só no PC de desenvolvimento). Não libera os falsos: isso é o PERMITIR_FALSOS. */
   PORTA_E2E: z.preprocess(vazioComoAusente, z.coerce.number().int().positive().optional()),
+  /** "1" libera ML_CONECTOR/EMISSOR_NFE "falso" num build de produção. Só o e2e define (AMBIENTE_E2E); nunca no .env nem na VPS. */
+  PERMITIR_FALSOS: lista(['0', '1'] as const, '0'),
   // Mídia (Fase 2)
   ARMAZENAMENTO: lista(['disco', 's3'] as const, 'disco'),
   MIDIA_DIR: comPadrao('.dados/midia'),
@@ -271,10 +280,12 @@ const VARIAVEIS_S3 = ['S3_ENDPOINT', 'S3_REGIAO', 'S3_BUCKET', 'S3_CHAVE_ID', 'S
 
 function problemas(e: EnvLido): string[] {
   const lista: string[] = [];
-  const producaoDeVerdade = e.NODE_ENV === 'production' && e.PORTA_E2E === undefined;
-  if (producaoDeVerdade) {
-    if (e.ML_CONECTOR === 'falso') lista.push('ML_CONECTOR: "falso" não é aceito em produção');
-    if (e.EMISSOR_NFE === 'falso') lista.push('EMISSOR_NFE: "falso" não é aceito em produção');
+  if (e.NODE_ENV === 'production') {
+    // Contrato §10, E1: a liberação dos falsos é explícita (só o e2e define PERMITIR_FALSOS=1).
+    if (e.PERMITIR_FALSOS !== '1') {
+      if (e.ML_CONECTOR === 'falso') lista.push('ML_CONECTOR: "falso" não é aceito em produção');
+      if (e.EMISSOR_NFE === 'falso') lista.push('EMISSOR_NFE: "falso" não é aceito em produção');
+    }
     if (!e.SEGREDO_LINKS || e.SEGREDO_LINKS.length < 32) {
       lista.push('SEGREDO_LINKS: obrigatório em produção, com 32 caracteres ou mais (gere com: openssl rand -hex 32)');
     }
@@ -313,6 +324,7 @@ DATABASE_URL=postgres://devolucoes:devolucoes@localhost:5432/devolucoes
 DATABASE_URL_TEST=postgres://devolucoes:devolucoes@localhost:5432/devolucoes_test
 # Porta do servidor do e2e (3100 no main; cada worktree de fase usa a sua). Só existe no PC de desenvolvimento.
 PORTA_E2E=3100
+# PERMITIR_FALSOS=1 libera os falsos num build de produção. Só o e2e define (tests/e2e/dados.ts). Não coloque aqui.
 
 # Mídia (Fase 2). No PC, fotos e vídeos ficam em .dados/ (fora do git).
 ARMAZENAMENTO=disco
@@ -354,6 +366,7 @@ POSTGRES_PASSWORD=troque-por-uma-senha-hexadecimal
 DATABASE_URL=postgres://devolucoes:troque-por-uma-senha-hexadecimal@postgres:5432/devolucoes
 # Versão da imagem: "main" (a mais recente) ou o hash de um commit, para voltar a uma versão anterior.
 IMAGEM_TAG=main
+# Nunca defina PERMITIR_FALSOS aqui: em produção o sistema recusa os conectores falsos.
 
 # Mídia. "disco" só para teste na bancada; o uso diário começa com o B2 (ARMAZENAMENTO=s3).
 ARMAZENAMENTO=disco
@@ -438,7 +451,8 @@ Esperado: tudo verde.
 - Produz:
   - em `devolucoes/dominio.ts`: `DESTINOS_ITEM`, `type DestinoItem`, `ROTULO_DESTINO` ("Estoque Bom", "Estoque Problema"), `MOTIVOS_ITEM`, `type MotivoItem`, `ROTULO_MOTIVO`
   - em `midia/dominio.ts`: `TIPOS_EVIDENCIA`, `type TipoEvidencia`, `ROTULO_EVIDENCIA` ("Foto 1" a "Foto 4", "Vídeo de Prova", "Extra"), `DESCRICAO_EVIDENCIA`, `EVIDENCIAS_DO_PACOTE`, `EVIDENCIAS_DO_ITEM`, `ehTipoEvidencia(t): t is TipoEvidencia`, `ehFoto(t: TipoEvidencia): boolean`, `SITUACOES_PROCESSAMENTO`, `type SituacaoProcessamento`, `ROTULO_SITUACAO_PROCESSAMENTO`
-  - em `configuracoes/dominio.ts`: `VIDEO_OBRIGATORIO`, `type VideoObrigatorio`, `ROTULO_VIDEO_OBRIGATORIO`, `REGIMES_TRIBUTARIOS`, `type RegimeTributario`, `ROTULO_REGIME`, `AMBIENTES_NFE`, `type AmbienteNfe`, `ROTULO_AMBIENTE`, `MESES_RETENCAO_PADRAO = 12`
+  - em `configuracoes/dominio.ts`: `VIDEO_OBRIGATORIO`, `type VideoObrigatorio`, `ROTULO_VIDEO_OBRIGATORIO`, `REGIMES_TRIBUTARIOS`, `type RegimeTributario`, `ROTULO_REGIME` ("Simples Nacional", "Lucro Presumido", "Lucro Real"), `AMBIENTES_NFE`, `type AmbienteNfe`, `ROTULO_AMBIENTE` ("Homologação (sem valor fiscal)", "Produção"), `MESES_RETENCAO_PADRAO = 12`
+  - Estes nomes são os únicos: as Fases 3 e 4 importam ou reexportam, nunca redefinem (contrato §4.5 e §10, E2).
   - em `configuracoes/ler.ts`: `type Configuracao` (a linha de `configuracoes`), `CONFIGURACAO_PADRAO`, `lerConfiguracao(db: DbOuTx): Promise<Configuracao>`
   - schema: `destinoItemEnum`, `motivoItemEnum`; em `devolucoes`: `conferenteId`, `conferenciaIniciadaEm`, `conferidaEm`, `concluidaEm`; em `itensDevolucao`: `produtoRecebidoId`, `eanLido`, `loteFabricacao`, `validade`, `destino`, `motivo`, `observacao`; `tipoEvidenciaEnum`, `situacaoProcessamentoEnum`, `evidencias`; `videoObrigatorioEnum`, `regimeTributarioEnum`, `ambienteNfeEnum`, `configuracoes`
 
@@ -604,7 +618,8 @@ export const ROTULO_REGIME: Record<RegimeTributario, string> = {
 
 export const AMBIENTES_NFE = ['HOMOLOGACAO', 'PRODUCAO'] as const;
 export type AmbienteNfe = (typeof AMBIENTES_NFE)[number];
-export const ROTULO_AMBIENTE: Record<AmbienteNfe, string> = { HOMOLOGACAO: 'Homologação', PRODUCAO: 'Produção' };
+/** O texto da tela Configurações › Fiscal (Fase 4); a Fase 4 reexporta, não redefine (contrato §10, E2). */
+export const ROTULO_AMBIENTE: Record<AmbienteNfe, string> = { HOMOLOGACAO: 'Homologação (sem valor fiscal)', PRODUCAO: 'Produção' };
 
 /** Prazo de guarda das mídias (spec §9): padrão de 12 meses. */
 export const MESES_RETENCAO_PADRAO = 12;
@@ -1025,7 +1040,7 @@ git commit -m "feat: modelo de dados da conferência e das próximas fases (migr
 - Consome: `Ator`, `ErroDevolucao`, `StatusItem`, `ROTULO_STATUS_ITEM`, `ROTULO_PERFIL`.
 - Produz:
   - em `transicoes-item.ts`: `type PedidoTransicaoItem = { de: StatusItem; para: StatusItem; ator: Ator }`, `REGRAS_TRANSICAO_ITEM`, `podeTransitarItem(p): boolean`, `class ErroTransicaoItem extends ErroDevolucao`, `exigirTransicaoItem(p: PedidoTransicaoItem): void`
-  - em `historico/rotulos/*.ts`: `ROTULOS_BASE`, `ROTULOS_CONFERENCIA`, `ROTULOS_MERCADO_LIVRE`, `ROTULOS_FISCAL`, `ROTULOS_LOTES`, `ROTULOS_ACABAMENTO` (`Record<string, string>`)
+  - em `historico/rotulos/*.ts`: `ROTULOS_BASE`, `ROTULOS_CONFERENCIA`, `ROTULOS_MERCADO_LIVRE`, `ROTULOS_FISCAL`, `ROTULOS_LOTES`, `ROTULOS_ACABAMENTO` (`Record<string, string>`), já com todas as chaves que os planos das Fases 2, 3 e 4 usam (inclusive `ml_resultado_ok_recusado`, `ml_resultado_sem_vinculo`, `ml_conta_desconectada`, `nf_item_escolhido` e `nota_venda_removida`). **Congelados** depois desta tarefa (contrato §10, E3).
   - em `eventos.ts`: `type EntidadeHistorico = 'devolucao' | 'item' | 'usuario' | 'configuracao' | 'conta_marketplace' | 'contestacao' | 'nota_fiscal' | 'lote'`; `ROTULO_ACAO` passa a ser a junção dos seis arquivos
   - a Busca Avançada ("Fornecedor ou Código de Barras / Serial Number") também acha pelo `ean_lido`
 
@@ -1103,7 +1118,7 @@ const ARQUIVOS: Record<string, Record<string, string>> = {
   acabamento: ROTULOS_ACABAMENTO,
 };
 
-// Chaves reservadas no contrato §4.7 (cada fase pode acrescentar outras com o próprio prefixo).
+// Chaves do contrato §4.7: todas as que os planos das Fases 2 a 6 usam. Os arquivos congelam depois da Parte A (§10, E3).
 const RESERVADAS: Record<string, string[]> = {
   base: [
     'criada', 'criada_nao_identificada', 'recebida', 'identificada', 'cancelada', 'extraviada',
@@ -1116,12 +1131,13 @@ const RESERVADAS: Record<string, string[]> = {
   ],
   'mercado-livre': [
     'ml_vinculada', 'ml_status_atualizado', 'ml_entregue', 'ml_no_cd', 'ml_reenviada_ao_vendedor', 'ml_status_apos_chegada',
-    'ml_resultado_ok_enviado', 'ml_conta_conectada', 'ml_conta_reconectar',
+    'ml_resultado_ok_enviado', 'ml_resultado_ok_recusado', 'ml_resultado_sem_vinculo',
+    'ml_conta_conectada', 'ml_conta_reconectar', 'ml_conta_desconectada',
     'contestacao_criada', 'contestacao_revisada', 'contestacao_enviada', 'contestacao_falhou',
   ],
   fiscal: [
-    'nf_solicitada', 'nf_autorizada', 'nf_rejeitada', 'nf_reenviada', 'nf_cancelada',
-    'nota_venda_anexada', 'nota_venda_obtida_ml', 'devolucao_reaberta',
+    'nf_solicitada', 'nf_autorizada', 'nf_rejeitada', 'nf_reenviada', 'nf_cancelada', 'nf_item_escolhido',
+    'nota_venda_anexada', 'nota_venda_obtida_ml', 'nota_venda_removida', 'devolucao_reaberta',
   ],
   lotes: [
     'lote_criado', 'lote_item_incluido', 'lote_item_movido', 'lote_fechado', 'lote_reaberto',
@@ -1264,7 +1280,7 @@ export const ROTULOS_CONFERENCIA: Record<string, string> = {
 `src/modules/historico/rotulos/mercado-livre.ts`:
 
 ```ts
-/** Fase 3. Chave nova: prefixo ml_ ou contestacao_. */
+/** Fase 3 (já com todas as chaves do plano da Fase 3). Congelado depois da Parte A: chave nova = emenda (contrato §10, E3). */
 export const ROTULOS_MERCADO_LIVRE: Record<string, string> = {
   ml_vinculada: 'Ligada à devolução do Mercado Livre',
   ml_status_atualizado: 'Status do Mercado Livre atualizado',
@@ -1273,8 +1289,11 @@ export const ROTULOS_MERCADO_LIVRE: Record<string, string> = {
   ml_reenviada_ao_vendedor: 'Reenviada ao vendedor pelo Mercado Livre',
   ml_status_apos_chegada: 'Status do Mercado Livre mudou depois da chegada',
   ml_resultado_ok_enviado: 'Resultado "OK" enviado ao Mercado Livre',
+  ml_resultado_ok_recusado: 'O Mercado Livre recusou o resultado "OK"',
+  ml_resultado_sem_vinculo: 'Resultado não enviado ao ML: devolução sem vínculo com o Mercado Livre',
   ml_conta_conectada: 'Conta do Mercado Livre conectada',
   ml_conta_reconectar: 'Conta do Mercado Livre precisa ser reconectada',
+  ml_conta_desconectada: 'Conta do Mercado Livre desconectada',
   contestacao_criada: 'Contestação criada',
   contestacao_revisada: 'Contestação revisada pelo Gestor',
   contestacao_enviada: 'Contestação enviada ao Mercado Livre',
@@ -1285,15 +1304,17 @@ export const ROTULOS_MERCADO_LIVRE: Record<string, string> = {
 `src/modules/historico/rotulos/fiscal.ts`:
 
 ```ts
-/** Fase 4. Chave nova: prefixo nf_ ou nota_venda_. */
+/** Fase 4 (já com todas as chaves do plano da Fase 4). Congelado depois da Parte A: chave nova = emenda (contrato §10, E3). */
 export const ROTULOS_FISCAL: Record<string, string> = {
   nf_solicitada: 'NF-e solicitada',
   nf_autorizada: 'NF-e autorizada',
   nf_rejeitada: 'NF-e rejeitada',
   nf_reenviada: 'NF-e reenviada',
   nf_cancelada: 'NF-e cancelada',
+  nf_item_escolhido: 'Item da NF de venda escolhido',
   nota_venda_anexada: 'NF de venda anexada',
   nota_venda_obtida_ml: 'NF de venda obtida do Mercado Livre',
+  nota_venda_removida: 'NF de venda removida',
   devolucao_reaberta: 'Devolução reaberta (NF cancelada)',
 };
 ```
@@ -1407,11 +1428,11 @@ git commit -m "feat: transições dos itens, rótulos do histórico por fase e E
 
 ```bash
 cd "/c/Users/idmpc/Dvoluções Markt"
-npm install --save-exact pg-boss@12.38.2
+npm install --save-exact pg-boss@12.38.0
 npm ls pg-boss @opentelemetry/api
 ```
 
-Esperado: `pg-boss@12.38.2` e `@opentelemetry/api` (dependência obrigatória do pg-boss, instalada junto pelo npm). Confira a API instalada antes de seguir: `grep -n "fromDrizzle" node_modules/pg-boss/dist/index.d.ts` deve mostrar a exportação; `grep -n "retryCount" node_modules/pg-boss/dist/types.d.ts` deve mostrar o campo do job.
+Esperado: `pg-boss@12.38.0` (publicada em 13/10/2026; contrato §10, E6) e `@opentelemetry/api` (dependência obrigatória do pg-boss, instalada junto pelo npm). Confira a API instalada antes de seguir: `grep -n "fromDrizzle" node_modules/pg-boss/dist/index.d.ts` deve mostrar a exportação; `grep -n "retryCount" node_modules/pg-boss/dist/types.d.ts` deve mostrar o campo do job.
 
 Em `next.config.ts`, logo depois da linha `distDir: ...`, acrescente:
 
@@ -1804,7 +1825,7 @@ git commit -m "feat: fila de tarefas com pg-boss 12 (envio na transação, chave
   - em `src/worker/manipuladores/*.ts`: `manipuladoresMidia`, `manipuladoresMercadoLivre`, `manipuladoresFiscal`, `manipuladoresLotes`, `manipuladoresAcabamento` (todos `Manipuladores`, vazios; cada fase só preenche o seu)
   - em `src/worker/index.ts`: `MANIPULADORES`, `executarTarefa(manipuladores, nome, job: { data; retryCount }, base: { db; fila }, agora?)`, `type OpcoesWorker = { url: string; manipuladores?: Manipuladores; schema?: string; intervaloSegundos?: number; registrar?: (linha: Record<string, unknown>) => void }`, `iniciarWorker(o): Promise<{ boss: PgBoss; parar(): Promise<void> }>`
   - `verificarSaude(sql, verificarFila, prazoMs?)` → `{ status, banco, fila }`
-  - em `tests/e2e/dados.ts`: `AMBIENTE_E2E` (disco em `.dados-e2e`, `SEGREDO_LINKS` do e2e e os falsos)
+  - em `tests/e2e/dados.ts`: `AMBIENTE_E2E` (disco em `.dados-e2e`, `SEGREDO_LINKS` do e2e, os falsos e `PERMITIR_FALSOS: '1'`, o único lugar que define essa variável; contrato §10, E1)
   - scripts: `npm run worker`; `npm run build:scripts` gera também `dist/worker.mjs`
 
 - [ ] **Passo 1: Escrever os testes que falham**
@@ -2234,7 +2255,11 @@ Em `docker-compose.prod.yml`, logo depois do bloco do serviço `web` (antes de `
 Acrescente no **final** de `tests/e2e/dados.ts`:
 
 ```ts
-/** Ambiente do servidor e do worker do e2e: mídia no disco local (.dados-e2e), links assinados e os falsos. */
+/**
+ * Ambiente do servidor e do worker do e2e: mídia no disco local (.dados-e2e), links assinados e os falsos.
+ * PERMITIR_FALSOS=1 é o que deixa o build de produção do e2e (`next start`) aceitar os falsos (contrato §10, E1).
+ * É o ÚNICO lugar que define essa variável.
+ */
 export const AMBIENTE_E2E = {
   ARMAZENAMENTO: 'disco',
   MIDIA_DIR: '.dados-e2e/midia',
@@ -2242,6 +2267,7 @@ export const AMBIENTE_E2E = {
   SEGREDO_LINKS: 'segredo-dos-testes-ponta-a-ponta-com-mais-de-32-caracteres',
   ML_CONECTOR: 'falso',
   EMISSOR_NFE: 'falso',
+  PERMITIR_FALSOS: '1',
 } as const;
 ```
 
@@ -2254,7 +2280,7 @@ import { criarDb } from '../../src/db/client';
 import { migrar } from '../../src/db/migrate';
 import { criarUsuario } from '../../src/modules/auth/usuarios';
 import { limparTabelas, urlBancoTeste } from '../helpers/db';
-import { AMBIENTE_E2E, PORTA_E2E, USUARIOS_E2E } from './dados';
+import { AMBIENTE_E2E, USUARIOS_E2E } from './dados';
 
 /**
  * Prepara o banco de testes, sobe o worker do e2e (o mesmo banco e o mesmo disco do servidor) e devolve
@@ -2278,7 +2304,8 @@ export default async function globalSetup() {
   mkdirSync('.dados-e2e', { recursive: true });
   const log = openSync('.dados-e2e/worker.log', 'a');
   const worker = spawn(process.execPath, ['--import', 'tsx', 'scripts/worker.ts'], {
-    env: { ...process.env, ...AMBIENTE_E2E, PORTA_E2E: String(PORTA_E2E), DATABASE_URL: url },
+    // AMBIENTE_E2E traz PERMITIR_FALSOS=1 (contrato §10, E1).
+    env: { ...process.env, ...AMBIENTE_E2E, DATABASE_URL: url },
     stdio: ['ignore', log, log],
     windowsHide: true,
   });
@@ -2295,15 +2322,14 @@ Em `playwright.config.ts`:
 import { AMBIENTE_E2E, PORTA_E2E as PORTA, URL_E2E } from './tests/e2e/dados';
 ```
 
-2. Troque a linha `env: { DATABASE_URL: ... },` do `webServer` por:
+2. Troque o comentário `// O Next não sobrescreve variáveis já definidas, então o servidor de teste usa o banco de testes.` **e** a linha `env: { DATABASE_URL: ... },` logo abaixo dele, no `webServer`, por:
 
 ```ts
     // O Next não sobrescreve variáveis já definidas: o servidor de teste usa o banco de testes, o disco do e2e e os falsos.
-    // PORTA_E2E marca o build de produção do e2e (o lerEnv aceita os falsos só nele).
+    // AMBIENTE_E2E traz PERMITIR_FALSOS=1: só com ele o build de produção do e2e aceita os falsos (contrato §10, E1).
     env: {
       DATABASE_URL: process.env.DATABASE_URL_TEST ?? '',
       ...AMBIENTE_E2E,
-      PORTA_E2E: String(PORTA),
       ...(MODO_DEV ? {} : { NEXT_DIST_DIR: '.next-e2e' }),
     },
 ```
@@ -2948,7 +2974,7 @@ git commit -m "feat: armazenamento de arquivos (disco e memória) e links tempor
 
 **Interfaces:**
 - Consome: `Canal`, `TipoDevolucao` (Fase 1); `DbOuTx`; `FilaMemoria`, `definirFilaParaTestes` (Tarefa 4); `ArmazenamentoMemoria`, `definirArmazenamentoParaTestes` (Tarefa 6).
-- Produz (contrato §5.3, nomes exatos): `type DevolucaoExterna`, `type MotivoCanal`, `type ResultadoConferencia`, `interface MarketplaceConnector`, `obterConector(db: DbOuTx, canal: Canal): Promise<MarketplaceConnector | null>` (devolve `null` até a Fase 3), `definirConectorParaTestes(canal: Canal, c: MarketplaceConnector | null): void`; `tests/setup/int-setup.ts` instala os falsos antes de cada teste de integração.
+- Produz (contrato §5.3, nomes exatos): `type DevolucaoExterna`, `type MotivoCanal`, `type ResultadoConferencia`, `interface MarketplaceConnector` (no ML, `obter` recebe o claim_id e `enviarResultadoConferencia` o return_id; o que é só de um canal vai numa interface que estende esta, contrato §10, E9), `obterConector(db: DbOuTx, canal: Canal): Promise<MarketplaceConnector | null>` (devolve `null` até a Fase 3), `definirConectorParaTestes(canal: Canal, c: MarketplaceConnector | null): void` (`null` = volta ao padrão, E8); `tests/setup/int-setup.ts` instala os falsos antes de cada teste de integração.
 
 - [ ] **Passo 1: Escrever os testes que falham**
 
@@ -2967,7 +2993,7 @@ describe('registro de conectores (contrato §5.3)', () => {
     expect(await obterConector(db, 'MERCADO_LIVRE')).toBeNull();
   });
 
-  it('nos testes, devolve o conector definido para o canal', async () => {
+  it('nos testes, devolve o conector definido para o canal; com null, volta ao padrão', async () => {
     const falso = { canal: 'MERCADO_LIVRE' } as MarketplaceConnector;
     definirConectorParaTestes('MERCADO_LIVRE', falso);
     expect(await obterConector(db, 'MERCADO_LIVRE')).toBe(falso);
@@ -3018,7 +3044,12 @@ Esperado: FAIL (registro não existe; os falsos não estão instalados).
 ```ts
 import type { Canal, TipoDevolucao } from '@/modules/devolucoes/dominio';
 
-/** Interface da spec §4.3 mais o método da §7.5 (contrato §5.3). Implementação do Mercado Livre: Fase 3. */
+/**
+ * Interface da spec §4.3 mais o método da §7.5 (contrato §5.3). Implementação do Mercado Livre: Fase 3.
+ * O que só um canal tem (no ML: status e subtipo da reclamação, varredura) fica numa interface do canal que ESTENDE
+ * esta, na pasta dele (ex.: `ConectorMercadoLivre extends MarketplaceConnector`, com um guarda de tipo). Este arquivo
+ * não muda depois da Parte A (contrato §10, E9).
+ */
 export type DevolucaoExterna = {
   canal: Canal;
   devolucaoExternaId: string;
@@ -3055,7 +3086,9 @@ export type ResultadoConferencia =
 export interface MarketplaceConnector {
   canal: Canal;
   listarAtualizadasDesde(desde: Date): AsyncIterable<DevolucaoExterna>;
+  /** No ML, `idExterno` é o claim_id (o aviso traz a reclamação). */
   obter(idExterno: string): Promise<DevolucaoExterna>;
+  /** No ML, `idExterno` é o return_id (= `devolucaoExternaId`), o que o return-review pede. */
   enviarResultadoConferencia(idExterno: string, r: ResultadoConferencia): Promise<void>;
   /** null = o canal não tem a nota. */
   obterXmlNotaVenda(pedidoExterno: string): Promise<string | null>;
@@ -3069,20 +3102,23 @@ import type { DbOuTx } from '@/db/client';
 import type { Canal } from '@/modules/devolucoes/dominio';
 import type { MarketplaceConnector } from './tipos';
 
-const paraTestes = new Map<Canal, MarketplaceConnector | null>();
+const substitutos = new Map<Canal, MarketplaceConnector>();
 
 /**
  * O conector do canal, ou null sem integração ou sem conta ATIVA (contrato §5.3).
  * Até a Fase 3 entrar, devolve sempre null. A Fase 3 troca o corpo desta função.
  */
 export async function obterConector(db: DbOuTx, canal: Canal): Promise<MarketplaceConnector | null> {
-  if (paraTestes.has(canal)) return paraTestes.get(canal) ?? null;
+  const substituto = substitutos.get(canal);
+  if (substituto) return substituto;
   void db;
   return null;
 }
 
+/** Testes: com um conector, ele substitui o real; com null, VOLTA AO PADRÃO (contrato §5.3 e §10, E8). */
 export function definirConectorParaTestes(canal: Canal, c: MarketplaceConnector | null): void {
-  paraTestes.set(canal, c);
+  if (c) substitutos.set(canal, c);
+  else substitutos.delete(canal);
 }
 ```
 
@@ -3106,6 +3142,7 @@ import { ArmazenamentoMemoria } from '@/modules/midia/armazenamento-memoria';
 beforeEach(() => {
   definirFilaParaTestes(new FilaMemoria());
   definirArmazenamentoParaTestes(new ArmazenamentoMemoria());
+  // null = volta ao padrão (contrato §10, E8): null até a Fase 3; depois, o conector real, que é null sem conta ATIVA.
   for (const canal of CANAIS) definirConectorParaTestes(canal, null);
 });
 ```
@@ -3137,11 +3174,12 @@ git commit -m "feat: tipos e registro dos conectores de marketplace e falsos pad
 - Modificar: `src/app/(app)/fluxo/devolucoes/[codigo]/page.tsx` (**congelado** depois desta tarefa)
 - Modificar (substituir o conteúdo): `src/app/(app)/configuracoes/page.tsx` (**congelado** depois desta tarefa)
 - Criar: `src/app/(app)/configuracoes/conferencia/page.tsx`, `mercado-livre/page.tsx`, `fiscal/page.tsx`, `falhas/page.tsx`
-- Testes: `tests/e2e/configuracoes.spec.ts`
+- Modificar: `src/components/EtapasCelular.tsx` (ponto de extensão `conteudoEtapa`; **congelado** depois desta tarefa, contrato §10, E5)
+- Testes: `tests/e2e/configuracoes.spec.ts`, `src/components/EtapasCelular.test.tsx` (acrescentar um caso)
 
 **Interfaces:**
 - Consome: `exigirPermissao`, `EmBreve`, `CARTAO`, `UsuarioSessao`, `StatusDevolucao`.
-- Produz: `type PropsSecao = { devolucaoId: string; codigo: string; status: StatusDevolucao; usuario: UsuarioSessao }`; `SecaoConferencia`, `SecaoMercadoLivre`, `SecaoFiscal`, `SecaoLote` (componentes de servidor assíncronos que devolvem `null`; cada fase preenche o seu); páginas `/configuracoes/conferencia` ("Conferência e mídias", Fase 2), `/configuracoes/mercado-livre` (3), `/configuracoes/fiscal` (4), `/configuracoes/falhas` (6).
+- Produz: `type PropsSecao = { devolucaoId: string; codigo: string; status: StatusDevolucao; usuario: UsuarioSessao }`; `SecaoConferencia`, `SecaoMercadoLivre`, `SecaoFiscal`, `SecaoLote` (componentes de servidor assíncronos que devolvem `null`; cada fase preenche o seu); páginas `/configuracoes/conferencia` ("Conferência e mídias", Fase 2), `/configuracoes/mercado-livre` (3), `/configuracoes/fiscal` (4), `/configuracoes/falhas` (6); `EtapasCelular({ colunas, selecionada, conteudoEtapa? })`, em que `conteudoEtapa?: Partial<Record<number, ReactNode>>` aparece no **topo** da etapa escolhida (abaixo do título, antes dos cartões). A Fase 4 passa `{ 4: <DivisaoEstoque … /> }` (Estoque Bom / Estoque Problema) sem mexer no componente.
 
 - [ ] **Passo 1: Escrever o teste ponta a ponta que falha**
 
@@ -3266,6 +3304,55 @@ import { SecaoMercadoLivre } from './secoes/SecaoMercadoLivre';
       <SecaoLote devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
 ```
 
+- [ ] **Passo 2b: Ponto de extensão do `EtapasCelular` (contrato §10, E5)**
+
+O `EtapasCelular` fica congelado durante as Fases 2 a 4, mas a Fase 4 precisa mostrar Estoque Bom / Estoque Problema **no topo** da etapa 4 no celular (mobile-first: a divisão não pode ficar embaixo de todos os cartões). A prop opcional resolve isso sem a Fase 4 editar o componente.
+
+No **final** de `src/components/EtapasCelular.test.tsx`, antes do último `});`, acrescente:
+
+```tsx
+  it('conteudoEtapa aparece no topo da etapa escolhida, antes dos cartões, e só nela', () => {
+    const { rerender } = render(
+      <EtapasCelular colunas={COLUNAS} selecionada={2} conteudoEtapa={{ 2: <nav aria-label="Extra da etapa 2">extra</nav> }} />,
+    );
+    const extra = screen.getByRole('navigation', { name: 'Extra da etapa 2' });
+    const cartao = screen.getByRole('link', { name: /DEV-000001/ });
+    // O extra vem antes do cartão na ordem do documento.
+    expect(extra.compareDocumentPosition(cartao) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    rerender(<EtapasCelular colunas={COLUNAS} selecionada={3} conteudoEtapa={{ 2: <nav aria-label="Extra da etapa 2">extra</nav> }} />);
+    expect(screen.queryByRole('navigation', { name: 'Extra da etapa 2' })).toBeNull();
+  });
+```
+
+Rode: `npm test -- src/components/EtapasCelular.test.tsx`
+Esperado: FAIL (a prop não existe).
+
+Em `src/components/EtapasCelular.tsx`:
+1. Acrescente no topo: `import type { ReactNode } from 'react';`
+2. Troque a assinatura `export function EtapasCelular({ colunas, selecionada }: { colunas: ColunaFluxo[]; selecionada: number }) {` por:
+
+```tsx
+export function EtapasCelular({
+  colunas,
+  selecionada,
+  conteudoEtapa,
+}: {
+  colunas: ColunaFluxo[];
+  selecionada: number;
+  /** Conteúdo extra por número de etapa, no topo da etapa escolhida (ex.: Estoque Bom / Estoque Problema na 4, Fase 4). */
+  conteudoEtapa?: Partial<Record<number, ReactNode>>;
+}) {
+```
+
+3. Logo depois do `</h2>` da seção `etapa-selecionada` (antes de `{cartoes.length === 0 ? (`), acrescente:
+
+```tsx
+        {conteudoEtapa?.[atual.numero]}
+```
+
+Rode: `npm test -- src/components/EtapasCelular.test.tsx`
+Esperado: PASS (os 4 casos de antes e o novo).
+
 - [ ] **Passo 3: Cartões das Configurações e as páginas das próximas fases**
 
 `src/app/(app)/configuracoes/page.tsx` (substitua o conteúdo):
@@ -3382,8 +3469,9 @@ Esperado: tudo verde nos dois projetos (o detalhe da devolução continua igual:
 
 ```bash
 cd "/c/Users/idmpc/Dvoluções Markt"
-git add "src/app/(app)/fluxo/devolucoes/[codigo]" "src/app/(app)/configuracoes" tests/e2e/configuracoes.spec.ts
-git commit -m "feat: esqueletos das seções do detalhe e cartões das Configurações das próximas fases" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+npm test
+git add "src/app/(app)/fluxo/devolucoes/[codigo]" "src/app/(app)/configuracoes" tests/e2e/configuracoes.spec.ts src/components/EtapasCelular.tsx src/components/EtapasCelular.test.tsx
+git commit -m "feat: esqueletos das seções do detalhe, cartões das Configurações e ponto de extensão do EtapasCelular" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -3400,7 +3488,7 @@ git status --short
 
 Esperado: tudo verde e a árvore limpa (fora o `AGENTS.md`, que o `next dev` reescreve).
 
-- **Revisão:** o controlador revisa as Tarefas 1 a 8 juntas antes de criar as worktrees. Depois disso ficam **congelados** (contrato §3): `src/db/schema/index.ts`, `src/db/schema/devolucoes.ts`, os scripts do `package.json`, `src/lib/env.ts`, `.env.example`, `.env.producao.example`, `tests/e2e/global-setup.ts`, `apoio.ts`, `dados.ts`, o detalhe da devolução (`[codigo]/page.tsx`, `detalhe.ts`) e `configuracoes/page.tsx`.
+- **Revisão:** o controlador revisa as Tarefas 1 a 8 juntas antes de criar as worktrees. Depois disso ficam **congelados** (contrato §3): `src/db/schema/index.ts`, `src/db/schema/devolucoes.ts`, os scripts do `package.json`, `src/lib/env.ts`, `.env.example`, `.env.producao.example`, `tests/e2e/global-setup.ts`, `apoio.ts`, `dados.ts`, o detalhe da devolução (`[codigo]/page.tsx`, `detalhe.ts`), `configuracoes/page.tsx`, os seis `src/modules/historico/rotulos/*.ts` (contrato §10, E3), `src/conectores/marketplace/tipos.ts` e `src/components/EtapasCelular.tsx` (E5).
 - **Worktrees:** crie as worktrees e os bancos das Fases 2, 3 e 4 com o bloco do contrato §6. Na worktree da Fase 2, troque no `.env` as três linhas: `DATABASE_URL=.../devolucoes_f2`, `DATABASE_URL_TEST=.../devolucoes_test_f2`, `PORTA_E2E=3102`; depois `npm ci && npm run db:migrar`.
 - **Produção:** antes de publicar este `main` na VPS, o `.env.producao` precisa de `SEGREDO_LINKS` (com `openssl rand -hex 32`); sem ele o `lerEnv` recusa a subida. O serviço `worker` sobe junto com o `docker compose up -d`. (Push e deploy são do usuário.)
 
@@ -6600,7 +6688,7 @@ git commit -m "feat: worker comprime o Vídeo de Prova (H.264 720p conferido com
 
 ```bash
 cd "/c/Users/idmpc/devolucoes-wt/fase-2"
-npm install --save-exact @aws-sdk/client-s3@3.1167.0 @aws-sdk/s3-request-presigner@3.1167.0
+npm install --save-exact @aws-sdk/client-s3@3.1161.0 @aws-sdk/s3-request-presigner@3.1161.0
 ```
 
 (O Next já trata `@aws-sdk/client-s3` como pacote externo; o esbuild empacota o SDK no `dist/worker.mjs`.)
@@ -8158,7 +8246,7 @@ git commit -m "feat: peças da conferência no celular (vagas com câmera e prog
   - rota `/fluxo/devolucoes/[codigo]/conferencia` (só quem está com a trava; os outros voltam ao detalhe)
   - Server Actions `salvarItemAcao(devolucaoId, itemId, entrada)`, `registrarEanAcao(devolucaoId, itemId, lido | null)`, `concluirAcao(devolucaoId, codigo)` e `desistirAcao(devolucaoId, codigo)` (as duas últimas devolvem `{ ok: true, destino }`; a tela navega)
   - `AssistenteConferencia`, `PassoItem`, `PassoDestino`
-  - em `apoio-conferencia.ts`: `type ArquivoTeste`, `fotoDeTeste(nome?)`, `temFfmpegE2e()`, `videoDeTeste()`, `prepararConferencia({ unidades?, canal?, emConferenciaCom? })`, `esperarEnviada(page, nome)`
+  - em `apoio-conferencia.ts`: `type ArquivoTeste`, `fotoDeTeste(nome?)`, `temFfmpegE2e()`, `videoDeTeste()`, `prepararConferencia({ unidades?, canal?, emConferenciaCom? })`, `esperarEnviada(page, nome)`, `type UnidadeE2e = 'BOM' | 'AUSENTE' | { problema: Exclude<MotivoItem, 'AUSENTE'> }` e `conferirDevolucao(page, codigo, unidades: UnidadeE2e[]): Promise<void>` (a conferência inteira pela tela; usado pelas integrações das Fases 3 e 4, contrato §7.3 e §10, E11)
 
 - [ ] **Passo 1: Escrever o teste ponta a ponta que falha**
 
@@ -8169,9 +8257,11 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, type Page } from '@playwright/test';
+import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
+import { devolucoes } from '../../src/db/schema';
 import { iniciarConferencia } from '../../src/modules/conferencia/trava';
-import type { Canal } from '../../src/modules/devolucoes/dominio';
+import type { Canal, MotivoItem } from '../../src/modules/devolucoes/dominio';
 import { receberPorRastreio } from '../../src/modules/devolucoes/recebimento';
 import { criarDevolucaoTeste, criarProdutoTeste } from '../helpers/fabricas';
 import { codigoUnico, comBanco, usuarioPorEmail } from './apoio';
@@ -8234,6 +8324,56 @@ export async function prepararConferencia(p: { unidades?: number; canal?: Canal;
 export async function esperarEnviada(page: Page, nome: string) {
   await expect(page.getByRole('group', { name: nome, exact: true })).toContainText(/Enviada|Pronta/, { timeout: 30_000 });
 }
+
+/** O que fazer com cada unidade, na ordem (Unidade 1, 2...). */
+export type UnidadeE2e = 'BOM' | 'AUSENTE' | { problema: Exclude<MotivoItem, 'AUSENTE'> };
+
+/**
+ * Conferência inteira pela tela (contrato §7.3 e §10, E11). As integrações das Fases 3 e 4 usam esta função depois
+ * do merge da Fase 2. Antes de chamar, a devolução já chegou (Aguardando conferência ou já em conferência com o
+ * Operador) e a `page` está logada como Operador. O EAN não é lido: concluir confirma o produto esperado (decisão 9).
+ * O Vídeo de Prova é sempre enviado (padrão SEMPRE). No fim, a página volta ao detalhe da devolução.
+ */
+export async function conferirDevolucao(page: Page, codigo: string, unidades: UnidadeE2e[]): Promise<void> {
+  await comBanco(async (db) => {
+    const [d] = await db.select({ id: devolucoes.id, status: devolucoes.status }).from(devolucoes).where(eq(devolucoes.codigo, codigo));
+    if (d.status === 'AGUARDANDO_CONFERENCIA') await iniciarConferencia(db, d.id, await usuarioPorEmail(db, USUARIOS_E2E.operador.email));
+  });
+  await page.goto(`/fluxo/devolucoes/${codigo}/conferencia`);
+  await page.getByLabel('Tirar Foto 1', { exact: true }).setInputFiles(await fotoDeTeste('foto-1.jpg'));
+  await page.getByLabel('Tirar Foto 2', { exact: true }).setInputFiles(await fotoDeTeste('foto-2.jpg'));
+  await esperarEnviada(page, 'Foto 1');
+  await esperarEnviada(page, 'Foto 2');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  for (const [i, u] of unidades.entries()) {
+    await expect(page.getByText(`Passo ${i + 2} de `)).toBeVisible();
+    if (u === 'AUSENTE') {
+      await page.getByRole('button', { name: 'Não veio no pacote (ausente)' }).click();
+    } else {
+      await page.getByLabel('Tirar Foto 3', { exact: true }).setInputFiles(await fotoDeTeste(`foto-3-${i + 1}.jpg`));
+      await page.getByLabel('Tirar Foto 4', { exact: true }).setInputFiles(await fotoDeTeste(`foto-4-${i + 1}.jpg`));
+      await esperarEnviada(page, 'Foto 3');
+      await esperarEnviada(page, 'Foto 4');
+    }
+    await page.getByRole('button', { name: 'Continuar' }).click();
+  }
+  await page.getByLabel('Escolher arquivo de vídeo').setInputFiles(videoDeTeste());
+  await esperarEnviada(page, 'Vídeo de Prova');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  for (const [i, u] of unidades.entries()) {
+    if (u === 'AUSENTE') continue;
+    const grupo = page.getByRole('group', { name: new RegExp(`^Unidade ${i + 1}\\b`) });
+    if (u === 'BOM') {
+      await grupo.getByLabel('Estoque Bom').check();
+    } else {
+      await grupo.getByLabel('Estoque Problema').check();
+      await page.getByLabel(`Motivo da unidade ${i + 1}`).selectOption(u.problema);
+    }
+  }
+  await expect(page.getByText('Tudo pronto para concluir.')).toBeVisible();
+  await page.getByRole('button', { name: 'Concluir conferência' }).click();
+  await expect(page).toHaveURL(new RegExp(`/fluxo/devolucoes/${codigo}$`));
+}
 ```
 
 `tests/e2e/conferencia.spec.ts`:
@@ -8243,7 +8383,7 @@ import { asc, eq } from 'drizzle-orm';
 import { expect, test } from '@playwright/test';
 import { evidencias, itensDevolucao } from '../../src/db/schema';
 import { comBanco, entrarComo, paginaNaoEncontrada, semRolagemLateral } from './apoio';
-import { EAN_TESTE, esperarEnviada, fotoDeTeste, prepararConferencia, videoDeTeste } from './apoio-conferencia';
+import { conferirDevolucao, EAN_TESTE, esperarEnviada, fotoDeTeste, prepararConferencia, videoDeTeste } from './apoio-conferencia';
 import { USUARIOS_E2E } from './dados';
 
 test('conferência completa: fotos, EAN, unidade ausente, Vídeo de Prova, destino e conclusão', async ({ page }) => {
@@ -8356,6 +8496,24 @@ test('só quem está com a trava abre a conferência; o Fiscal nem vê a tela', 
   await page.context().clearCookies();
   await entrarComo(page, USUARIOS_E2E.fiscal);
   await paginaNaoEncontrada(page, `/fluxo/devolucoes/${d.codigo}/conferencia`);
+});
+
+test('conferirDevolucao (apoio das integrações das Fases 3 e 4) conclui pela tela', async ({ page }) => {
+  const d = await prepararConferencia({ unidades: 3 });
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await conferirDevolucao(page, d.codigo, ['BOM', { problema: 'AVARIADO' }, 'AUSENTE']);
+  const itens = await comBanco((db) =>
+    db
+      .select({ status: itensDevolucao.status, destino: itensDevolucao.destino, motivo: itensDevolucao.motivo })
+      .from(itensDevolucao)
+      .where(eq(itensDevolucao.devolucaoId, d.id))
+      .orderBy(asc(itensDevolucao.unidade)),
+  );
+  expect(itens).toEqual([
+    { status: 'AGUARDANDO_NF', destino: 'BOM', motivo: null },
+    { status: 'AGUARDANDO_NF', destino: 'PROBLEMA', motivo: 'AVARIADO' },
+    { status: 'AUSENTE', destino: null, motivo: 'AUSENTE' },
+  ]);
 });
 ```
 
@@ -10452,7 +10610,7 @@ Esperado: merge limpo ou com conflitos só nos arquivos permitidos pela regra do
 
 ```bash
 git checkout main -- package.json package-lock.json
-npm install --save-exact @tus/server@2.4.6 @tus/file-store@2.1.1 tus-js-client@4.3.1 idb-keyval@6.3.0 sharp@0.35.5 @aws-sdk/client-s3@3.1167.0 @aws-sdk/s3-request-presigner@3.1167.0
+npm install --save-exact @tus/server@2.4.6 @tus/file-store@2.1.1 tus-js-client@4.3.1 idb-keyval@6.3.0 sharp@0.35.5 @aws-sdk/client-s3@3.1161.0 @aws-sdk/s3-request-presigner@3.1161.0
 ```
 
 - **Arquivos congelados** (`src/db/schema/index.ts`, `devolucoes.ts`, `src/lib/env.ts`, scripts do `package.json`, `tests/e2e/global-setup.ts`, `apoio.ts`, `dados.ts`, `[codigo]/page.tsx`, `configuracoes/page.tsx`): fica a versão do `main`. Se a Fase 2 precisou mudar algum, a mudança tinha de ter ido antes ao `main` como emenda.

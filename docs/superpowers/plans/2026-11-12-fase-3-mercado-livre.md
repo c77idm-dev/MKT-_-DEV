@@ -71,7 +71,6 @@
   - `src/modules/mercado-livre/*` e `src/conectores/marketplace/mercadolivre/*`;
   - o **corpo** de `src/conectores/marketplace/registro.ts`;
   - `src/worker/manipuladores/mercado-livre.ts`;
-  - `src/modules/historico/rotulos/mercado-livre.ts`;
   - `src/modules/devolucoes/criar.ts` (dono na janela);
   - `src/app/(app)/contestacoes/**` e `src/app/(app)/configuracoes/mercado-livre/**`;
   - `src/app/(app)/fluxo/devolucoes/[codigo]/secoes/SecaoMercadoLivre.tsx`;
@@ -85,6 +84,7 @@
   - `dominio.ts`, `transicoes.ts` e `transicoes-item.ts`;
   - `NavAbas.tsx` e `permissoes.ts`;
   - `src/lib/env.ts`, `.env.example` e `.env.producao.example`;
+  - `src/modules/historico/rotulos/*.ts` (a Parte A já trouxe as chaves desta fase; contrato §10, E3) e `src/conectores/marketplace/tipos.ts`;
   - `package.json` (`scripts`);
   - `tests/e2e/global-setup.ts`, `apoio.ts` e `dados.ts`, e `tests/helpers/fabricas.ts`;
   - `[codigo]/page.tsx` e `detalhe.ts`;
@@ -123,22 +123,24 @@
 
 ## Nomes que este plano usa da Parte A (P2)
 
-O contrato fixa os nomes abaixo. Os marcados com **(nome suposto)** não estão escritos no contrato: confira no `main` e, se a P2 usou outro nome, troque só o import, sem mudar o comportamento.
+O contrato (§4.5, §4.7, §5 e §10, reconciliação de 2026-11-13) e a Parte A fixam todos os nomes abaixo. Não há mais nome suposto: se o `main` tiver outro nome, é erro da Parte A e vira emenda no `main`, não mudança aqui.
 
 | O quê | Nome | Onde |
 |---|---|---|
 | Fila | `obterFila()`, `definirFilaParaTestes(f)`, `class FilaMemoria` (campo `enviadas`), `type Fila`, `type OpcoesEnvio` | `@/modules/fila/fila` |
 | Tarefas | `CONFIG_TAREFAS`, `type NomeTarefa`, `type DadosTarefa` | `@/modules/fila/tarefas` |
-| Worker | `type ContextoTarefa = { db; fila; agora; tentativa }`, `type Manipuladores` | `src/worker/tipos.ts` |
-| Manipuladores do ML | `export const manipuladoresMercadoLivre: Manipuladores` **(nome suposto, padrão `manipuladores<Area>`)** | `src/worker/manipuladores/mercado-livre.ts` |
-| Armazenamento | `obterArmazenamento()` com `salvar`, `ler`, `urlTemporaria`, `existe` | `@/modules/midia/armazenamento` |
+| Fila: `chaveUnica` | vira o id **fixo** do job no pg-boss: um 2º envio com a mesma (tarefa, chave) é ignorado enquanto o job existir, **mesmo já concluído**. Reenvio legítimo = chave nova (contrato §5.1 e §10, E4) | `@/modules/fila/fila` |
+| Worker | `type ContextoTarefa = { db; fila; agora; tentativa }` (`tentativa` começa em **1**; a última é `CONFIG_TAREFAS[nome].tentativas`, 5), `type Manipuladores` | `src/worker/tipos.ts` |
+| Manipuladores do ML | `export const manipuladoresMercadoLivre: Manipuladores` (o `src/worker/index.ts` da P2 já o importa) | `src/worker/manipuladores/mercado-livre.ts` |
+| Armazenamento | `obterArmazenamento()` (onde gravar), `armazenamentoDoProvedor(provedor)` (onde está um arquivo já gravado: **use este para ler as evidências**, pela coluna `provedor`; contrato §10, E15), `provedorAtual()`; métodos `salvar`, `ler`, `urlTemporaria`, `existe` | `@/modules/midia/armazenamento` |
 | Conectores | `type MarketplaceConnector`, `DevolucaoExterna`, `ResultadoConferencia`, `MotivoCanal` | `@/conectores/marketplace/tipos` |
-| Registro | `obterConector(db, canal)`, `definirConectorParaTestes(canal, c)` | `@/conectores/marketplace/registro` |
-| Tabela `evidencias` | `evidencias` com `id, devolucaoId, itemId, tipo, tipoConteudo, caminho, provedor, tamanhoOriginal, tamanho, sha256Original, sha256Final, situacaoProcessamento, idCliente, enviadoEm, processadoEm` (camelCase de §4.1; `tamanhoOriginal`/`tamanho` supostos em `mode: 'number'`) | `@/db/schema` |
+| Registro | `obterConector(db, canal)`, `definirConectorParaTestes(canal, c)` (com `null`, **volta ao padrão**; contrato §10, E8) | `@/conectores/marketplace/registro` |
+| Tabela `evidencias` | `evidencias` com `id, devolucaoId, itemId, tipo, tipoConteudo, caminho, caminhoTemporario, provedor, tamanhoOriginal, tamanho, sha256Original, sha256Final, situacaoProcessamento, erroProcessamento, idCliente, enviadoPor, enviadoEm, processadoEm` (`tamanhoOriginal`/`tamanho` em `bigint(..., { mode: 'number' })`) | `@/db/schema` |
 | Colunas novas | `itensDevolucao.destino`, `.motivo`, `.observacao`, `.status`; `devolucoes.conferidaEm`, `.concluidaEm` | `@/db/schema` |
-| Vocabulário | `type MotivoItem`, `type DestinoItem` **(nomes de tipo supostos, derivados de `MOTIVOS_ITEM` e `DESTINOS_ITEM`)** | `@/modules/devolucoes/dominio` |
+| Vocabulário | `MOTIVOS_ITEM`, `type MotivoItem`, `ROTULO_MOTIVO`, `DESTINOS_ITEM`, `type DestinoItem`, `ROTULO_DESTINO` | `@/modules/devolucoes/dominio` |
+| Vocabulário das evidências | `TIPOS_EVIDENCIA`, `type TipoEvidencia`, `ROTULO_EVIDENCIA` ("Foto 1" a "Foto 4", "Vídeo de Prova", "Extra"), `ehFoto(t)` | `@/modules/midia/dominio` |
 | Histórico | `EntidadeHistorico` já com `'conta_marketplace'` e `'contestacao'` | `@/modules/historico/eventos` |
-| Rótulos do ML | objeto exportado por `src/modules/historico/rotulos/mercado-livre.ts` **(nome do export não fixado)** | idem |
+| Rótulos do ML | `ROTULOS_MERCADO_LIVRE`, já com **todas** as chaves deste plano, inclusive `ml_conta_desconectada`, `ml_resultado_sem_vinculo` e `ml_resultado_ok_recusado`. Arquivo **congelado** (contrato §10, E3) | `src/modules/historico/rotulos/mercado-livre.ts` |
 | Seção do detalhe | `SecaoMercadoLivre(props: { devolucaoId; codigo; status; usuario })`, componente de servidor async | `[codigo]/secoes/SecaoMercadoLivre.tsx` |
 | Variáveis | `lerEnv()` com `ML_CONECTOR`, `ML_CLIENT_ID`, `ML_CLIENT_SECRET`, `ML_REDIRECT_URI`, `ML_USAR_PKCE`, `CHAVE_CRIPTOGRAFIA` | `@/lib/env` |
 | Conferência (só a Tarefa 17) | `concluirConferencia(db, devolucaoId, usuario, agora?)` | `@/modules/conferencia/concluir` |
@@ -222,7 +224,6 @@ src/
     dominio.ts config.ts contas.ts fabrica-conector.ts conector.ts status.ts sincronizar.ts
     notificacoes.ts tarefas.ts resultado.ts contestacoes.ts selos.ts oauth-estado.ts conexao.ts consultas.ts
   modules/devolucoes/criar.ts              + origem API (contrato §5.5)
-  modules/historico/rotulos/mercado-livre.ts  + 3 chaves com prefixo ml_
   worker/manipuladores/mercado-livre.ts    manipuladores das 5 tarefas ml.*
   components/mercado-livre/BotaoConfirmar.tsx, Dado.tsx
   app/
@@ -247,7 +248,7 @@ tests/
 - Criar: `src/modules/mercado-livre/dominio.ts`
 - Modificar (substituir o `export {};` da P2): `src/db/schema/mercado-livre.ts`
 - Modificar: `src/db/schema/notificacoes.ts` (coluna `referencia_externa`)
-- Modificar (acrescentar 3 chaves): `src/modules/historico/rotulos/mercado-livre.ts`
+- Só conferir (congelado, contrato §10, E3): `src/modules/historico/rotulos/mercado-livre.ts` já traz as 3 chaves desta fase
 - Gerado: `drizzle/00NN_fase3_mercado_livre.sql`
 - Testes: `src/modules/mercado-livre/dominio.test.ts`, `src/modules/mercado-livre/tabelas.int.test.ts`
 
@@ -262,7 +263,7 @@ tests/
     - `LIMITE_SEM_SINCRONIZAR_MS`, `sincronizacaoAtrasada(ultima: Date | null, agora: Date): boolean`;
     - `rotuloStatusML(statusCanal: string | null): string`.
   - Tabelas `contasMarketplace`, `contestacoesCanal` e `reclamacoesMl`; enums `situacaoContaEnum` e `statusContestacaoEnum`; coluna `notificacoesRecebidas.referenciaExterna`.
-  - Chaves de histórico `ml_conta_desconectada`, `ml_resultado_sem_vinculo` e `ml_resultado_ok_recusado`.
+  - (as chaves de histórico `ml_conta_desconectada`, `ml_resultado_sem_vinculo` e `ml_resultado_ok_recusado` já vêm da Parte A, em `ROTULOS_MERCADO_LIVRE`).
 
 - [ ] **Passo 1: Escrever os testes que falham**
 
@@ -582,13 +583,13 @@ export const notificacoesRecebidas = pgTable(
 );
 ```
 
-Acrescente ao objeto exportado por `src/modules/historico/rotulos/mercado-livre.ts` (criado pela P2 com as chaves reservadas da §4.7; mantenha as que já estão lá) estas três chaves, com o prefixo da fase:
+Confira (sem editar: o arquivo é congelado, contrato §10, E3) que `ROTULOS_MERCADO_LIVRE`, em `src/modules/historico/rotulos/mercado-livre.ts`, já traz as três chaves que esta fase grava:
 
-```ts
-  ml_conta_desconectada: 'Conta do Mercado Livre desconectada',
-  ml_resultado_sem_vinculo: 'Resultado não enviado ao ML: devolução sem vínculo com o Mercado Livre',
-  ml_resultado_ok_recusado: 'O Mercado Livre recusou o resultado "OK"',
+```bash
+grep -n "ml_conta_desconectada\|ml_resultado_sem_vinculo\|ml_resultado_ok_recusado" src/modules/historico/rotulos/mercado-livre.ts
 ```
+
+Esperado: as 3 linhas. Se faltar alguma, pare e peça a emenda no `main`.
 
 - [ ] **Passo 4: Gerar e aplicar a migração**
 
@@ -607,7 +608,7 @@ Esperado: PASS (unitários 11, integração 4); `tsc` sem erros.
 
 ```bash
 cd "/c/Users/idmpc/devolucoes-wt/fase-3"
-git add src/modules/mercado-livre/dominio.ts src/modules/mercado-livre/dominio.test.ts src/modules/mercado-livre/tabelas.int.test.ts src/db/schema/mercado-livre.ts src/db/schema/notificacoes.ts src/modules/historico/rotulos/mercado-livre.ts drizzle
+git add src/modules/mercado-livre/dominio.ts src/modules/mercado-livre/dominio.test.ts src/modules/mercado-livre/tabelas.int.test.ts src/db/schema/mercado-livre.ts src/db/schema/notificacoes.ts drizzle
 git commit -m "feat: tabelas do Mercado Livre (contas, contestações, reclamações) e vocabulário" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -4598,7 +4599,9 @@ export async function aplicarReclamacao(db: DbOuTx, dados: DadosDevolucaoML, ago
     const status = await aplicarStatus(tx, alvo, d, agora);
     await gravarReclamacao(tx, dados, alvo.id, agora);
     if (acao === 'vinculada' && fila && DEPOIS_DA_CONFERENCIA.includes(status)) {
-      await fila.enviar('ml.enviar-resultado', { devolucaoId: alvo.id }, { tx, chaveUnica: alvo.id });
+      // Chave diferente da do fim da conferência (`devolucaoId`), que já foi usada e ficou só com o evento "sem vínculo"
+      // (contrato §10, E4). O vínculo acontece uma vez por devolução.
+      await fila.enviar('ml.enviar-resultado', { devolucaoId: alvo.id }, { tx, chaveUnica: `${alvo.id}:vinculo` });
     }
     return { acao, devolucaoId: alvo.id, codigo: alvo.codigo, status };
   });
@@ -4641,7 +4644,7 @@ git commit -m "feat: sincronização da reclamação do ML (cria, vincula D9, lo
 - Produz:
   - em `src/lib/limite-taxa.ts`: `type Limitador = { permitir(chave: string, agoraMs?: number): boolean; tamanho(): number }`, `criarLimitador(p: { maximo; janelaMs; maxChaves? }): Limitador`, `ipDaRequisicao(cabecalhos: Headers): string`;
   - no conector: `idReclamacaoDoRecurso(recurso: string | null): string | null`;
-  - em `src/modules/mercado-livre/notificacoes.ts`: `CANAL_NOTIFICACAO_ML = 'mercado_livre'`, `chaveTarefaReclamacao(id): string`, `receberNotificacaoML(db, fila, n: NotificacaoML): Promise<{ id: number; enfileirada: boolean }>`, `marcarNotificacoesProcessadas(db, reclamacaoId, agora): Promise<number>`;
+  - em `src/modules/mercado-livre/notificacoes.ts`: `CANAL_NOTIFICACAO_ML = 'mercado_livre'`, `chaveTarefaReclamacao(id, agora?): string` (`ml-reclamacao-{id}-{minuto}`), `receberNotificacaoML(db, fila, n: NotificacaoML): Promise<{ id: number; enfileirada: boolean }>`, `marcarNotificacoesProcessadas(db, reclamacaoId, agora): Promise<number>`;
   - em `src/modules/mercado-livre/tarefas.ts`:
     - `JANELA_INICIAL_MS` (30 dias), `SOBREPOSICAO_MS` (10 min);
     - `ehUltimaTentativa(nome: NomeTarefa, tentativa: number): boolean`;
@@ -4650,7 +4653,9 @@ git commit -m "feat: sincronização da reclamação do ML (cria, vincula D9, lo
     - `renovarTokensML(db, agora)`.
   - `manipuladoresMercadoLivre` com `ml.sincronizar-reclamacao`, `ml.varredura` e `ml.renovar-token`.
 
-> `ehUltimaTentativa` supõe que `ContextoTarefa.tentativa` começa em 1 e chega a `CONFIG_TAREFAS[nome].tentativas` (5) na última. Confira na P2. Se ela começar em 0, use `tentativa + 1`.
+> `ContextoTarefa.tentativa` começa em 1 e chega a `CONFIG_TAREFAS[nome].tentativas` (5) na última (Parte A, `executarTarefa`: `retryCount + 1`; contrato §10, E14).
+>
+> `chaveUnica` é o id fixo do job (contrato §10, E4): a mesma chave **nunca** roda duas vezes enquanto o job existir. Por isso a sincronização usa uma chave por reclamação **por minuto** (`chaveTarefaReclamacao(id, agora)`): o mesmo aviso repetido, ou aviso + varredura, no mesmo minuto não empilha, e um aviso novo depois disso sincroniza de novo.
 
 - [ ] **Passo 1: Escrever os testes que falham**
 
@@ -4758,7 +4763,11 @@ describe('receberNotificacaoML (spec §7.2)', () => {
       processadaEm: null,
     });
     expect(fila.enviadas).toEqual([
-      { nome: 'ml.sincronizar-reclamacao', dados: { claimId: '5292183123' }, opcoes: expect.objectContaining({ chaveUnica: 'ml-reclamacao-5292183123' }) },
+      {
+        nome: 'ml.sincronizar-reclamacao',
+        dados: { claimId: '5292183123' },
+        opcoes: expect.objectContaining({ chaveUnica: expect.stringMatching(/^ml-reclamacao-5292183123-\d+$/) }),
+      },
     ]);
   });
 
@@ -4970,9 +4979,13 @@ import type { Fila } from '@/modules/fila/fila';
 
 export const CANAL_NOTIFICACAO_ML = 'mercado_livre';
 
-/** Chave única na fila: o mesmo aviso repetido (ou aviso + varredura) não empilha tarefas iguais. */
-export function chaveTarefaReclamacao(reclamacaoId: string): string {
-  return `ml-reclamacao-${reclamacaoId}`;
+/**
+ * Chave única na fila. A chave é o id fixo do job (contrato §10, E4): sem o minuto, a reclamação só sincronizaria
+ * uma vez enquanto o job existisse. Com ele, o mesmo aviso repetido (ou aviso + varredura) no mesmo minuto não empilha,
+ * e um aviso novo depois disso sincroniza de novo.
+ */
+export function chaveTarefaReclamacao(reclamacaoId: string, agora: Date = new Date()): string {
+  return `ml-reclamacao-${reclamacaoId}-${Math.floor(agora.getTime() / 60_000)}`;
 }
 
 /**
@@ -5037,7 +5050,7 @@ import { aplicarReclamacao, type ResultadoAplicacao } from './sincronizar';
 export const JANELA_INICIAL_MS = 30 * 24 * 60 * 60 * 1000;
 export const SOBREPOSICAO_MS = 10 * 60 * 1000;
 
-/** `tentativa` começa em 1 (confirmar na P2); a última é a de número CONFIG_TAREFAS[nome].tentativas (spec §11: 5). */
+/** `tentativa` começa em 1 (Parte A); a última é a de número CONFIG_TAREFAS[nome].tentativas (spec §11: 5). */
 export function ehUltimaTentativa(nome: NomeTarefa, tentativa: number): boolean {
   return tentativa >= CONFIG_TAREFAS[nome].tentativas;
 }
@@ -5073,7 +5086,7 @@ export async function varrerReclamacoes(db: DbOuTx, fila: Fila, agora: Date): Pr
   let enfileiradas = 0;
   try {
     for await (const r of conector.reclamacoesAtualizadasDesde(desde)) {
-      await fila.enviar('ml.sincronizar-reclamacao', { claimId: r.reclamacaoId }, { chaveUnica: chaveTarefaReclamacao(r.reclamacaoId) });
+      await fila.enviar('ml.sincronizar-reclamacao', { claimId: r.reclamacaoId }, { chaveUnica: chaveTarefaReclamacao(r.reclamacaoId, agora) });
       enfileiradas += 1;
     }
   } catch (erro) {
@@ -5924,7 +5937,11 @@ describe('revisarEEnviar (o Gestor clica em "Enviar ao ML")', () => {
       revisadoPor: gestor.id,
     });
     expect(fila.enviadas).toEqual([
-      { nome: 'ml.enviar-contestacao', dados: { contestacaoId: c.id }, opcoes: expect.objectContaining({ chaveUnica: `ml-contestacao-${c.id}` }) },
+      {
+        nome: 'ml.enviar-contestacao',
+        dados: { contestacaoId: c.id },
+        opcoes: expect.objectContaining({ chaveUnica: expect.stringMatching(new RegExp(`^ml-contestacao-${c.id}-\\d+$`)) }),
+      },
     ]);
     expect(await acoes(d.id)).toContain('contestacao_revisada');
     expect((await listarContestacoes(db, 'AGUARDANDO_GESTOR', AGORA))[0].enviando).toBe(true);
@@ -6056,7 +6073,7 @@ import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import type { DadosSelo } from '@/modules/devolucoes/selos';
 import type { Fila } from '@/modules/fila/fila';
 import { registrarEvento } from '@/modules/historico/eventos';
-import { obterArmazenamento } from '@/modules/midia/armazenamento';
+import { armazenamentoDoProvedor, provedorAtual } from '@/modules/midia/armazenamento';
 import { obterConectorML } from './conector';
 import { ErroContaML } from './contas';
 import { ehMotivoCanal, MOTIVOS_COM_FOTO_OBRIGATORIA, ROTULO_MOTIVO_CANAL, type StatusContestacao } from './dominio';
@@ -6333,13 +6350,17 @@ export async function revisarEEnviar(db: DbOuTx, fila: Fila, id: string, e: Entr
       dados: { contestacaoId: id, motivo: dados.motivo, fotos: dados.evidencias.length, statusAnterior: c.status },
       em: agora,
     });
-    await fila.enviar('ml.enviar-contestacao', { contestacaoId: id }, { tx, chaveUnica: `ml-contestacao-${id}` });
+    // Uma chave por pedido de envio: depois de FALHOU o Gestor pode mandar de novo, e a chave antiga já foi usada
+    // (o id do job é fixo; contrato §10, E4). O `where` acima já impede dois pedidos ao mesmo tempo.
+    await fila.enviar('ml.enviar-contestacao', { contestacaoId: id }, { tx, chaveUnica: `ml-contestacao-${id}-${agora.getTime()}` });
   });
 }
 
-async function lerArquivo(caminho: string): Promise<Buffer> {
+/** Lê a foto de onde ela foi gravada (coluna `provedor`): depois da troca disco → S3 as antigas continuam no disco (D2, E15). */
+async function lerArquivo(foto: { caminho: string; provedor: string | null }): Promise<Buffer> {
   const partes: Buffer[] = [];
-  for await (const parte of await obterArmazenamento().ler(caminho)) partes.push(Buffer.isBuffer(parte) ? parte : Buffer.from(parte));
+  const origem = armazenamentoDoProvedor(foto.provedor ?? provedorAtual());
+  for await (const parte of await origem.ler(foto.caminho)) partes.push(Buffer.isBuffer(parte) ? parte : Buffer.from(parte));
   return Buffer.concat(partes);
 }
 
@@ -6394,7 +6415,7 @@ export async function enviarContestacao(db: DbOuTx, id: string, o: { agora: Date
     c.evidencias.length === 0
       ? []
       : await db
-          .select({ id: evidencias.id, caminho: evidencias.caminho, situacao: evidencias.situacaoProcessamento })
+          .select({ id: evidencias.id, caminho: evidencias.caminho, provedor: evidencias.provedor, situacao: evidencias.situacaoProcessamento })
           .from(evidencias)
           .where(inArray(evidencias.id, c.evidencias));
   if (fotos.some((f) => f.situacao === 'RECEBIDA' || f.situacao === 'PROCESSANDO')) {
@@ -6407,7 +6428,7 @@ export async function enviarContestacao(db: DbOuTx, id: string, o: { agora: Date
   for (const evidenciaId of c.evidencias) {
     const foto = fotos.find((f) => f.id === evidenciaId);
     if (!foto || foto.situacao !== 'PRONTA' || !foto.caminho) continue;
-    const conteudo = await lerArquivo(foto.caminho);
+    const conteudo = await lerArquivo({ caminho: foto.caminho, provedor: foto.provedor });
     if (conteudo.length > LIMITE_FOTO_ML_BYTES) continue;
     anexos.push({ nome: `${c.codigo}-${anexos.length + 1}.jpg`, conteudo, tipoConteudo: 'image/jpeg' });
   }
@@ -8352,7 +8373,6 @@ Se houver conflito, resolva assim:
   - `src/modules/devolucoes/criar.ts`;
   - `src/conectores/marketplace/registro.ts`;
   - `src/worker/manipuladores/mercado-livre.ts`;
-  - `src/modules/historico/rotulos/mercado-livre.ts`;
   - `src/app/(app)/contestacoes/**` e `src/app/(app)/configuracoes/mercado-livre/**`;
   - `secoes/SecaoMercadoLivre.tsx`;
   - `src/db/schema/mercado-livre.ts` e `notificacoes.ts`.

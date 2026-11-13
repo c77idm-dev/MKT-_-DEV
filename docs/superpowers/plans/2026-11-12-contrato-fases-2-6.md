@@ -47,7 +47,7 @@ Fica no plano da Fase 2 como **"Parte A (main)"**: é executada, revisada e merg
 1. **Migração `0006_fundacao`** com o modelo da §4.1 (colunas novas em `devolucoes` e `itens_devolucao`, tabelas `evidencias` e `configuracoes`, enums novos).
 2. **Arquivos de schema vazios** (`export {};`) para as fases seguintes: `src/db/schema/mercado-livre.ts`, `fiscal.ts`, `lotes.ts`, e as linhas `export * from` de todos eles (e de `evidencias.ts` e `configuracoes.ts`) no `src/db/schema/index.ts`.
 3. **Vocabulário** (§4.5), `src/modules/devolucoes/transicoes-item.ts` (§4.6) e o histórico (§4.7: entidades novas e os arquivos de rótulos já preenchidos).
-4. **Fila e worker** (§5.1): `pg-boss@12.38.2`, `src/modules/fila/`, `src/worker/`, `scripts/worker.ts`, script `npm run worker`, `build:scripts` gera também `dist/worker.mjs`; `/saude` também confere a fila.
+4. **Fila e worker** (§5.1): `pg-boss@12.38.0` (§10, E6), `src/modules/fila/`, `src/worker/`, `scripts/worker.ts`, script `npm run worker`, `build:scripts` gera também `dist/worker.mjs`; `/saude` também confere a fila.
 5. **Armazenamento** (§5.2): interface, disco, memória e a rota `src/app/api/arquivos/route.ts` (links temporários do modo disco).
 6. **Conectores** (§5.3): tipos de `MarketplaceConnector` e `registro.ts` que devolve `null`.
 7. `src/modules/configuracoes/ler.ts`: `lerConfiguracao(db)` (§5.6).
@@ -55,8 +55,9 @@ Fica no plano da Fase 2 como **"Parte A (main)"**: é executada, revisada e merg
 9. **Esqueletos de tela** (cada um vira de uma fase só):
    - detalhe da devolução: `src/app/(app)/fluxo/devolucoes/[codigo]/secoes/{SecaoConferencia,SecaoMercadoLivre,SecaoFiscal,SecaoLote}.tsx`, componentes de servidor assíncronos com `props: { devolucaoId: string; codigo: string; status: StatusDevolucao; usuario: UsuarioSessao }`, que devolvem `null`. A página os chama nessa ordem, entre "Itens" e "Histórico". Cada seção busca os próprios dados.
    - Configurações: cartões para `/configuracoes/conferencia` ("Conferência e mídias"), `/configuracoes/mercado-livre`, `/configuracoes/fiscal` e `/configuracoes/falhas`, cada um com uma página `EmBreve`.
+   - `src/components/EtapasCelular.tsx` ganha a prop opcional `conteudoEtapa?: Partial<Record<number, ReactNode>>`, mostrada no **topo** da etapa escolhida (logo abaixo do título, antes dos cartões). A Fase 4 a usa na etapa 4 (§10, E5).
 10. **Testes:** `vitest.int.config.mts` ganha `setupFiles: ['tests/setup/int-setup.ts']`, que instala os falsos por padrão (fila em memória, armazenamento em memória, conectores `null`). O `tests/e2e/global-setup.ts` sobe o worker (`node --import tsx scripts/worker.ts`, com o banco de testes e os falsos) e devolve a função que o encerra.
-11. **Docker:** serviço `worker` no `docker-compose.prod.yml` (mesma imagem, `command: ["node", "dist/worker.mjs"]`, sem migrar, `memory: 1g`). `package.json`: `"engines": { "node": ">=24" }`. `globals.css`: estilo de `focus-visible` (pendência anterior às telas de celular).
+11. **Docker:** serviço `worker` no `docker-compose.prod.yml` (mesma imagem, `command: ["node", "dist/worker.mjs"]`, sem migrar, `memory: 1g`). `package.json`: `"engines": { "node": ">=24" }`. `globals.css`: só **conferir** o `:focus-visible` (já existe desde a Fase 1; §10, E7).
 
 ## 3. Dono de cada arquivo compartilhado (uma regra por arquivo)
 
@@ -67,7 +68,7 @@ Fica no plano da Fase 2 como **"Parte A (main)"**: é executada, revisada e merg
 | `src/db/schema/index.ts` | Congelado depois da P2: a P2 já exporta todos os arquivos de schema (os das fases seguintes nascem vazios). Cada fase escreve **só no próprio arquivo**: 2 → `evidencias.ts`, 3 → `mercado-livre.ts`, 4 → `fiscal.ts`, 5 → `lotes.ts`. |
 | `src/db/schema/devolucoes.ts`, `catalogo.ts`, `auth.ts` | Congelados na janela (as colunas das Fases 2 a 4 entram na P2). A Fase 5 acrescenta `lote_id` e `resultado_fornecedor` (já fora da janela). `notificacoes.ts`: dono a Fase 3. |
 | Numeração das migrações | A P2 cria a 0006. Na branch, cada fase gera migrações à vontade; **antes do merge** elas são descartadas e regeneradas numa só, na ordem fixa 2 → 3 → 4 (procedimento abaixo). Nenhuma fase acrescenta valor a um enum que já existe. |
-| `ROTULO_ACAO` (`src/modules/historico/eventos.ts`) | Vira a junção de `src/modules/historico/rotulos/{base,conferencia,mercado-livre,fiscal,lotes,acabamento}.ts`. A P2 cria os arquivos já com as chaves reservadas da §4.7. Cada fase só edita o próprio arquivo, e chave nova usa o prefixo da fase. |
+| `ROTULO_ACAO` (`src/modules/historico/eventos.ts`) | Vira a junção de `src/modules/historico/rotulos/{base,conferencia,mercado-livre,fiscal,lotes,acabamento}.ts`. A P2 cria os arquivos já com as chaves reservadas da §4.7, que incluem todas as chaves usadas pelos planos das Fases 2, 3 e 4. Depois da P2 os seis arquivos ficam **congelados**: chave nova = emenda no `main`, com o prefixo da fase (§10, E3). |
 | `STATUS_*` e `REGRAS_TRANSICAO` (`dominio.ts`, `transicoes.ts`) | Congelados: os status das devoluções e dos itens já estão completos, e a tabela da §5.2 da spec já está toda em `REGRAS_TRANSICAO`. As transições dos itens nascem completas na P2 (`transicoes-item.ts`). Cada fase só **usa** as linhas que são dela (§4.6). |
 | `NavAbas.tsx`, `ABAS`/`MATRIZ` (`permissoes.ts`) | Congelados: as 5 abas e as 5 ações da spec §6.9 já existem. As fases trocam só a página atrás da aba: `/contestacoes/page.tsx` é da 3, `/lotes/page.tsx` da 5. |
 | `tests/e2e/global-setup.ts`, `apoio.ts`, `dados.ts` | Congelados depois da P1/P2. Os dados de cada spec são criados no próprio spec, com `tests/helpers/fabricas-<area>.ts` e `tests/e2e/apoio-<area>.ts` da fase (`conferencia`, `ml`, `fiscal`, `lotes`). `tests/helpers/fabricas.ts` também fica congelado. |
@@ -82,8 +83,8 @@ Fica no plano da Fase 2 como **"Parte A (main)"**: é executada, revisada e merg
 | `src/components/*` existentes, `globals.css`, `layout.tsx`, `manifest.ts` | Somente leitura na janela, exceto `manifest.ts` e o service worker, que são da Fase 2 (modo offline). Componentes novos vão em `src/components/<area>/`. |
 | `README.md` | Só quem integra edita, depois de cada merge. |
 
-**Variáveis de ambiente (todas na P2; em produção, `falso` é recusado pelo `lerEnv`):**
-`PORTA_E2E` · mídia (2): `ARMAZENAMENTO` (`disco` ou `s3`), `MIDIA_DIR` (padrão `.dados/midia`), `MIDIA_TMP_DIR` (padrão `.dados/tmp`), `SEGREDO_LINKS`, `S3_ENDPOINT`, `S3_REGIAO`, `S3_BUCKET`, `S3_CHAVE_ID`, `S3_CHAVE_SECRETA`, `FFMPEG_PATH`, `FFPROBE_PATH` · ML (3): `ML_CONECTOR` (`api` ou `falso`), `ML_CLIENT_ID`, `ML_CLIENT_SECRET`, `ML_REDIRECT_URI`, `ML_USAR_PKCE`, `CHAVE_CRIPTOGRAFIA` (32 bytes em base64, AES-256-GCM) · Focus (4): `EMISSOR_NFE` (`focus` ou `falso`), `FOCUS_TOKEN_HOMOLOGACAO`, `FOCUS_TOKEN_PRODUCAO`. Em desenvolvimento, `.env.example` traz `ML_CONECTOR=falso`, `EMISSOR_NFE=falso` e `ARMAZENAMENTO=disco`.
+**Variáveis de ambiente (todas na P2; com `NODE_ENV=production`, `falso` é recusado pelo `lerEnv`, a menos que `PERMITIR_FALSOS=1`; §10, E1):**
+`PORTA_E2E` · `PERMITIR_FALSOS` (`1` libera os falsos num build de produção; só o `webServer.env` do `playwright.config.ts` e o worker do e2e definem; nunca no `.env` nem na VPS) · mídia (2): `ARMAZENAMENTO` (`disco` ou `s3`), `MIDIA_DIR` (padrão `.dados/midia`), `MIDIA_TMP_DIR` (padrão `.dados/tmp`), `SEGREDO_LINKS`, `S3_ENDPOINT`, `S3_REGIAO`, `S3_BUCKET`, `S3_CHAVE_ID`, `S3_CHAVE_SECRETA`, `FFMPEG_PATH`, `FFPROBE_PATH` · ML (3): `ML_CONECTOR` (`api` ou `falso`), `ML_CLIENT_ID`, `ML_CLIENT_SECRET`, `ML_REDIRECT_URI`, `ML_USAR_PKCE`, `CHAVE_CRIPTOGRAFIA` (32 bytes em base64, AES-256-GCM) · Focus (4): `EMISSOR_NFE` (`focus` ou `falso`), `FOCUS_TOKEN_HOMOLOGACAO`, `FOCUS_TOKEN_PRODUCAO`. Em desenvolvimento, `.env.example` traz `ML_CONECTOR=falso`, `EMISSOR_NFE=falso` e `ARMAZENAMENTO=disco`.
 
 **Procedimento das migrações antes do merge** (na worktree da fase, Git Bash):
 ```bash
@@ -227,9 +228,11 @@ notas_fiscais        lote_id ganha a FK → lotes
 Tipo do lote → tipo da NF: CONSERTO → REMESSA_CONSERTO; TROCA e GARANTIA → REMESSA_TROCA_GARANTIA. A lista consolidada (PDF e Excel) é gerada na hora, sem tabela.
 
 ### 4.5 Vocabulário (arquivos de domínio e rótulos de tela)
-- P2, `src/modules/devolucoes/dominio.ts`: `DESTINOS_ITEM` (rótulos **"Estoque Bom"**, **"Estoque Problema"**) e `MOTIVOS_ITEM` (Avariado, Usado, Divergente, Incompleto, Com defeito, Ausente, Outro).
-- P2, `src/modules/midia/dominio.ts`: `TIPOS_EVIDENCIA` com rótulos **"Foto 1"**, **"Foto 2"**, **"Foto 3"**, **"Foto 4"**, **"Vídeo de Prova"**, "Extra" (os nomes do PDF); `SITUACOES_PROCESSAMENTO`.
-- P2, `src/modules/configuracoes/dominio.ts`: `VIDEO_OBRIGATORIO`, `REGIMES_TRIBUTARIOS`, `AMBIENTES_NFE`.
+- P2, `src/modules/devolucoes/dominio.ts`: `DESTINOS_ITEM`, `type DestinoItem`, `ROTULO_DESTINO` (**"Estoque Bom"**, **"Estoque Problema"**) e `MOTIVOS_ITEM`, `type MotivoItem`, `ROTULO_MOTIVO` (Avariado, Usado, Divergente, Incompleto, Com defeito, Ausente, Outro).
+- P2, `src/modules/midia/dominio.ts`: `TIPOS_EVIDENCIA`, `type TipoEvidencia`, `ROTULO_EVIDENCIA` (**"Foto 1"**, **"Foto 2"**, **"Foto 3"**, **"Foto 4"**, **"Vídeo de Prova"**, "Extra": os nomes do PDF); `SITUACOES_PROCESSAMENTO`, `type SituacaoProcessamento`.
+- P2, `src/modules/configuracoes/dominio.ts`: `VIDEO_OBRIGATORIO`, `REGIMES_TRIBUTARIOS` + `type RegimeTributario` + `ROTULO_REGIME`, `AMBIENTES_NFE` + `type AmbienteNfe` + `ROTULO_AMBIENTE` ("Homologação (sem valor fiscal)", "Produção"). Os enums do schema: `destinoItemEnum`, `motivoItemEnum`, `tipoEvidenciaEnum`, `situacaoProcessamentoEnum`, `videoObrigatorioEnum`, `regimeTributarioEnum`, `ambienteNfeEnum` (este em `src/db/schema/configuracoes.ts`; a Fase 4 importa dali para `notas_fiscais.ambiente`).
+- P2, `src/modules/configuracoes/ler.ts`: `type Configuracao` = a linha de `configuracoes` em camelCase (`razaoSocial`, `cnpj`, `ie`, `logradouro`, `numero`, `complemento`, `bairro`, `cidade`, `uf`, `cep`, `regimeTributario`, `serieNfe`, `ambienteNfe`, `videoObrigatorio`, `mesesRetencaoMidia`, `atualizadoPor`, `atualizadoEm`), `CONFIGURACAO_PADRAO`, `lerConfiguracao(db)`.
+- Nenhuma fase redefine estes nomes: reexporta ou importa (§10, E2).
 - 3: `src/modules/mercado-livre/dominio.ts` · 4: `src/modules/fiscal/dominio.ts` · 5: `src/modules/lotes/dominio.ts`.
 
 ### 4.6 Status e transições
@@ -264,8 +267,9 @@ Tipo do lote → tipo da NF: CONSERTO → REMESSA_CONSERTO; TROCA e GARANTIA →
 - Chaves reservadas (a P2 cria todas com o rótulo; chave nova só com o prefixo da fase):
   - `base.ts`: as atuais, mais `item_status` ("Status do item alterado"), `concluida` ("Devolução concluída"), `configuracao_alterada` ("Configuração alterada").
   - `conferencia.ts` (2): `conferencia_iniciada`, `conferencia_interrompida`, `conferencia_trava_liberada`, `conferencia_concluida`, `item_conferido`, `evidencia_enviada`, `evidencia_processada`, `evidencia_refeita`, `evidencia_falhou`.
-  - `mercado-livre.ts` (3): `ml_vinculada`, `ml_status_atualizado`, `ml_entregue`, `ml_no_cd`, `ml_reenviada_ao_vendedor`, `ml_status_apos_chegada`, `ml_resultado_ok_enviado`, `ml_conta_conectada`, `ml_conta_reconectar`, `contestacao_criada`, `contestacao_revisada`, `contestacao_enviada`, `contestacao_falhou`.
-  - `fiscal.ts` (4): `nf_solicitada`, `nf_autorizada`, `nf_rejeitada`, `nf_reenviada`, `nf_cancelada`, `nota_venda_anexada`, `nota_venda_obtida_ml`, `devolucao_reaberta`.
+  - `mercado-livre.ts` (3): `ml_vinculada`, `ml_status_atualizado`, `ml_entregue`, `ml_no_cd`, `ml_reenviada_ao_vendedor`, `ml_status_apos_chegada`, `ml_resultado_ok_enviado`, `ml_resultado_ok_recusado`, `ml_resultado_sem_vinculo`, `ml_conta_conectada`, `ml_conta_reconectar`, `ml_conta_desconectada`, `contestacao_criada`, `contestacao_revisada`, `contestacao_enviada`, `contestacao_falhou`.
+  - `fiscal.ts` (4): `nf_solicitada`, `nf_autorizada`, `nf_rejeitada`, `nf_reenviada`, `nf_cancelada`, `nf_item_escolhido`, `nota_venda_anexada`, `nota_venda_obtida_ml`, `nota_venda_removida`, `devolucao_reaberta`.
+  - Nomes dos exports (um por arquivo, `Record<string, string>`): `ROTULOS_BASE`, `ROTULOS_CONFERENCIA`, `ROTULOS_MERCADO_LIVRE`, `ROTULOS_FISCAL`, `ROTULOS_LOTES`, `ROTULOS_ACABAMENTO`. `ROTULO_ACAO` (em `eventos.ts`) é a junção deles.
   - `lotes.ts` (5): `lote_criado`, `lote_item_incluido`, `lote_item_movido`, `lote_fechado`, `lote_reaberto`, `lote_enviado`, `lote_resultado_registrado`, `lote_finalizado`.
   - `acabamento.ts` (6): `midia_apagada_retencao`, `tarefa_reenviada`.
 
@@ -304,12 +308,18 @@ export interface Fila {
 export function obterFila(): Fila;                       // pg-boss; cria as filas de CONFIG_TAREFAS (idempotente)
 export function definirFilaParaTestes(f: Fila | null): void;
 export class FilaMemoria implements Fila { readonly enviadas: { nome: NomeTarefa; dados: unknown; opcoes?: OpcoesEnvio }[] }
+// FilaMemoria: um item por envio, na ordem; sem `opcoes`, o item não tem a chave `opcoes`. Não deduplica por chaveUnica.
+// chaveUnica (E4): vira o id fixo do job no pg-boss (idDoJob(nome, chave)). Um 2º envio com a mesma (tarefa, chave) é
+// ignorado ENQUANTO o job existir, inclusive depois de concluído (o pg-boss só apaga o job dias depois).
+// Use-a só para "uma vez por evento"; um reenvio legítimo (outra rodada, outro pedido do usuário) usa uma chave nova.
 
 // src/worker/tipos.ts
-export type ContextoTarefa = { db: Db; fila: Fila; agora: Date; tentativa: number };
+export type ContextoTarefa = { db: Db; fila: Fila; agora: Date; tentativa: number };   // tentativa começa em 1; a última é CONFIG_TAREFAS[nome].tentativas (5)
 export type Manipulador<N extends NomeTarefa> = (dados: DadosTarefa[N], ctx: ContextoTarefa) => Promise<void>;
 export type Manipuladores = { [N in NomeTarefa]?: Manipulador<N> };
 // src/worker/manipuladores/{midia,mercado-livre,fiscal,lotes,acabamento}.ts: `export const manipuladores<Area>: Manipuladores = {}`
+//   nomes exatos: manipuladoresMidia, manipuladoresMercadoLivre, manipuladoresFiscal, manipuladoresLotes, manipuladoresAcabamento
+//   (o src/worker/index.ts da P2 já importa os cinco; a fase só troca o objeto do próprio arquivo)
 ```
 - Cada fase só preenche o seu arquivo de manipuladores; o `src/worker/index.ts` (P2) junta todos, chama `work()` para quem tem manipulador e agenda as tarefas com `agenda`.
 - **Manipulador idempotente:** pode rodar duas vezes; se a entidade não existe mais (ex.: banco de testes esvaziado), termina sem erro. Lançar exceção = nova tentativa. Erro definitivo de negócio (ex.: SEFAZ rejeitou) não lança: grava o resultado no domínio.
@@ -325,10 +335,14 @@ export interface ArmazenamentoArquivos {
   apagar(caminho: string): Promise<void>;
   existe(caminho: string): Promise<boolean>;
 }
-export function obterArmazenamento(): ArmazenamentoArquivos;            // conforme ARMAZENAMENTO
+export function obterArmazenamento(): ArmazenamentoArquivos;            // conforme ARMAZENAMENTO (onde gravar arquivo novo)
+export function armazenamentoDoProvedor(provedor: string): ArmazenamentoArquivos; // onde está um arquivo já gravado (coluna `provedor`)
+export function provedorAtual(): ProvedorArmazenamento;                // 'disco' | 's3' | 'memoria' (este nos testes); grave-o em `provedor`
 export function definirArmazenamentoParaTestes(a: ArmazenamentoArquivos | null): void;
 // P2: ArmazenamentoDisco (MIDIA_DIR; link = /api/arquivos?c=&exp=&sig=, HMAC com SEGREDO_LINKS e sessão exigida)
-//     e ArmazenamentoMemoria (testes). Fase 2: ArmazenamentoS3 (B2 ou R2, @aws-sdk/client-s3 3.1167.0).
+//     e ArmazenamentoMemoria (testes). Fase 2: ArmazenamentoS3 (B2 ou R2, @aws-sdk/client-s3 3.1161.0; §10, E6).
+// Ler uma evidência (ex.: as fotos da contestação, Fase 3): armazenamentoDoProvedor(e.provedor).ler(e.caminho), nunca
+// obterArmazenamento(), para a troca disco → S3 não quebrar os arquivos antigos (D2).
 ```
 Chaves: `evidencias/{devolucaoId}/{evidenciaId}.{jpg|mp4}` (2), `notas-venda/{devolucaoId}/{notaVendaId}.xml` (4), `nfe/{aaaa}/{mm}/{notaFiscalId}.xml`, `...-danfe.pdf`, `...-cancelamento.xml` (4 e 5). O upload em andamento (tus) fica fora da interface, em `MIDIA_TMP_DIR`.
 
@@ -352,14 +366,18 @@ export type ResultadoConferencia =
 export interface MarketplaceConnector {
   canal: Canal;
   listarAtualizadasDesde(desde: Date): AsyncIterable<DevolucaoExterna>;
-  obter(idExterno: string): Promise<DevolucaoExterna>;
-  enviarResultadoConferencia(idExterno: string, r: ResultadoConferencia): Promise<void>;
+  obter(idExterno: string): Promise<DevolucaoExterna>;          // ML: idExterno = claim_id (o aviso traz a reclamação)
+  enviarResultadoConferencia(idExterno: string, r: ResultadoConferencia): Promise<void>; // ML: idExterno = return_id (= devolucaoExternaId)
   obterXmlNotaVenda(pedidoExterno: string): Promise<string | null>;   // null = o canal não tem a nota
 }
 // src/conectores/marketplace/registro.ts (P2 devolve null; a Fase 3 troca o corpo)
 export function obterConector(db: DbOuTx, canal: Canal): Promise<MarketplaceConnector | null>; // null sem integração ou sem conta ATIVA
 export function definirConectorParaTestes(canal: Canal, c: MarketplaceConnector | null): void;
+// com um conector: ele substitui o real; com null: VOLTA AO PADRÃO (P2: null; depois da Fase 3: o real, null sem conta ATIVA).
+// O tests/setup/int-setup.ts chama com null para todos os canais antes de cada teste (E8).
 ```
+- **Extensão por canal (E9):** o que só o ML tem (status e subtipo da reclamação, varredura por `last_updated`, `sellerId`) fica numa interface da Fase 3 que **estende** a da P2, na pasta do canal: `interface ConectorMercadoLivre extends MarketplaceConnector` em `src/conectores/marketplace/mercadolivre/tipos.ts`, com o guarda `ehConectorML(c): c is ConectorMercadoLivre` e `obterConectorML(db)` (`src/modules/mercado-livre/conector.ts`). O registro continua devolvendo `MarketplaceConnector`; ninguém mexe em `tipos.ts` da P2.
+- **Fixtures do ML (E12):** `tests/fixtures/ml/doc/` = respostas copiadas ou montadas a partir dos exemplos da documentação oficial (testes do mapeamento puro); `tests/fixtures/ml-falso/` = cenários do conector falso (dev, e2e), montados a partir delas.
 
 | Serviço | Interface | Real (ligado no fim) | Falso (dev, testes, e2e) | Variável |
 |---|---|---|---|---|
@@ -419,8 +437,10 @@ export interface EmissorNFe {
   cancelar(referencia: string, justificativa: string): Promise<SituacaoNota>;   // justificativa de 15 a 255 caracteres
   baixar(url: string): Promise<Buffer>;                                         // XML e DANFE
 }
+// as duas funções abaixo moram em src/conectores/nfe/registro.ts (como o registro dos marketplaces) e o tipos.ts as
+// reexporta; importe de '@/conectores/nfe/registro' (E10)
 export function obterEmissorNFe(ambiente: AmbienteNfe): EmissorNFe;           // token do ambiente; EMISSOR_NFE
-export function definirEmissorParaTestes(e: EmissorNFe | null): void;
+export function definirEmissorParaTestes(e: EmissorNFe | null): void;         // null = volta ao padrão (EMISSOR_NFE)
 
 export type NotaParaEmissao = {
   referencia: string; tipo: TipoNota; naturezaOperacao: string;
@@ -512,6 +532,7 @@ Ordem: **P → (2, 3, 4 em paralelo) → merge 2 → merge 3 → merge 4 → Fas
    - **Fase 3** (já com a 2 no `main`): conferência real de uma devolução que veio do ML falso → todos BOM → "OK" enviado; com PROBLEMA → contestação AGUARDANDO_GESTOR com as Fotos → "Enviar ao ML".
    - **Fase 4** (já com 2 e 3): recebimento → conferência → Estoque Bom e Estoque Problema → Emitir NF de devolução (emissor falso) → CONCLUIDA; NF de venda buscada no ML falso; rejeição → corrigir e reenviar; cancelamento.
    - **Fase 5**: a mesma jornada até o lote → fechar → NF de remessa → lista consolidada → envio → resultado → FINALIZADO (o e2e completo da spec §12).
+   - **Conferência pela tela (E11):** a Fase 2 exporta `conferirDevolucao(page, codigo, unidades)` em `tests/e2e/apoio-conferencia.ts` (dona: Fase 2). Com a Fase 2 já no `main`, as tarefas "Integração" das Fases 3 e 4 podem usá-lo no e2e. O caminho por serviço (`iniciarConferencia` de `src/modules/conferencia/trava.ts` + `concluirConferencia`) continua valendo como alternativa.
 
 **No `main`, depois de cada merge (`git merge --no-ff`):** recriar `devolucoes_test`, rodar a suíte inteira, `npm run db:migrar` no banco `devolucoes`, apagar a worktree (`git worktree remove`) e os bancos `_fN` da fase. As worktrees que ainda estão abertas fazem `git merge main` logo em seguida, para pegar conflitos cedo.
 
@@ -530,10 +551,10 @@ Ordem: **P → (2, 3, 4 em paralelo) → merge 2 → merge 3 → merge 4 → Fas
 - **D11.** Até a Fase 5, item PROBLEMA continua AGUARDANDO_NF depois da NF autorizada (porta "sem lotes"); a 5 aloca os pendentes.
 - **D12.** NF-e por consulta periódica (`nfe.consultar` com espera crescente: 10 s, 30 s, 1 min, 2 min, 5 min, depois a cada 10 min), sem webhook da Focus. `ref` = id da nota sem hífens. Série e numeração ficam no cadastro da empresa na Focus; o sistema confere a série que volta.
 - **D13.** As regras fiscais não nascem gravadas: o formulário (Gestor, em Configurações) já vem com os CFOP sugeridos da §8.3, e a emissão é recusada até a regra ser salva (spec §8.2).
-- **D14.** Item da devolução ↔ item da NF de venda: pelo código do produto (= SKU), depois pelo EAN; se nada casar, o Fiscal escolhe.
+- **D14.** Item da devolução ↔ item da NF de venda: pelo código do produto (= SKU), depois pelo EAN; se nada casar, o Fiscal escolhe. A escolha fica no próprio `notas_venda.itens[]` (campo `itensDevolucaoIds` dentro do jsonb), sem coluna nova (§10, E13).
 - **D15.** `validade` é texto livre, como está impresso.
 - **D16.** A divisão Estoque Bom / Estoque Problema da coluna 4 é da Fase 4 (spec §6.4), e não da 2.
-- **D17.** Os falsos (ML, Focus e armazenamento em memória) ficam em `src/`, e `lerEnv` recusa `falso` em produção.
+- **D17.** Os falsos (ML, Focus e armazenamento em memória) ficam em `src/`, e `lerEnv` recusa `falso` com `NODE_ENV=production`, a menos que `PERMITIR_FALSOS=1` (só o e2e define; §10, E1).
 
 ## 9. Perguntas que estavam em aberto (decididas)
 
@@ -541,3 +562,31 @@ O usuário já tinha decidido as duas: "constroi ele inteiro e deixa para conect
 
 1. **Contas reais só no fim: SIM.** As Fases 3, 4 e 5 terminam com os falsos, montados a partir da documentação oficial. Uma etapa **"Ligação das contas reais"**, antes da Fase 6, cumpre os critérios de pronto da spec §14 que dependem de contas reais: devolução real do ML e NF autorizada em homologação. Essa etapa também ajusta o mapeamento do ML às respostas reais do teste §7.6. Os conectores devem isolar o mapeamento (funções puras sobre o JSON de entrada), para esse ajuste ficar barato.
 2. **Mídia antes do B2: disco só para teste.** A Fase 2 vai para a VPS com `ARMAZENAMENTO=disco`, só para teste na bancada. O uso diário começa quando a conta B2 (ou R2) for ligada, na mesma etapa de ligação das contas. A tela de Configurações mostra um aviso quando o provedor é `disco` em produção.
+
+## 10. Emendas (reconciliação de 2026-11-13)
+
+Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O que as Fases 3 e 4 precisavam e faltava entrou na Parte A, porque os arquivos compartilhados congelam depois dela. Cada linha diz o que mudou e por quê.
+
+- **E1. `PERMITIR_FALSOS=1`.** O `lerEnv` recusa `ML_CONECTOR=falso` e `EMISSOR_NFE=falso` quando `NODE_ENV=production` e `PERMITIR_FALSOS !== '1'`. Só o `AMBIENTE_E2E` (`tests/e2e/dados.ts`), usado no `webServer.env` do Playwright e no worker do e2e, define a variável. Motivo: o e2e roda `next build && next start` (`NODE_ENV=production`); a regra antiga, "produção sem `PORTA_E2E`", liberava os falsos em qualquer servidor que tivesse um `PORTA_E2E` esquecido. A exigência de `SEGREDO_LINKS` com 32 caracteres em produção continua valendo também no e2e.
+- **E2. Um nome só para cada vocabulário da P2** (`ROTULO_DESTINO`, `ROTULO_MOTIVO`, `ROTULO_EVIDENCIA`, `ROTULO_REGIME`, `ROTULO_AMBIENTE`, `DestinoItem`, `MotivoItem`, `TipoEvidencia`, `Configuracao`, `ambienteNfeEnum`; lista na §4.5). A Fase 4 reexporta `ROTULO_REGIME`/`ROTULO_AMBIENTE` em vez de redefinir, e `DestinoEstoque` vira apelido de `DestinoItem`. O rótulo da homologação passa a ser "Homologação (sem valor fiscal)" na P2, o texto que a tela da Fase 4 usa. Motivo: as Fases 3 e 4 redefiniam ou supunham esses nomes.
+- **E3. Rótulos do histórico preenchidos e congelados na P2.** Entram as chaves que os planos usavam e a P2 não tinha: `ml_resultado_ok_recusado`, `ml_resultado_sem_vinculo` e `ml_conta_desconectada` (Fase 3), e `nf_item_escolhido` e `nota_venda_removida` (Fase 4). Os nomes dos exports são `ROTULOS_<AREA>`. As Fases 3 e 4 não editam mais `rotulos/*.ts`. Motivo: o arquivo congela depois da P2.
+- **E4. `chaveUnica` = id fixo do job no pg-boss** (decisão 2 da Parte A). Um 2º envio com a mesma chave é ignorado enquanto o job existir, mesmo já concluído (§5.1). Motivo: as Fases 3 e 4 usavam a chave como "não empilhar enquanto está na fila" e perderiam reenvios legítimos. Chaves corrigidas:
+  - `ml.sincronizar-reclamacao`: `ml-reclamacao-{id}-{minuto}`, ou seja, uma por reclamação por minuto;
+  - `ml.enviar-resultado` depois do vínculo D9: `{devolucaoId}:vinculo`;
+  - `ml.enviar-contestacao`: `ml-contestacao-{id}-{instante do pedido}`, porque o Gestor pode reenviar depois de FALHOU;
+  - `nfe.consultar`: `{notaFiscalId}:{atualizadaEm em ms}:{n}`, uma série por rodada, porque o reenvio da NF rejeitada recomeça a contagem.
+- **E5. Etapa 4 no celular.** A P2 acrescenta a `EtapasCelular` a prop opcional `conteudoEtapa?: Partial<Record<number, ReactNode>>`, mostrada no topo da etapa escolhida. A Fase 4 passa `{ 4: <DivisaoEstoque .../> }`, e o Estoque Bom e o Estoque Problema aparecem acima dos cartões. Motivo: mobile-first; antes a divisão ficava embaixo de todos os cartões, porque o componente é congelado.
+- **E6. Versões publicadas há mais de 2 semanas**, com a data de corte de 30/10/2026:
+  - `pg-boss@12.38.0` (13/10/2026) no lugar da 12.38.2. As APIs que os planos usam foram conferidas no pacote: `createQueue`, `updateQueue`, `getQueue`, `findJobs`, `deleteAllJobs`, `isInstalled`, `fromDrizzle`/`DrizzleTransactionLike`, `send` com `id` e `startAfter`, `retryCount`, `retryDelayMax`, `work` com `batchSize`/`localConcurrency`/`pollingIntervalSeconds` e `schedule` com `tz`. A diferença para a 12.38.2 é só compatibilidade com CockroachDB e o tipo de `fail()`.
+  - `@aws-sdk/client-s3@3.1161.0` e `@aws-sdk/s3-request-presigner@3.1161.0` (30/10/2026) no lugar da 3.1167.0.
+  - Já estavam dentro da regra e ficam: `@tus/server@2.4.6`, `@tus/file-store@2.1.1`, `tus-js-client@4.3.1`, `idb-keyval@6.3.0`, `sharp@0.35.5` (a mesma do Next) e `fast-xml-parser@5.11.2`.
+  - Motivo: risco de cadeia de suprimentos.
+- **E7. `focus-visible`:** o estilo já existe em `globals.css`, então a P2 só confere. Motivo: pendência já resolvida na Fase 1.
+- **E8. `definirConectorParaTestes(canal, null)` = volta ao padrão** (P2: `null`; depois da Fase 3: o conector real da conta ATIVA). A P2 implementa assim (`Map.delete`), igual à Fase 3. Motivo: a P2 gravava `null` como "forçar nulo" e a Fase 3 como "voltar ao real".
+- **E9. `obter(idExterno)` recebe o claim_id no ML; `enviarResultadoConferencia(idExterno)` recebe o return_id.** O que é só do ML vai numa interface que estende a da P2 (`ConectorMercadoLivre`, §5.3). Motivo: a interface genérica não tem lugar para o status e o subtipo da reclamação, e os tipos da P2 são congelados.
+- **E10. `obterEmissorNFe` e `definirEmissorParaTestes`** moram em `src/conectores/nfe/registro.ts` (Fase 4), e `tipos.ts` os reexporta. Motivo: o contrato listava as duas funções dentro do bloco de tipos.
+- **E11. `conferirDevolucao(page, codigo, unidades)`** em `tests/e2e/apoio-conferencia.ts` (Fase 2, Tarefa 18) faz a conferência inteira pela tela, com um e2e próprio. As integrações das Fases 3 e 4 podem usá-lo depois do merge da 2, mantendo o caminho por serviço como alternativa. Motivo: §7.3 sem um apoio de e2e fixo.
+- **E12. Fixtures do ML:** `tests/fixtures/ml/doc/` guarda os exemplos da documentação e `tests/fixtures/ml-falso/` os cenários do falso (§5.3). Motivo: o plano da Fase 3 usa as duas pastas.
+- **E13. D14 aceito como está:** a escolha do Fiscal fica em `notas_venda.itens[].itensDevolucaoIds` (jsonb). Motivo: evita coluna ou tabela nova.
+- **E14. `ContextoTarefa.tentativa` começa em 1;** a última é `CONFIG_TAREFAS[nome].tentativas` (5). Motivo: a Fase 3 deixava isso "a confirmar".
+- **E15. Ler uma evidência já gravada** usa `armazenamentoDoProvedor(evidencia.provedor)`, e não `obterArmazenamento()`. A Fase 3 faz assim ao subir as fotos da contestação. Motivo: depois da troca disco → S3, as fotos antigas continuam no disco (D2).
