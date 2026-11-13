@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 13/11/2026, 18h22 (os três times trabalhando depois do limite de uso das 19h). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 13/11/2026, 18h22 (os três times trabalhando de novo depois da parada no limite de uso das 17h50). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Fases 0 e 1:** prontas, no `main` e publicadas na VPS (https://devolucoes.179-199-128-100.sslip.io).
@@ -13,7 +13,7 @@ Atualizado em 13/11/2026, 18h22 (os três times trabalhando depois do limite de 
   - Inclui: variáveis de ambiente, migração 0006, vocabulário e rótulos, fila pg-boss com o worker, armazenamento com links assinados, tipos dos conectores e esqueletos das telas.
   - Testes: 293 de unidade, 144 de integração, 69 no navegador.
 - **Times das Fases 2, 3 e 4:** trabalham em paralelo desde 13/11, cada um na sua worktree: `C:/Users/idmpc/devolucoes-wt/fase-2`, `fase-3` e `fase-4`, nas branches `fase-2-conferencia`, `fase-3-mercado-livre` e `fase-4-fiscal`, todas a partir do `main` `f38e320`. Cada uma tem `.env` próprio (banco, banco de testes e porta), conforme o contrato §6. O que cada tarefa já fechou fica na branch, no GitHub.
-  - **Estado em 13/11 à noite:** os três times voltaram depois do limite de uso das 19h e estão trabalhando.
+  - **Estado em 13/11, 18h22:** os três times pararam no limite de uso por volta das 17h50, voltaram com a troca de conta e estão trabalhando.
 
     | Fase | Prontas e revisadas | Em andamento | No GitHub |
     |---|---|---|---|
