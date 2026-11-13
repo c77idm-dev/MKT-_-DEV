@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 13/11/2026. Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 13/11/2026 (Fase 4 com as tarefas prontas). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Fases 0 e 1:** prontas, no `main` e publicadas na VPS (https://devolucoes.179-199-128-100.sslip.io).
@@ -12,10 +12,13 @@ Atualizado em 13/11/2026. Mantenha este arquivo em dia ao fechar cada etapa e en
 - **P1 e Parte A (base comum) da Fase 2:** prontas, revisadas e no `main` (`f38e320`, enviado ao GitHub).
   - Inclui: variáveis de ambiente, migração 0006, vocabulário e rótulos, fila pg-boss com o worker, armazenamento com links assinados, tipos dos conectores e esqueletos das telas.
   - Testes: 293 de unidade, 144 de integração, 69 no navegador.
-- **Times das Fases 2, 3 e 4:** começaram em 13/11 e **pararam no limite de uso da conta** antes de terminar a primeira tarefa. Nada foi perdido:
-  - As worktrees existem e estão limpas: `C:/Users/idmpc/devolucoes-wt/fase-2`, `fase-3` e `fase-4`, nas branches `fase-2-conferencia`, `fase-3-mercado-livre` e `fase-4-fiscal`, todas a partir do `main` `f38e320`. Cada uma tem `.env` próprio (banco, banco de testes e porta), conforme o contrato §6.
-  - O trabalho parcial da primeira tarefa das Fases 3 e 4 ficou guardado com `git stash` na própria worktree. A próxima execução recomeça a tarefa do zero.
-  - Os bancos da Fase 4 (`devolucoes_f4` e `devolucoes_test_f4`) foram recriados até a 0006.
+- **Times das Fases 2, 3 e 4:** trabalham em paralelo desde 13/11, cada um na sua worktree: `C:/Users/idmpc/devolucoes-wt/fase-2`, `fase-3` e `fase-4`, nas branches `fase-2-conferencia`, `fase-3-mercado-livre` e `fase-4-fiscal`, todas a partir do `main` `f38e320`. Cada uma tem `.env` próprio (banco, banco de testes e porta), conforme o contrato §6. O que cada tarefa já fechou fica na branch, no GitHub.
+  - **Fase 4:** as tarefas 1 a 10 estão prontas e foram aprovadas na revisão sem precisar de correção (`27dc4cd`). Agora roda a revisão final da fase (servidor e telas) com a rodada de correções, pelo fluxo [workflows/fase-final.js](workflows/fase-final.js). Depois disso, a Fase 4 só espera a vez dela na junção (contrato §7).
+  - **Fases 2 e 3:** as tarefas seguem uma a uma. Veja o que já entrou com `git log` na branch de cada fase.
+  - Ainda há um `git stash` antigo nas worktrees das Fases 3 e 4, com o trabalho parcial de antes do limite de uso. Ele não serve mais: as tarefas foram refeitas.
+- **Decisões tomadas no caminho:**
+  - Citar o ERP **Bitbrain** nas telas está certo (spec §8 e §8.7): a NF de venda é baixada dele, o ZIP de XMLs é importado nele, e a série não pode colidir com a dele. A regra é só não usar domínio nem marca bitbrain no sistema.
+- **Pergunta em aberto para o usuário:** a empresa tem Inscrição Estadual ou é isenta? Hoje a configuração fiscal só aceita o número. Se for isenta, é preciso aceitar "ISENTO".
 - **Para retomar os times:** use o fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js). Para cada tarefa, ele faz: implementar, revisar, até 2 rodadas de correção, enviar ao GitHub. Rode um fluxo por fase, os três em paralelo, com os argumentos:
   - Fase 2: `{"fase":2,"pasta":"/c/Users/idmpc/devolucoes-wt/fase-2","branch":"fase-2-conferencia","pref":"f2","tarefas":[9,…,22],"porta":3102,"bancoTeste":"devolucoes_test_f2"}`
   - Fase 3: `{"fase":3,"pasta":".../fase-3","branch":"fase-3-mercado-livre","pref":"f3","tarefas":[1,…,16],"porta":3103,"bancoTeste":"devolucoes_test_f3"}`
@@ -23,6 +26,7 @@ Atualizado em 13/11/2026. Mantenha este arquivo em dia ao fechar cada etapa e en
   - O fluxo lê os resumos de cada tarefa e as regras comuns em `.superpowers/sdd/fases-2-6/`, que não vão para o git. Em outro computador, recrie esses resumos a partir dos planos: cada resumo é o trecho de uma tarefa `### Tarefa N:`, salvo em `fN-task-N-brief.md`. Recrie também o `contexto-comum.md`: pasta, banco e porta de cada time, regras de celular, TDD, relatório.
   - Se uma tarefa já tiver sido concluída, ela aparece no registro `progress-fN.md` e na branch. Retome a partir da seguinte.
   - As tarefas de Integração (Fase 2 T23, Fase 3 T17, Fase 4 T11) ficam fora dos fluxos. Elas rodam na ordem de junção 2 → 3 → 4 (contrato §7).
+  - Quando um time termina as tarefas, rode o fluxo [workflows/fase-final.js](workflows/fase-final.js) na fase. Ele faz a revisão final (servidor e telas), as correções, a re-revisão e o push. Argumentos: os mesmos do outro fluxo, mais `"base":"f38e320"`, `"plano":"docs/superpowers/plans/<plano da fase>.md"` e, se precisar, `"decisoes"` (texto com decisões já tomadas).
 - **Atenção ao publicar na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500.
 - **Próximos passos, em ordem:**
   1. Retomar os três times (Fases 2, 3 e 4 em paralelo).
