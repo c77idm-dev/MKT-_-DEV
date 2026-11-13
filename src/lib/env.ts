@@ -52,24 +52,24 @@ export type Env = Omit<EnvLido, 'SEGREDO_LINKS'> & { SEGREDO_LINKS: string };
 const VARIAVEIS_S3 = ['S3_ENDPOINT', 'S3_REGIAO', 'S3_BUCKET', 'S3_CHAVE_ID', 'S3_CHAVE_SECRETA'] as const;
 
 function problemas(e: EnvLido): string[] {
-  const lista: string[] = [];
+  const erros: string[] = [];
   if (e.NODE_ENV === 'production') {
     // Contrato §10, E1: a liberação dos falsos é explícita (só o e2e define PERMITIR_FALSOS=1).
     if (e.PERMITIR_FALSOS !== '1') {
-      if (e.ML_CONECTOR === 'falso') lista.push('ML_CONECTOR: "falso" não é aceito em produção');
-      if (e.EMISSOR_NFE === 'falso') lista.push('EMISSOR_NFE: "falso" não é aceito em produção');
+      if (e.ML_CONECTOR === 'falso') erros.push('ML_CONECTOR: "falso" não é aceito em produção');
+      if (e.EMISSOR_NFE === 'falso') erros.push('EMISSOR_NFE: "falso" não é aceito em produção');
     }
     if (!e.SEGREDO_LINKS || e.SEGREDO_LINKS.length < 32) {
-      lista.push('SEGREDO_LINKS: obrigatório em produção, com 32 caracteres ou mais (gere com: openssl rand -hex 32)');
+      erros.push('SEGREDO_LINKS: obrigatório em produção, com 32 caracteres ou mais (gere com: openssl rand -hex 32)');
     }
   }
   if (e.ARMAZENAMENTO === 's3') {
-    for (const nome of VARIAVEIS_S3) if (!e[nome]) lista.push(`${nome}: obrigatório com ARMAZENAMENTO=s3`);
+    for (const nome of VARIAVEIS_S3) if (!e[nome]) erros.push(`${nome}: obrigatório com ARMAZENAMENTO=s3`);
   }
   if (e.CHAVE_CRIPTOGRAFIA && Buffer.from(e.CHAVE_CRIPTOGRAFIA, 'base64').length !== 32) {
-    lista.push('CHAVE_CRIPTOGRAFIA: precisa ter 32 bytes em base64 (gere com: openssl rand -base64 32)');
+    erros.push('CHAVE_CRIPTOGRAFIA: precisa ter 32 bytes em base64 (gere com: openssl rand -base64 32)');
   }
-  return lista;
+  return erros;
 }
 
 export function lerEnv(fonte: Record<string, string | undefined> = process.env): Env {
@@ -78,7 +78,7 @@ export function lerEnv(fonte: Record<string, string | undefined> = process.env):
     const detalhes = resultado.error.issues.map((i) => `${i.path.join('.') || 'env'}: ${i.message}`).join('; ');
     throw new Error(`Variáveis de ambiente inválidas: ${detalhes}`);
   }
-  const lista = problemas(resultado.data);
-  if (lista.length > 0) throw new Error(`Variáveis de ambiente inválidas: ${lista.join('; ')}`);
+  const erros = problemas(resultado.data);
+  if (erros.length > 0) throw new Error(`Variáveis de ambiente inválidas: ${erros.join('; ')}`);
   return { ...resultado.data, SEGREDO_LINKS: resultado.data.SEGREDO_LINKS ?? SEGREDO_LINKS_DESENVOLVIMENTO };
 }
