@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 13/11/2026, 19h (os três times pararam no limite de uso; retomar depois das 19h50). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 13/11/2026, 18h22 (os três times trabalhando depois do limite de uso das 19h). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Fases 0 e 1:** prontas, no `main` e publicadas na VPS (https://devolucoes.179-199-128-100.sslip.io).
@@ -13,30 +13,31 @@ Atualizado em 13/11/2026, 19h (os três times pararam no limite de uso; retomar 
   - Inclui: variáveis de ambiente, migração 0006, vocabulário e rótulos, fila pg-boss com o worker, armazenamento com links assinados, tipos dos conectores e esqueletos das telas.
   - Testes: 293 de unidade, 144 de integração, 69 no navegador.
 - **Times das Fases 2, 3 e 4:** trabalham em paralelo desde 13/11, cada um na sua worktree: `C:/Users/idmpc/devolucoes-wt/fase-2`, `fase-3` e `fase-4`, nas branches `fase-2-conferencia`, `fase-3-mercado-livre` e `fase-4-fiscal`, todas a partir do `main` `f38e320`. Cada uma tem `.env` próprio (banco, banco de testes e porta), conforme o contrato §6. O que cada tarefa já fechou fica na branch, no GitHub.
-  - **13/11 às 19h: os três times pararam no limite de uso da conta (volta às 19h50).** Nada foi perdido. O estado de cada um:
+  - **Estado em 13/11 à noite:** os três times voltaram depois do limite de uso das 19h e estão trabalhando.
 
-    | Fase | Prontas e revisadas | Onde parou | No GitHub |
+    | Fase | Prontas e revisadas | Em andamento | No GitHub |
     |---|---|---|---|
-    | 2, conferência | Tarefas 9 a 17 (`fe9aa75`) | **T18** (assistente da conferência no celular). O agente chegou a fazer o commit `55de648`, mas parou antes de rodar as suítes e escrever o relatório. O resumo da T18 ganhou uma nota de retomada: partir do `55de648`, com base `fe9aa75`. | `55de648` |
-    | 3, Mercado Livre | Tarefas 1 a 13 (`c87ec79`) | **T14**. O trabalho parcial (`consultas.ts` e o teste) ficou num `git stash`; a tarefa recomeça do zero. | `c87ec79` |
-    | 4, fiscal | Tarefas 1 a 10 (`27dc4cd`) | **Revisão final**: as duas revisões terminaram e pediram 5 correções; o corretor do servidor parou antes de mudar qualquer coisa. | `27dc4cd` |
+    | 2, conferência | Tarefas 9 a 18 (`55de648`). A T18 (assistente da conferência no celular) foi revisada e aprovada sem mudanças. | **T19**: a conferência a partir do detalhe e da etapa | `55de648` |
+    | 3, Mercado Livre | Tarefas 1 a 14 (`e3c2778`). A T14 é a seção Mercado Livre no detalhe da devolução. | **T15**: Configurações › Mercado Livre (conectar a conta) | `e3c2778` |
+    | 4, fiscal | Tarefas 1 a 10 (`27dc4cd`) | **Correções da revisão final**: 3 das 5 já têm commit, e falta enviar. | `27dc4cd` |
 
   - **As 5 correções da revisão final da Fase 4:**
-    - **Telas, importantes:**
-      - O botão "Remover" da NF de venda apaga com um só toque. Ele precisa de confirmação, porque um toque errado no celular apaga a NF e as escolhas de item.
-      - O Fiscal não consegue trocar o item da NF de venda quando o casamento automático (pelo SKU ou pelo EAN) errou.
-    - **Telas, menor:** no celular, o botão "Emitir NF de devolução" aparece antes dos blocos "NF de venda" e "Itens".
-    - **Servidor, menores:**
-      - O XML do cancelamento que ainda não está disponível na Focus precisa voltar para a fila, e não sumir. Do contrário, o ZIP do período sai sem esse cancelamento.
-      - Falta um teste que prove que a chave das consultas muda a cada reenvio (E4).
-    - As revisões completas estão em `.superpowers/sdd/fases-2-6/f4-final-servidor.md` e `f4-final-telas.md`, só neste PC. As revisões também listam o que fica de propósito e por quê.
-  - **Para retomar depois das 19h50:** relance os três fluxos com `resumeFromRunId`. As tarefas já feitas voltam do cache, e só o que parou roda de novo.
+    - Já feitas (falta enviar ao GitHub):
+      - O XML do cancelamento ainda indisponível na Focus volta para a fila e, se não chegar, vai para Falhas. Antes ele sumia, e o ZIP do período saía sem esse cancelamento.
+      - Um teste novo prova que a chave das consultas muda a cada reenvio (E4).
+      - O botão "Remover" da NF de venda passa a pedir confirmação. Um toque errado no celular apagava a NF e as escolhas de item.
+    - Ainda faltam:
+      - O Fiscal poder trocar o item da NF de venda quando o casamento automático (pelo SKU ou pelo EAN) errou.
+      - No celular, mostrar "NF de venda" e "Itens" antes do botão "Emitir NF de devolução".
+    - Depois das correções, a re-revisão confere tudo, e só então a branch vai para o GitHub.
+    - As revisões completas estão em `.superpowers/sdd/fases-2-6/f4-final-servidor.md` e `f4-final-telas.md`, só neste PC. Elas também listam o que fica de propósito e por quê.
+  - **Runs atuais (para `resumeFromRunId` se pararem de novo):**
     - Fase 2: `wf_3b9280f3-f70`, com o script do fluxo dos times.
     - Fase 3: `wf_c5c15a75-faa`, com o script do fluxo dos times.
     - Fase 4: `wf_1a3f0cc6-104`, com o script da revisão final ([workflows/fase-final.js](workflows/fase-final.js)).
     - Os argumentos são os mesmos de antes (veja abaixo).
-    - Em outro computador ou em outra sessão não há cache: rode o fluxo só com as tarefas que faltam, a Fase 2 com `[18,…,22]` e a Fase 3 com `[14,15,16]`. Para a Fase 4, rode o fluxo da revisão final do zero.
-  - Os `git stash` "parcial da T1", nas Fases 3 e 4, são antigos e não servem mais. O "parcial da T14" da Fase 3 também pode ser descartado: a T14 será refeita.
+    - Em outro computador ou em outra sessão não há cache. Rode o fluxo só com as tarefas que faltam: a Fase 2 a partir da T19 (`[19,…,22]`) e a Fase 3 a partir da T15 (`[15,16]`). Antes, confira na branch o que já entrou. Para a Fase 4, rode de novo a revisão final, a partir do que estiver na branch.
+  - Os `git stash` "parcial da T1" (Fases 3 e 4) e "parcial da T14" (Fase 3) são antigos e podem ser descartados: essas tarefas já foram refeitas.
 - **Decisões tomadas no caminho:**
   - Citar o ERP **Bitbrain** nas telas está certo (spec §8 e §8.7): a NF de venda é baixada dele, o ZIP de XMLs é importado nele, e a série não pode colidir com a dele. A regra é só não usar domínio nem marca bitbrain no sistema.
 - **Pergunta em aberto para o usuário:** a empresa tem Inscrição Estadual ou é isenta? Hoje a configuração fiscal só aceita o número. Se for isenta, é preciso aceitar "ISENTO".
