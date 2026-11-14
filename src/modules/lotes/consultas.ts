@@ -176,7 +176,7 @@ export async function listarSemFornecedor(db: DbOuTx, opcoes: { limite?: number 
       item: itensDevolucao,
       devolucaoCodigo: devolucoes.codigo,
       skuRecebido: recebido.sku,
-      skuRecebido: recebido.sku, descricaoRecebido: recebido.descricao,
+      descricaoRecebido: recebido.descricao,
       descricaoEsperado: esperado.descricao,
     })
     .from(itensDevolucao)
@@ -192,7 +192,7 @@ export async function listarSemFornecedor(db: DbOuTx, opcoes: { limite?: number 
       itemId: l.item.id,
       devolucaoCodigo: l.devolucaoCodigo,
       unidade: l.item.unidade,
-      sku: l.skuRecebido ?? l.item.sku,
+      sku: l.item.sku,
       descricao: l.descricaoRecebido ?? l.descricaoEsperado ?? VAZIO,
       motivo: l.item.motivo ? ROTULO_MOTIVO[l.item.motivo] : VAZIO,
       serial: l.item.serial ?? VAZIO,
