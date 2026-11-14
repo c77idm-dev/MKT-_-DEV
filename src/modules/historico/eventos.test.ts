@@ -41,7 +41,7 @@ const RESERVADAS: Record<string, string[]> = {
     'lote_criado', 'lote_item_incluido', 'lote_item_movido', 'lote_fechado', 'lote_reaberto',
     'lote_enviado', 'lote_resultado_registrado', 'lote_finalizado',
   ],
-  acabamento: ['midia_apagada_retencao', 'tarefa_reenviada'],
+  acabamento: ['midia_apagada_retencao', 'tarefa_reenviada', 'tarefa_dispensada'],
 };
 
 describe('rótulos do histórico (contrato §4.7)', () => {
