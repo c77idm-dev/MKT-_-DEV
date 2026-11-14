@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { devolucoes, itensDevolucao, reclamacoesMl } from '@/db/schema';
+import { contestacoesCanal, devolucoes, itensDevolucao, reclamacoesMl } from '@/db/schema';
+import { obterContestacao } from './contestacoes';
 import { FilaMemoria } from '@/modules/fila/fila';
 import { listarEventos } from '@/modules/historico/eventos';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
@@ -90,6 +91,31 @@ describe('aplicarReclamacao (contrato §5.5, spec §7.2 e §7.3)', () => {
     });
     expect(await db.select().from(devolucoes)).toHaveLength(1);
     expect(await acoes(manual.id)).toEqual(['criada', 'ml_vinculada']);
+  });
+
+  it('D9: o ML é a fonte da reclamação; o texto manual diferente vai para o evento ml_vinculada', async () => {
+    const operador = await criarUsuarioTeste(db);
+    const manual = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido: 'P-ERRADO', rastreio: null });
+    await db.update(devolucoes).set({ reclamacaoId: 'digitado-errado' }).where(eq(devolucoes.id, manual.id));
+    const d = devolucaoExternaTeste({ pedidos: ['P-ERRADO'] });
+    await aplicarReclamacao(db, dadosDevolucaoMLTeste(d), AGORA);
+    expect((await devolucao(manual.id)).reclamacaoId).toBe(d.reclamacaoId);
+    const eventos = await listarEventos(db, 'devolucao', manual.id);
+    const vinculada = eventos.find((e) => e.acao === 'ml_vinculada');
+    expect(vinculada?.dados).toMatchObject({ reclamacaoId: d.reclamacaoId, reclamacaoIdManual: 'digitado-errado' });
+  });
+
+  it('atualização: o prazo da contestação acompanha o prazo da devolução (não enviada)', async () => {
+    const d = devolucaoExternaTeste({ pedidos: ['P-PRAZO'], prazoConferencia: null });
+    const { devolucaoId } = comDevolucao(await aplicarReclamacao(db, dadosDevolucaoMLTeste(d), AGORA));
+    const [c] = await db
+      .insert(contestacoesCanal)
+      .values({ devolucaoId, motivoCanal: 'SRF2', mensagem: 'm', prazo: null })
+      .returning({ id: contestacoesCanal.id });
+    expect((await obterContestacao(db, c.id, AGORA))?.prazo ?? null).toBeNull();
+    const prazo = new Date('2026-11-20T12:00:00Z');
+    await aplicarReclamacao(db, dadosDevolucaoMLTeste({ ...d, prazoConferencia: prazo }), AGORA);
+    expect((await obterContestacao(db, c.id, AGORA))?.prazo).toEqual(prazo);
   });
 
   it('vinculada depois da conferência: manda o resultado ao ML de novo (decisão 11)', async () => {

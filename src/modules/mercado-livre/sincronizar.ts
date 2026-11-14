@@ -3,7 +3,7 @@ import { ErroFormatoML } from '@/conectores/marketplace/mercadolivre/mapeamento'
 import type { DadosDevolucaoML } from '@/conectores/marketplace/mercadolivre/tipos';
 import type { DevolucaoExterna } from '@/conectores/marketplace/tipos';
 import type { DbOuTx } from '@/db/client';
-import { devolucoes, reclamacoesMl } from '@/db/schema';
+import { contestacoesCanal, devolucoes, reclamacoesMl } from '@/db/schema';
 import { normalizarSku } from '@/modules/catalogo/documentos';
 import { criarDevolucao, type DadosCanal, type DadosNovaDevolucao } from '@/modules/devolucoes/criar';
 import type { StatusDevolucao } from '@/modules/devolucoes/dominio';
@@ -26,6 +26,7 @@ export type ResultadoAplicacao =
 type Atual = {
   id: string;
   codigo: string;
+  reclamacaoId: string | null;
   status: StatusDevolucao;
   statusCanal: string | null;
   rastreio: string | null;
@@ -37,6 +38,7 @@ type Atual = {
 const COLUNAS = {
   id: devolucoes.id,
   codigo: devolucoes.codigo,
+  reclamacaoId: devolucoes.reclamacaoId,
   status: devolucoes.status,
   statusCanal: devolucoes.statusCanal,
   rastreio: devolucoes.rastreio,
@@ -124,6 +126,13 @@ async function atualizar(tx: DbOuTx, atual: Atual, d: DevolucaoExterna, agora: D
       atualizadaEm: agora,
     })
     .where(eq(devolucoes.id, atual.id));
+  // O due_date do ML costuma aparecer só depois da entrega: a contestação ainda aberta acompanha o prazo da devolução.
+  if (d.prazoConferencia !== null) {
+    await tx
+      .update(contestacoesCanal)
+      .set({ prazo: d.prazoConferencia, atualizadaEm: agora })
+      .where(and(eq(contestacoesCanal.devolucaoId, atual.id), ne(contestacoesCanal.status, 'ENVIADA')));
+  }
   if (atual.statusCanal !== d.statusCanal) {
     await evento(tx, atual.id, antesDaChegada ? 'ml_status_atualizado' : 'ml_status_apos_chegada', agora, {
       dados: { statusCanalAnterior: atual.statusCanal, statusCanal: d.statusCanal },
@@ -160,7 +169,8 @@ async function vincular(tx: DbOuTx, manual: Atual, d: DevolucaoExterna, agora: D
     .update(devolucoes)
     .set({
       devolucaoExternaId: d.devolucaoExternaId,
-      reclamacaoId: sql`coalesce(${devolucoes.reclamacaoId}, ${d.reclamacaoId})`,
+      // O ML é a fonte: o texto digitado à mão não pode apontar os anexos e os motivos para outra reclamação.
+      reclamacaoId: d.reclamacaoId,
       tipo: d.tipo,
       statusCanal: d.statusCanal,
       prazoConferenciaCanal: d.prazoConferencia,
@@ -173,7 +183,13 @@ async function vincular(tx: DbOuTx, manual: Atual, d: DevolucaoExterna, agora: D
     .where(and(eq(devolucoes.id, manual.id), isNull(devolucoes.devolucaoExternaId)))
     .returning({ id: devolucoes.id });
   if (!vinculada) return false;
-  await evento(tx, manual.id, 'ml_vinculada', agora, { dados: { devolucaoExternaId: d.devolucaoExternaId, reclamacaoId: d.reclamacaoId } });
+  await evento(tx, manual.id, 'ml_vinculada', agora, {
+    dados: {
+      devolucaoExternaId: d.devolucaoExternaId,
+      reclamacaoId: d.reclamacaoId,
+      ...(manual.reclamacaoId && manual.reclamacaoId !== d.reclamacaoId ? { reclamacaoIdManual: manual.reclamacaoId } : {}),
+    },
+  });
   if (!manual.entregueSegundoCanalEm && d.entregueEm) await evento(tx, manual.id, 'ml_entregue', agora, { dados: { entregueEm: d.entregueEm.toISOString() } });
   return true;
 }

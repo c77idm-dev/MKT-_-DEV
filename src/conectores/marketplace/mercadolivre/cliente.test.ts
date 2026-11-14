@@ -128,3 +128,12 @@ describe('analisarJson', () => {
     });
   });
 });
+
+describe('ErroML (corpo cru fora da serialização)', () => {
+  it('corpo não é enumerável: não vai para job.output nem para JSON', () => {
+    const e = new ErroML(500, '{"buyer":{"first_name":"Ana"}}', '/x');
+    expect(Object.keys(e)).not.toContain('corpo');
+    expect(JSON.stringify(e)).not.toContain('Ana');
+    expect(e.corpo).toContain('Ana');
+  });
+});

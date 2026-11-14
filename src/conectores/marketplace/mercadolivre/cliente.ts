@@ -2,14 +2,15 @@ export const API_ML = 'https://api.mercadolibre.com';
 
 export class ErroML extends Error {
   readonly status: number;
-  readonly corpo: string;
+  /** Não enumerável: o pg-boss grava o erro em job.output copiando as chaves próprias, e o corpo cru pode ter dados do comprador. */
+  declare readonly corpo: string;
   readonly caminho: string;
 
   constructor(status: number, corpo: string, caminho: string) {
     super(`Mercado Livre respondeu ${status} em ${caminho}`);
     this.name = 'ErroML';
     this.status = status;
-    this.corpo = corpo;
+    Object.defineProperty(this, 'corpo', { value: corpo, enumerable: false });
     this.caminho = caminho;
   }
 }
