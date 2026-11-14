@@ -83,8 +83,8 @@ describe('cancelarNota (spec §8.6)', () => {
     const [d] = await db.select().from(devolucoes).where(eq(devolucoes.id, dev.id));
     expect(d).toMatchObject({ status: 'AGUARDANDO_NF', concluidaEm: null });
     const itens = await db.select({ status: itensDevolucao.status }).from(itensDevolucao).where(eq(itensDevolucao.devolucaoId, dev.id)).orderBy(asc(itensDevolucao.unidade));
-    // Fase 5, Tarefa 2: a unidade PROBLEMA (sem fornecedor) segue SEM_FORNECEDOR até a Tarefa 3 (desfazerAlocacao) voltar para AGUARDANDO_NF.
-    expect(itens.map((i) => i.status)).toEqual(['AGUARDANDO_NF', 'SEM_FORNECEDOR', 'AUSENTE']);
+    // Fase 5, Tarefa 3: desfazerAlocacao devolve a unidade PROBLEMA (sem fornecedor) para AGUARDANDO_NF.
+    expect(itens.map((i) => i.status)).toEqual(['AGUARDANDO_NF', 'AGUARDANDO_NF', 'AUSENTE']);
     expect((await listarEventos(db, 'devolucao', dev.id)).at(-1)).toMatchObject({
       acao: 'devolucao_reaberta',
       de: 'CONCLUIDA',

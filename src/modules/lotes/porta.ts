@@ -1,7 +1,7 @@
 import type { NotaParaEmissao } from '@/conectores/nfe/tipos';
 import type { DbOuTx } from '@/db/client';
 import { ErroFiscal } from '@/modules/fiscal/erros';
-import { alocarItensProblema } from './alocacao';
+import { alocarItensProblema, desfazerAlocacao, motivoParaNaoCancelarDevolucao } from './alocacao';
 
 /** Contrato §5.7. A Fase 4 cria a implementação "sem lotes"; a Fase 5 troca o corpo (e só ela). */
 export interface PortaLotes {
@@ -21,16 +21,16 @@ export interface PortaLotes {
 
 const REMESSAS_NA_FASE_5 = 'As remessas chegam na Fase 5';
 
-/** Fase 5: alocação ligada; o restante da porta continua "sem lotes" até as Tarefas 3 e 6. */
+/** Fase 5: alocação e cancelamento ligados; o restante da porta continua "sem lotes" até a Tarefa 6. */
 export const portaLotes: PortaLotes = {
   async alocarItensProblema(tx, devolucaoId, agora) {
     await alocarItensProblema(tx, devolucaoId, agora);
   },
-  async motivoParaNaoCancelarDevolucao() {
-    return null;
+  async motivoParaNaoCancelarDevolucao(tx, devolucaoId) {
+    return motivoParaNaoCancelarDevolucao(tx, devolucaoId);
   },
-  async desfazerAlocacao() {
-    // D11: nada foi alocado, nada a desfazer.
+  async desfazerAlocacao(tx, devolucaoId, agora) {
+    await desfazerAlocacao(tx, devolucaoId, agora);
   },
   async montarNotaRemessa() {
     throw new ErroFiscal(REMESSAS_NA_FASE_5);
