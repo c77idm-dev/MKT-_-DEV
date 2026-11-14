@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LINK_VOLTAR } from '@/components/estilos';
+import { RegistrarServiceWorker } from '@/components/pwa/RegistrarServiceWorker';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { abrirConferenciaAcao } from './acoes';
 import { FormularioConferirPacote } from './FormularioConferirPacote';
@@ -12,6 +13,7 @@ export default async function PaginaConferirPacote() {
   await exigirPermissao('operar_devolucoes');
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-3">
+      <RegistrarServiceWorker />
       <Link href="/fluxo/etapa/2" className={`${LINK_VOLTAR} self-start`}>
         ← Pedidos Chegados - Aguardando Conferência
       </Link>

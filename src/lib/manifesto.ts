@@ -3,7 +3,7 @@ import type { MetadataRoute } from 'next';
 export const COR_TEMA = '#0F766E';
 export const COR_FUNDO = '#F2F4F3';
 
-/** App instalável na tela inicial (PWA básico da Fase 1). Sem service worker: o modo offline é da Fase 2. */
+/** App instalável na tela inicial (PWA). O modo offline básico é o service worker em public/sw.js (Fase 2). */
 export function manifesto(): MetadataRoute.Manifest {
   return {
     name: 'Gestão de Devoluções',

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { AssistenteConferencia } from '@/components/conferencia/AssistenteConferencia';
+import { RegistrarServiceWorker } from '@/components/pwa/RegistrarServiceWorker';
 import { obterDb } from '@/db';
 import { primeiroValor } from '@/lib/parametros';
 import { exigirPermissao } from '@/modules/auth/servidor';
@@ -26,6 +27,7 @@ export default async function PaginaConferencia({ params, searchParams }: Props)
   const passo = Number.parseInt(primeiroValor((await searchParams).passo), 10);
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+      <RegistrarServiceWorker />
       <AssistenteConferencia
         devolucao={{ id: dados.id, codigo: dados.codigo, rastreio: dados.rastreio }}
         itens={dados.itens}
