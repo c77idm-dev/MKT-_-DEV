@@ -21,6 +21,10 @@ test('depois de abrir a bancada uma vez, sem internet a navegação mostra "Sem 
       { timeout: 20_000 },
     )
     .toBe(true);
+  await page.goto('/fluxo/conferencia');
+  const guardados = await page.evaluate(async () => (await (await caches.open('devolucoes-v2')).keys()).map((r) => new URL(r.url).pathname));
+  expect(guardados.some((c) => c.startsWith('/_next/static/'))).toBe(true);
+  expect(guardados.filter((c) => c.startsWith('/api/'))).toEqual([]);
   await context.setOffline(true);
   try {
     await page.goto('/fluxo');
