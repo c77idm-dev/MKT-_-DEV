@@ -75,6 +75,10 @@ Write the full report to ${relatorio}.
 Return: status, base, head (git rev-parse --short HEAD after your commits), commits (sha + subject), a one-line test summary, and concerns.`,
     { label: `F${A.fase} T${n} implementar`, phase: 'Tarefas', model: 'sonnet', schema: IMPL },
   )
+  if (impl && impl.status !== 'BLOCKED' && impl.status !== 'NEEDS_CONTEXT' && (!impl.head || impl.head === impl.base)) {
+    impl.status = 'BLOCKED'
+    impl.preocupacoes = `no commit (head ${impl.head} = base ${impl.base}). ${impl.preocupacoes || ''}`
+  }
   if (!impl || impl.status === 'BLOCKED' || impl.status === 'NEEDS_CONTEXT') {
     resultado.push({ tarefa: n, parado: true, motivo: impl ? `${impl.status}: ${impl.preocupacoes || ''}` : 'implementer died' })
     return { fase: A.fase, concluidas: resultado.filter((r) => !r.parado).map((r) => r.tarefa), resultado }
