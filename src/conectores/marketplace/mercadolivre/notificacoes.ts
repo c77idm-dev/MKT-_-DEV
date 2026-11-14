@@ -1,11 +1,8 @@
-import type { Db } from '@/db/client';
-import { notificacoesRecebidas } from '@/db/schema';
-
 export type NotificacaoML = { topico: string | null; recurso: string | null; payload: Record<string, unknown> };
 
 export const LIMITE_AVISO_BYTES = 64 * 1024;
 
-const CAMPOS_CONHECIDOS = ['id', 'resource', 'user_id', 'topic', 'application_id', 'attempts', 'sent', 'received', 'actions'] as const;
+const CAMPOS_CONHECIDOS = ['_id', 'id', 'resource', 'user_id', 'topic', 'application_id', 'attempts', 'sent', 'received', 'actions'] as const;
 
 /** Lê o texto do aviso: 413 se passar do limite, 400 se não for JSON. */
 export function lerAvisoML(texto: string): { ok: true; corpo: unknown } | { ok: false; status: 400 | 413 } {
@@ -32,10 +29,8 @@ export function aceitarNotificacaoML(corpo: unknown, clientIdEsperado?: string):
   };
 }
 
-export async function registrarNotificacao(db: Db, canal: string, n: NotificacaoML): Promise<number> {
-  const [linha] = await db
-    .insert(notificacoesRecebidas)
-    .values({ canal, topico: n.topico, recurso: n.recurso, payload: n.payload })
-    .returning({ id: notificacoesRecebidas.id });
-  return linha.id;
+/** "/post-purchase/v1/claims/5292183123" (e variações com /actions ou ?...) → "5292183123". Outros recursos → null. */
+export function idReclamacaoDoRecurso(recurso: string | null): string | null {
+  const m = recurso ? /^\/post-purchase\/v\d+\/claims\/(\d+)(?:[/?#].*)?$/.exec(recurso.trim()) : null;
+  return m ? m[1] : null;
 }

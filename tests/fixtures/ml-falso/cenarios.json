@@ -1,0 +1,65 @@
+{
+  "vendedor": 123456789,
+  "cenarios": {
+    "1": {
+      "nome": "a caminho do vendedor",
+      "devolucao": { "status": "shipped", "subtype": "return_total" },
+      "envio": { "status": "shipped", "type": "return", "destino": "seller_address" },
+      "itens": [{ "sku": "MLF-FONE-01", "quantidade": "1.0" }]
+    },
+    "2": {
+      "nome": "entregue ao vendedor",
+      "devolucao": { "status": "delivered", "subtype": "return_total" },
+      "envio": { "status": "delivered", "type": "return", "destino": "seller_address" },
+      "itens": [{ "sku": "MLF-FONE-01", "quantidade": "1.0" }]
+    },
+    "3": {
+      "nome": "sem envio físico (low_cost)",
+      "devolucao": { "status": "closed", "subtype": "low_cost" },
+      "envio": null,
+      "itens": [{ "sku": "MLF-CABO-02", "quantidade": "1.0" }]
+    },
+    "4": {
+      "nome": "no CD do Mercado Livre (triagem)",
+      "devolucao": { "status": "delivered", "subtype": "return_total" },
+      "envio": { "status": "delivered", "type": "return", "destino": "warehouse" },
+      "itens": [{ "sku": "MLF-FONE-01", "quantidade": "1.0" }]
+    },
+    "5": {
+      "nome": "reenvio da triagem ao vendedor",
+      "devolucao": { "status": "shipped", "subtype": "return_total" },
+      "envio": { "status": "shipped", "type": "return_from_triage", "destino": "seller_address" },
+      "itens": [{ "sku": "MLF-FONE-01", "quantidade": "1.0" }]
+    },
+    "6": {
+      "nome": "cancelada no ML",
+      "devolucao": { "status": "cancelled", "subtype": "return_total" },
+      "envio": { "status": "cancelled", "type": "return", "destino": "seller_address" },
+      "itens": [{ "sku": "MLF-FONE-01", "quantidade": "1.0" }]
+    },
+    "7": {
+      "nome": "dois pedidos",
+      "devolucao": { "status": "shipped", "subtype": "return_partial" },
+      "envio": { "status": "shipped", "type": "return", "destino": "seller_address" },
+      "itens": [
+        { "sku": "MLF-FONE-01", "quantidade": "2.0" },
+        { "sku": "MLF-CABO-02", "quantidade": "1.0" }
+      ]
+    },
+    "8": {
+      "nome": "revisão recusada pelo ML",
+      "recusarRevisao": true,
+      "devolucao": { "status": "delivered", "subtype": "return_total" },
+      "envio": { "status": "delivered", "type": "return", "destino": "seller_address" },
+      "itens": [{ "sku": "MLF-FONE-01", "quantidade": "1.0" }]
+    },
+    "9": { "nome": "reclamação sem devolução", "semDevolucao": true, "itens": [] }
+  },
+  "notaVenda": {
+    "cnpjEmitente": "11222333000181",
+    "ncm": "85183000",
+    "valorUnitario": "129.90",
+    "ean": "7891234567895",
+    "descricao": "Produto de teste do ML falso"
+  }
+}

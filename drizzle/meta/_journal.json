@@ -50,6 +50,13 @@
       "when": 1794583421842,
       "tag": "0006_fundacao",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794595397798,
+      "tag": "0007_fase3_mercado_livre",
+      "breakpoints": true
     }
   ]
 }

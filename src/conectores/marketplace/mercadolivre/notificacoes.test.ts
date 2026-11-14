@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { aceitarNotificacaoML, LIMITE_AVISO_BYTES, lerAvisoML } from './notificacoes';
+import { aceitarNotificacaoML, idReclamacaoDoRecurso, LIMITE_AVISO_BYTES, lerAvisoML } from './notificacoes';
+import notificacaoDoc from '../../../../tests/fixtures/ml/doc/notificacao.json';
 
 const AVISO = {
   id: 'abc',
@@ -57,5 +58,26 @@ describe('lerAvisoML', () => {
   it('responde 413 acima de 64 KB', () => {
     expect(LIMITE_AVISO_BYTES).toBe(64 * 1024);
     expect(lerAvisoML('"' + 'x'.repeat(LIMITE_AVISO_BYTES) + '"')).toEqual({ ok: false, status: 413 });
+  });
+});
+
+describe('idReclamacaoDoRecurso (suposição A12)', () => {
+  it.each([
+    ['/post-purchase/v1/claims/5292183123', '5292183123'],
+    ['/post-purchase/v1/claims/5292183123/actions', '5292183123'],
+    ['/post-purchase/v2/claims/5292183123?x=1', '5292183123'],
+  ])('%s → %s', (recurso, id) => {
+    expect(idReclamacaoDoRecurso(recurso)).toBe(id);
+  });
+
+  it('outros recursos → null', () => {
+    expect(idReclamacaoDoRecurso('/orders/2000008003035430')).toBeNull();
+    expect(idReclamacaoDoRecurso(null)).toBeNull();
+  });
+});
+
+describe('aviso do exemplo da documentação', () => {
+  it('guarda todos os campos conhecidos, inclusive o _id', () => {
+    expect(aceitarNotificacaoML(notificacaoDoc, undefined)?.payload).toEqual(notificacaoDoc);
   });
 });

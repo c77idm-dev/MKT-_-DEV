@@ -7,7 +7,15 @@ import { normalizarSku } from '@/modules/catalogo/documentos';
 import { idsDosProdutos } from '@/modules/catalogo/produtos';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { interpretarCanal } from './canais';
-import { CANAIS, LIMITE_QUANTIDADE, LIMITE_UNIDADES_DEVOLUCAO, ROTULO_CANAL, type Canal, type StatusDevolucao } from './dominio';
+import {
+  CANAIS,
+  LIMITE_QUANTIDADE,
+  LIMITE_UNIDADES_DEVOLUCAO,
+  ROTULO_CANAL,
+  type Canal,
+  type StatusDevolucao,
+  type TipoDevolucao,
+} from './dominio';
 import { ErroDevolucao, ErroDevolucaoDuplicada } from './erros';
 import { normalizarRastreio } from './rastreio';
 import { exigirTransicao } from './transicoes';
@@ -180,29 +188,63 @@ export async function codigosAtivosPorPedido(db: DbOuTx, pares: { canal: Canal; 
   return resultado;
 }
 
+/** Dados que só a criação pela API do canal tem (contrato §5.5). */
+export type DadosCanal = {
+  devolucaoExternaId: string;
+  tipo: TipoDevolucao;
+  pedidos: string[];
+  statusCanal: string;
+  entregueSegundoCanalEm: Date | null;
+  prazoConferenciaCanal: Date | null;
+};
+
+export type OpcoesCriacao =
+  | { origem: 'MANUAL' | 'PLANILHA'; usuario: UsuarioSessao }
+  | { origem: 'API'; usuario: null; canal: DadosCanal; agora?: Date };
+
 /**
  * Cadastra a devolução em "Pendente de chegada" (spec §5.2, "(nova) → PENDENTE_CHEGADA"), com uma linha por unidade
  * e o evento no histórico. Funciona dentro de outra transação (a confirmação da planilha usa um savepoint).
+ * Pela API (contrato §5.5): ator SISTEMA, sem usuário, e a chave é (canal, devolucao_externa_id) (spec §11).
  */
-export async function criarDevolucao(
-  db: DbOuTx,
-  dados: DadosNovaDevolucao,
-  opcoes: { origem: 'MANUAL' | 'PLANILHA'; usuario: UsuarioSessao },
-): Promise<DevolucaoCriada> {
-  exigirTransicao({ de: null, para: 'PENDENTE_CHEGADA', ator: opcoes.usuario.perfil });
-  // Regra "uma devolução em andamento por pedido e canal": lê e depois insere, sem trava no banco. Decisão aceita
-  // (sistema interno, pouca concorrência): duas criações simultâneas do mesmo pedido poderiam passar as duas.
-  const existente = (await codigosAtivosPorPedido(db, [{ canal: dados.canal, pedido: dados.pedido }])).get(
-    chavePedido(dados.canal, dados.pedido),
-  );
-  if (existente) throw new ErroDevolucaoDuplicada(existente);
-  if (dados.rastreio) {
-    const naoIdentificado = (await codigosNaoIdentificadosPorRastreio(db, [dados.rastreio])).get(dados.rastreio);
-    if (naoIdentificado) throw new ErroDevolucao(mensagemRastreioNaoIdentificado(naoIdentificado));
+export async function criarDevolucao(db: DbOuTx, dados: DadosNovaDevolucao, opcoes: OpcoesCriacao): Promise<DevolucaoCriada> {
+  exigirTransicao({ de: null, para: 'PENDENTE_CHEGADA', ator: opcoes.origem === 'API' ? 'SISTEMA' : opcoes.usuario.perfil });
+  if (opcoes.origem === 'API') {
+    const [existente] = await db
+      .select({ codigo: devolucoes.codigo })
+      .from(devolucoes)
+      .where(and(eq(devolucoes.canal, dados.canal), eq(devolucoes.devolucaoExternaId, opcoes.canal.devolucaoExternaId)))
+      .limit(1);
+    if (existente) throw new ErroDevolucaoDuplicada(existente.codigo);
+  } else {
+    // Regra "uma devolução em andamento por pedido e canal": lê e depois insere, sem trava no banco. Decisão aceita
+    // (sistema interno, pouca concorrência): duas criações simultâneas do mesmo pedido poderiam passar as duas.
+    const existente = (await codigosAtivosPorPedido(db, [{ canal: dados.canal, pedido: dados.pedido }])).get(
+      chavePedido(dados.canal, dados.pedido),
+    );
+    if (existente) throw new ErroDevolucaoDuplicada(existente);
+    if (dados.rastreio) {
+      const naoIdentificado = (await codigosNaoIdentificadosPorRastreio(db, [dados.rastreio])).get(dados.rastreio);
+      if (naoIdentificado) throw new ErroDevolucao(mensagemRastreioNaoIdentificado(naoIdentificado));
+    }
   }
   const unidades = expandirUnidades(dados.itens);
   if (unidades.length > LIMITE_UNIDADES_DEVOLUCAO) throw new ErroDevolucao(mensagemLimiteUnidades(unidades.length));
   const produtosPorSku = await idsDosProdutos(db, [...new Set(unidades)]);
+  const agora = opcoes.origem === 'API' ? (opcoes.agora ?? null) : null;
+  const doCanal =
+    opcoes.origem === 'API'
+      ? {
+          pedidosExternos: [...new Set([dados.pedido, ...opcoes.canal.pedidos])],
+          devolucaoExternaId: opcoes.canal.devolucaoExternaId,
+          tipo: opcoes.canal.tipo,
+          statusCanal: opcoes.canal.statusCanal,
+          entregueSegundoCanalEm: opcoes.canal.entregueSegundoCanalEm,
+          prazoConferenciaCanal: opcoes.canal.prazoConferenciaCanal,
+          criadoPor: null,
+          ...(agora ? { criadaEm: agora, atualizadaEm: agora } : {}),
+        }
+      : { pedidosExternos: [dados.pedido], criadoPor: opcoes.usuario.id };
 
   return db.transaction(async (tx) => {
     const [criada] = await tx
@@ -210,14 +252,13 @@ export async function criarDevolucao(
       .values({
         canal: dados.canal,
         origem: opcoes.origem,
-        pedidosExternos: [dados.pedido],
         reclamacaoId: dados.reclamacaoId,
         rastreio: dados.rastreio,
         transportadora: dados.transportadora,
         motivoCliente: dados.motivoCliente,
         postadaEm: dados.postadaEm,
         status: 'PENDENTE_CHEGADA',
-        criadoPor: opcoes.usuario.id,
+        ...doCanal,
       })
       .returning({ id: devolucoes.id, codigo: devolucoes.codigo });
     if (unidades.length > 0) {
@@ -236,8 +277,9 @@ export async function criarDevolucao(
       acao: 'criada',
       de: null,
       para: 'PENDENTE_CHEGADA',
-      usuarioId: opcoes.usuario.id,
+      usuarioId: opcoes.origem === 'API' ? null : opcoes.usuario.id,
       dados: { origem: opcoes.origem, unidades: unidades.length },
+      ...(agora ? { em: agora } : {}),
     });
     return { id: criada.id, codigo: criada.codigo, unidades: unidades.length };
   });

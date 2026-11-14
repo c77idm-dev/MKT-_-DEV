@@ -1,0 +1,11 @@
+{
+  "id": "MLB3456789012",
+  "title": "Fone de Ouvido Bluetooth",
+  "attributes": [
+    { "id": "BRAND", "name": "Marca", "value_name": "Marca Exemplo" },
+    { "id": "GTIN", "name": "Código universal de produto", "value_name": "7891234567895" }
+  ],
+  "variations": [
+    { "id": 178234567890, "attributes": [{ "id": "GTIN", "name": "Código universal de produto", "value_name": "7891234567888" }] }
+  ]
+}
