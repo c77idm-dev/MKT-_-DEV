@@ -1,6 +1,7 @@
 import type { NotaParaEmissao } from '@/conectores/nfe/tipos';
 import type { DbOuTx } from '@/db/client';
 import { ErroFiscal } from '@/modules/fiscal/erros';
+import { alocarItensProblema } from './alocacao';
 
 /** Contrato §5.7. A Fase 4 cria a implementação "sem lotes"; a Fase 5 troca o corpo (e só ela). */
 export interface PortaLotes {
@@ -20,10 +21,10 @@ export interface PortaLotes {
 
 const REMESSAS_NA_FASE_5 = 'As remessas chegam na Fase 5';
 
-/** "Sem lotes" (D11): o item PROBLEMA fica em AGUARDANDO_NF depois da NF; a Fase 5 aloca os pendentes. */
+/** Fase 5: alocação ligada; o restante da porta continua "sem lotes" até as Tarefas 3 e 6. */
 export const portaLotes: PortaLotes = {
-  async alocarItensProblema() {
-    // D11: nada a fazer até a Fase 5.
+  async alocarItensProblema(tx, devolucaoId, agora) {
+    await alocarItensProblema(tx, devolucaoId, agora);
   },
   async motivoParaNaoCancelarDevolucao() {
     return null;

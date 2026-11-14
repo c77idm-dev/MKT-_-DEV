@@ -81,7 +81,7 @@ function pedir(devolucaoId: string, usuario: UsuarioSessao = fiscal) {
 }
 
 describe('emissão da NF de devolução (spec §6.4, §8.6; contrato §5.7)', () => {
-  it('solicita, envia e autoriza na 2ª consulta: BOM disponível, PROBLEMA aguardando (D11), devolução concluída', async () => {
+  it('solicita, envia e autoriza na 2ª consulta: BOM disponível, PROBLEMA sem fornecedor (Fase 5), devolução concluída', async () => {
     const { dev, venda } = await devolucaoPronta();
     const { notaFiscalId } = await pedir(dev.id);
     expect(await notaDe(notaFiscalId)).toMatchObject({
@@ -122,7 +122,7 @@ describe('emissão da NF de devolução (spec §6.4, §8.6; contrato §5.7)', ()
       .from(itensDevolucao)
       .where(eq(itensDevolucao.devolucaoId, dev.id))
       .orderBy(asc(itensDevolucao.unidade));
-    expect(itens.map((i) => i.status)).toEqual(['DISPONIVEL_VENDA', 'AGUARDANDO_NF', 'AUSENTE']);
+    expect(itens.map((i) => i.status)).toEqual(['DISPONIVEL_VENDA', 'SEM_FORNECEDOR', 'AUSENTE']);
 
     const eventos = await listarEventos(db, 'devolucao', dev.id);
     expect(eventos.map((e) => e.acao)).toEqual(expect.arrayContaining(['nf_solicitada', 'nf_autorizada']));
