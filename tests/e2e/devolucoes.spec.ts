@@ -151,10 +151,10 @@ test.describe('mobile-first (celular)', () => {
   });
 });
 
-test('a etapa 6 não existe (HTTP 404) e a etapa 5 mostra o aviso dos lotes', async ({ page }) => {
+test('a etapa 6 não existe (HTTP 404) e a etapa 5 mostra a lista de lotes', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.operador);
   await paginaNaoEncontrada(page, '/fluxo/etapa/6');
   await page.goto('/fluxo/etapa/5');
-  await expect(page.getByText('Os lotes por fornecedor aparecem aqui quando a conferência estiver pronta.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Agrupamento por Fornecedor (Remessas)', level: 1 })).toBeVisible();
   await semRolagemLateral(page);
 });
