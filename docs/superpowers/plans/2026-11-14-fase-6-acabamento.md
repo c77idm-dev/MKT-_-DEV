@@ -39,13 +39,16 @@ PG="/c/Program Files/PostgreSQL/18/bin"; export PGPASSWORD="$(cat "/c/Users/JEFF
 "$PG/pg_isready.exe" -h localhost -p 5433   # esperado: "localhost:5433 - accepting connections"
 "$PG/createdb.exe" -h localhost -p 5433 -U postgres -O devolucoes devolucoes_f6
 "$PG/createdb.exe" -h localhost -p 5433 -U postgres -O devolucoes devolucoes_test_f6
+# O teste da restauração (Tarefa 10) cria e apaga o banco devolucoes_restauracao_f6_teste: o usuário precisa de CREATEDB.
+"$PG/psql.exe" -h localhost -p 5433 -U postgres -c "alter role devolucoes createdb"
 cp .env "/c/Users/JEFFERSON LIMA/devolucoes-wt/fase-6/.env"   # depois troque DATABASE_URL, DATABASE_URL_TEST e PORTA_E2E
 cd "/c/Users/JEFFERSON LIMA/devolucoes-wt/fase-6"
 npm ci && npm run db:migrar && npx playwright install chromium
 ```
 
 - Windows com Git Bash. O caminho tem espaço: **use aspas sempre**. Todos os comandos deste plano rodam na pasta da worktree: `cd "/c/Users/JEFFERSON LIMA/devolucoes-wt/fase-6"`.
-- A Tarefa 10 roda `pg_dump`, `psql` e `openssl` do PC: `PG_BIN` aponta para `C:/Program Files/PostgreSQL/18/bin` (padrão do teste). O `openssl` e o `sh` vêm do Git for Windows.
+- A Tarefa 10 roda `pg_dump`, `pg_restore`, `psql`, `createdb`, `dropdb` e `openssl` do PC: `PG_BIN` aponta para `C:/Program Files/PostgreSQL/18/bin` (padrão do teste). O `openssl` e o `sh` vêm do Git for Windows.
+- **Acentos no `psql` do Windows:** um texto com acento passado por `-v` chega ao `psql.exe` convertido para ANSI e é recusado ("invalid multibyte character"). Os scripts mandam texto livre (mensagens de erro) **pela entrada padrão**; só valores ASCII (uuid, números, caminhos gerados) vão por `-v`.
 
 **Arquivos que esta fase pode editar**
 - Cria ou edita:
@@ -59,7 +62,7 @@ npm ci && npm run db:migrar && npx playwright install chromium
   - painel: `src/modules/devolucoes/busca.ts` (opção `ids`), `src/modules/devolucoes/selos.ts` (usa `prazoVencendo`), `src/app/(app)/fluxo/page.tsx` (bloco Alertas);
   - login e saúde: `src/app/login/acoes.ts` (limite por IP), `src/app/api/saude/route.ts`;
   - infraestrutura: `next.config.ts`, `docker-compose.prod.yml`, `docs/operacao/deploy-vps.md`.
-- Testes: `tests/helpers/fabricas-acabamento.ts`, `tests/e2e/apoio-acabamento.ts`, `tests/e2e/{falhas,alertas,seguranca}.spec.ts`, `scripts/infra.test.ts`, e `src/**/*.test.ts(x)` novos.
+- Testes: `tests/helpers/fabricas-acabamento.ts`, `tests/e2e/apoio-acabamento.ts`, `tests/e2e/{falhas,alertas,seguranca}.spec.ts`, `scripts/infra.test.ts`, e `src/**/*.test.ts(x)` novos. Ajuste pequeno e permitido: `tests/e2e/configuracoes.spec.ts` (Tarefa 11, só a expectativa do "Em breve" de Falhas) e `tests/e2e/saude.spec.ts` (Tarefa 13, só testes novos).
 - **Nunca** mexa nestes arquivos:
   - ambiente e scripts: `src/lib/env.ts`, `.env.example` (a Fase 6 não cria variável lida pelo sistema), `package.json` (scripts e dependências), `src/modules/fila/tarefas.ts` (`midia.retencao` já existe; `falhas` não é uma `NomeTarefa`);
   - congelados que só mudam pela Tarefa 0, no `main`: `src/db/schema/index.ts`, `src/modules/historico/rotulos/*.ts`, `.env.producao.example` e o contrato;
@@ -124,10 +127,10 @@ npm ci && npm run db:migrar && npx playwright install chromium
    - Em `nfe.consultar`, o reenvio repete a última consulta (mais 5 tentativas). Ele não zera a contagem, porque as chaves da série antiga ainda existem e engoliriam as consultas seguintes.
 4. **(extra) "Dispensar"** (ABERTA → DISPENSADA, com confirmação em dois toques) serve para a falha que não tem mais conserto. Sem isso, a lista só cresceria. Chave nova `tarefa_dispensada` (E19).
 5. **Histórico das Falhas:** os eventos `tarefa_reenviada` e `tarefa_dispensada` vão para a entidade `configuracao`, id `falhas`, com `{ falhaId, tarefa }`. A própria falha guarda quem a tratou e quando (`resolvida_por`, `resolvida_em`).
-6. **Mensagem do erro:** só o `message`, sem a pilha, até 500 caracteres, sem caracteres de controle. Segue a pendência da Fase 3 "não registrar o corpo cru dos erros".
+6. **Mensagem do erro:** só o `message`, sem a pilha, até 500 caracteres, sem caracteres de controle. Segue a pendência da Fase 3 "não registrar o corpo cru dos erros". O tempo esgotado do pg-boss chega como `{ value: { message: 'job timed out' } }` e aparece como **"Tempo esgotado"**. A função (`mensagemDoErro`) mora em `src/lib/log.ts`, que é puro; `falhas.ts` importa dali.
 7. **Prazo de guarda (spec §9).**
    - (a) "Contestação ainda não resolvida" = AGUARDANDO_GESTOR ou FALHOU; ENVIADA conta como resolvida.
-   - (b) Também bloqueiam a limpeza: unidade `SEM_FORNECEDOR`, e unidade num lote que não está FINALIZADO.
+   - (b) Também bloqueiam a limpeza: unidade num lote que não está FINALIZADO, e **qualquer unidade com `destino = 'PROBLEMA'` que ainda não está RESOLVIDO**. A regra cobre `SEM_FORNECEDOR`, `EM_LOTE`, `ENVIADO` e a unidade PROBLEMA que ficou em AGUARDANDO_NF numa devolução CONCLUIDA (D11, até a `lotes.alocar-pendentes` rodar).
    - (c) Só sai **mídia**: Fotos, Vídeo de Prova e extras. O XML e o DANFE das NF e o XML da NF de venda nunca saem: são guarda fiscal.
    - (d) O arquivo é apagado primeiro (`armazenamentoDoProvedor(provedor)`, E15) e o temporário também; só depois a linha vira APAGADA, com `caminho` e `caminho_temporario` vazios. Os hashes, o tipo e quem enviou ficam. Arquivo que já sumiu não é erro. Se a gravação falhar depois de apagar, a próxima rodada termina o serviço.
    - (e) Rodadas de 50 devoluções, até 4 minutos por execução (a tarefa expira em 300 s). O que sobrar fica para o dia seguinte.
@@ -143,22 +146,24 @@ npm ci && npm run db:migrar && npx playwright install chromium
 | Sincronização com o ML parada há mais de 1 h | | | ✓ | `/configuracoes/mercado-livre` |
 | Itens sem fornecedor | | ✓ | ✓ | `/lotes/sem-fornecedor` |
 | (extra) Entregue (ML) sem leitura física | ✓ | | ✓ | `/fluxo/alertas#entregue_sem_leitura` |
-| Status do ML mudou depois da chegada (spec §7.3: "alerta para o Gestor") | | | ✓ | `/fluxo/alertas#ml_status_apos_chegada` |
+| Status do ML mudou depois da chegada (spec §7.3: "alerta para o Gestor"; só cancelamento ou extravio, decisão 10) | | | ✓ | `/fluxo/alertas#ml_status_apos_chegada` |
 | (extra) NF cancelada com o lote já adiante (Fase 5, decisão 13) | | ✓ | ✓ | `/fluxo/alertas#lote_nf_cancelada` |
 | (extra) Tarefas em Falhas | | | ✓ | `/configuracoes/falhas` |
 | (extra) Backup diário atrasado | | | ✓ | `/configuracoes/falhas` |
 | (extra) Disco do servidor quase cheio (spec §16: "monitorar o uso") | | | ✓ | `/configuracoes/conferencia` |
 
 10. **Alertas que nascem de um evento** ("Status do ML mudou depois da chegada" e "NF cancelada com o lote já adiante") ficam no painel por **7 dias** e somem sozinhos, sem botão "ciente". O registro continua no histórico.
+    - A Fase 3 grava `ml_status_apos_chegada` em **qualquer** troca do `statusCanal` depois da leitura física (ex.: `shipped` → `delivered`, que é a vida normal de quase toda devolução do ML). O alerta conta **só** os eventos cujo `dados.statusCanal` é de encerramento no ML: os status de `STATUS_ML_CANCELAMENTO` ou `STATUS_ML_EXTRAVIO` (`src/modules/mercado-livre/status.ts`), os mesmos que antes da chegada levariam a CANCELADA ou EXTRAVIADA. É o caso que o Gestor precisa ver (spec §7.3).
 11. **"Prazo do ML vencendo"** usa a mesma regra do selo do cartão: prazo em até 24 h, ou já vencido. Valem as devoluções em PENDENTE_CHEGADA, AGUARDANDO_CONFERENCIA ou EM_CONFERENCIA e, para o Gestor, as contestações AGUARDANDO_GESTOR ou FALHOU. A regra vira uma função só, `prazoVencendo`, que o selo passa a usar.
 12. **"2 dias úteis"** (spec §5.2, extra): de segunda a sexta, no fuso de Brasília, sem feriados. Contam os dias úteis inteiros **depois** do dia da entrega. Ex.: entregue na sexta, o alerta aparece na terça.
-13. **Painel:** um bloco "Alertas" no topo do Fluxo, acima da Busca Avançada, com uma linha por alerta (título, contagem e link). Sem alertas, o bloco não aparece. **(extra)** A página `/fluxo/alertas` mostra os cartões das devoluções de cada alerta (no celular, cartões; nada de tabela).
+13. **Painel:** um bloco "Alertas" no topo do Fluxo, acima da Busca Avançada, com uma linha por alerta (título, contagem e link). Sem alertas, o bloco não aparece. O Gestor pode ter até 11 linhas: em 390×844 isso empurraria o quadro para fora da tela, então o painel mostra **as 3 primeiras** (na ordem de prioridade da decisão 9) e o link **"Ver todos os alertas (N)"**. **(extra)** A página `/fluxo/alertas` mostra a lista inteira no topo e, abaixo, os cartões das devoluções de cada alerta (no celular, cartões; nada de tabela).
 14. **Limite de login por IP:**
     - 20 tentativas **que falham** a cada 15 minutos, por IP. Só as falhas contam, porque o escritório inteiro sai pelo mesmo IP e o turno começa com todo mundo entrando.
-    - A contagem fica em memória (um processo `web`), num mapa limitado a 10 mil IPs.
+    - A contagem fica em memória (um processo `web`), num mapa limitado a 10 mil IPs. Com o mapa cheio, saem primeiro as janelas vencidas e depois as **mais antigas** (nunca um `clear()`, que soltaria um atacante no meio da janela).
+    - IPv6 conta por **/64** (os 4 primeiros grupos): um só cliente IPv6 costuma ter a /64 inteira e trocaria de endereço a cada tentativa.
     - Com o IP bloqueado, a senha nem é conferida.
     - Soma-se ao bloqueio por usuário que já existe (5 falhas, 15 minutos). O IP é o último do `X-Forwarded-For`, que o nginx da VPS escreve (`ipDaRequisicao`).
-15. **Cabeçalhos de segurança** (todas as rotas):
+15. **Cabeçalhos de segurança** (todas as páginas; as rotas `/api/` ficam de fora da regra, com `source: "/((?!api/).*)"`, para o visualizador de PDF do navegador abrir o DANFE e as mídias manterem os cabeçalhos próprios da Fase 2):
     - `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`;
     - `Permissions-Policy: camera=(self), microphone=(self), geolocation=(), payment=(), usb=()`;
     - `Strict-Transport-Security: max-age=31536000`, só no build de produção;
@@ -170,20 +175,27 @@ npm ci && npm run db:migrar && npx playwright install chromium
     - O `worker` grava um batimento a cada 30 s em `/tmp/devolucoes-worker-vivo`, e o healthcheck exige um batimento com menos de 2 minutos.
     - O Docker só marca "unhealthy" (`docker ps`); quem reinicia o processo caído é o `restart: unless-stopped`.
     - Sem "autoheal": a VPS é compartilhada.
-18. **Logs (spec §11):** `src/instrumentation.ts` grava cada erro de requisição do servidor numa linha JSON: hora, caminho **sem a query**, método, rota, tipo, mensagem (até 500 caracteres) e `digest`. Nunca grava cabeçalhos nem corpo.
+18. **Logs (spec §11):** `src/instrumentation.ts` grava cada erro de requisição do servidor numa linha JSON: hora, caminho **sem a query**, método, rota, tipo, mensagem (até 500 caracteres) e `digest`. Nunca grava cabeçalhos nem corpo. O próprio Next continua escrevendo o erro com a pilha no stderr; a linha JSON é a que se procura e se filtra no `docker logs`.
 19. **Backup diário (spec §10):**
     - **Onde roda:** serviço `backup` no compose, com `postgres:17-alpine` e limite de 256 MB. Na subida, ele instala `rclone`, `openssl` e `tzdata` pelo `apk`, e a VPS continua sem compilar nada.
+    - **Sem `env_file`:** o container recebe **só** o que usa (`PG*`, `BACKUP_*`, `ARMAZENAMENTO`, `MIDIA_DIR` e o nome do bucket das mídias, `S3_BUCKET`), por `environment:` com interpolação do `--env-file`. Ele roda `apk add` como root, sem versão fixa; por isso nunca vê `ML_CLIENT_SECRET`, `CHAVE_CRIPTOGRAFIA`, `FOCUS_TOKEN_*`, as chaves `S3_*` nem `SEGREDO_LINKS`. O risco que sobra (um pacote do Alpine alterado) fica anotado no `deploy-vps.md`, e o alerta "Backup diário atrasado" é a rede de proteção se a instalação falhar. Uma imagem própria compilada pelo GitHub Actions resolveria isso de vez; ela fica como melhoria opcional.
     - **Quando:** às **02h30** de Brasília, antes do prazo de guarda das 03h00 e da limpeza das 03h30.
     - **O banco:** `pg_dump -Fc`, cifrado (AES-256-CBC, PBKDF2 com 200 mil iterações, senha `BACKUP_SENHA`), enviado a um **bucket só de backup** (B2 ou R2, com chave restrita a ele). O envio é por streaming, sem arquivo temporário no disco da VPS.
-    - **As mídias:** com `ARMAZENAMENTO=disco`, vai também um `tar` cifrado de `MIDIA_DIR`. Com `ARMAZENAMENTO=s3`, as mídias já estão fora da VPS: o roteiro manda ligar no B2 a regra que guarda as versões antigas por 30 dias.
-    - **Guarda:** apaga do bucket o que tiver mais de **30 dias**.
+    - **As mídias:** com `ARMAZENAMENTO=disco`, vai também um `tar` cifrado de `MIDIA_DIR`. É uma cópia **inteira por dia**: com 30 dias guardados, o bucket chega a 30 vezes o tamanho das mídias. Isso só serve para o teste na bancada; o uso diário é com o B2 (contrato §9.2). Com `ARMAZENAMENTO=s3`, as mídias já estão fora da VPS: o roteiro manda ligar no B2 a regra que guarda as versões antigas por 30 dias.
+    - **Guarda de 30 dias:** quem apaga é a **regra de ciclo de vida do bucket de backup** no B2. O `rclone delete` do B2 só esconde o arquivo (vira versão antiga), sem liberar espaço. A chave recomendada **não tem permissão de apagar** (proteção contra ransomware: quem invadir a VPS não apaga os backups). Por isso o `rclone delete --min-age 30d` do script é só um reforço: se a chave não puder apagar, ele registra um aviso no log e o backup continua OK.
+    - **Bucket separado de verdade:** o script recusa `BACKUP_S3_BUCKET` igual a `S3_BUCKET` (o das mídias).
     - **Registro:** cada execução fica em `execucoes_backup` (EM_ANDAMENTO → OK ou FALHOU, com o tamanho e o erro).
     - **Variáveis novas** (E19): `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGIAO`, `BACKUP_S3_BUCKET`, `BACKUP_S3_CHAVE_ID`, `BACKUP_S3_CHAVE_SECRETA` e `BACKUP_SENHA`. Elas ficam só no `.env.producao`, e só o script as lê; o `lerEnv` não muda.
-20. **Restauração:** `restaurar.sh` restaura por padrão num banco **separado** (`devolucoes_restauracao`) e mostra as contagens das tabelas principais. Restaurar por cima do banco do sistema exige `CONFIRMAR=sim` e o `web` e o `worker` parados. O procedimento fica em `docs/operacao/backup-restauracao.md`.
-21. **(extra) Alerta "Backup diário atrasado":** dispara quando não há backup OK nas últimas 26 h, mas só depois que o primeiro backup foi registrado. Antes disso (no PC, no e2e e na VPS ainda sem backup), não há o que vigiar. **(extra) Alerta "Disco do servidor quase cheio":** mais de 85% de uso no disco de `MIDIA_DIR`.
-22. **(extra)** A tela Falhas mostra, no topo, o último backup (situação, hora e tamanho).
-23. **Índice novo** em `eventos_historico (acao, em)`, para os alertas por evento não varrerem a tabela inteira.
+20. **Restauração** (`restaurar.sh <arquivo> [banco]`):
+    - Por padrão, restaura num banco **separado** (`devolucoes_restauracao`) e mostra as contagens das tabelas principais.
+    - Sem `CONFIRMAR=sim`, só aceita destinos que começam com `devolucoes_restauracao`. Qualquer outro nome é recusado antes de apagar o que for (ex.: `restaurar.sh arq postgres` apagaria o banco `postgres`).
+    - Por cima do banco do sistema (`CONFIRMAR=sim` e o destino igual a `PGDATABASE`): com o `web` e o `worker` parados, `dropdb` e `createdb` conectados ao banco `postgres`, e depois o `pg_restore` num banco limpo. Isso é mais previsível que o `--clean`, que deixa para trás o que o dump não conhece (ex.: o schema do pg-boss de outra versão).
+    - As mídias (`tar` do modo disco) voltam **à mão**, com o comando do documento. Elas não têm teste automático, porque o modo disco é só para a bancada.
+    - O procedimento fica em `docs/operacao/backup-restauracao.md`. A restauração do banco tem teste automático no PC (Tarefa 10) e o teste de verdade na VPS (spec §14).
+21. **(extra) Alerta "Backup diário atrasado":** dispara quando não há backup OK nas últimas 26 h, mas só depois que o primeiro backup foi registrado. Antes disso (no PC, no e2e e na VPS ainda sem backup), não há o que vigiar. Uma execução EM_ANDAMENTO há mais de 6 h conta como interrompida. **(extra) Alerta "Disco do servidor quase cheio":** mais de 85% de uso no disco de `MIDIA_DIR`.
+22. **(extra)** A tela Falhas mostra, no topo, o último backup: OK (hora e tamanho), FALHOU (o erro), "Em andamento desde HH:MM" ou, passadas 6 h, "Interrompido (começou em …)".23. **Índice novo** em `eventos_historico (acao, em)`, para os alertas por evento não varrerem a tabela inteira.
 24. **Passagem para produção:** a ação já existe na Fase 4 (Configurações › Fiscal, com a marcação "O contador validou…" e o `FOCUS_TOKEN_PRODUCAO`). A Fase 6 não muda código: deixa o roteiro em "Depois da fase".
+25. **Não adotado (opcional da revisão):** fechar sozinha a falha de uma tarefa agendada quando uma execução seguinte dá certo. O Gestor dispensa à mão (decisão 4); se for preciso, o fechamento automático entra depois, com um estado novo `RESOLVIDA`.
 
 ## Pontos de atenção na revisão
 
@@ -194,7 +206,9 @@ O que a spec não diz, mas vai acontecer com quem usa o sistema. Cada linha tem 
 3. **O prazo de guarda encontra o arquivo já apagado,** ou a mídia está no disco depois da troca para S3. Ele marca APAGADA sem erro e **nunca** apaga com lote aberto, unidade sem fornecedor ou contestação pendente (Tarefa 4).
 4. **O escritório inteiro entra pelo mesmo IP:** 30 logins certos seguidos não bloqueiam ninguém, e só as falhas contam (Tarefa 7).
 5. **A CSP quebra a câmera, o leitor ZXing, o vídeo ou os links do B2:** o e2e percorre as telas principais e falha se o navegador acusar uma violação da CSP (Tarefa 13). A suíte inteira, com a conferência, roda na Integração.
-6. **O backup roda sem senha ou com o bucket errado:** sai com erro, grava FALHOU e o painel do Gestor avisa (Tarefas 6 e 10).
+6. **O backup roda sem senha ou com o bucket das mídias:** sai com erro, grava FALHOU (mesmo com acento na mensagem, no `psql` do Windows) e o painel do Gestor avisa (Tarefas 6 e 10).
+7. **A restauração não restaura:** o teste da Tarefa 10 faz o backup, restaura num banco novo e confere as contagens. Um destino errado (`postgres`) é recusado antes de qualquer `dropdb`.
+8. **Quase toda devolução do ML muda de status depois da chegada** (`delivered`): isso não pode acender o alerta do Gestor (Tarefa 5, teste "delivered não alerta").
 
 ## Mapa de arquivos
 
@@ -541,9 +555,9 @@ git commit -m "feat(acabamento): vocabulário, tabelas falhas_tarefas e execucoe
 ### Tarefa 2: Falhas: a fila `falhas` (deadLetter) e `registrarFalha` com agrupamento
 
 **Arquivos:**
-- Criar: `src/modules/acabamento/falhas.ts`
+- Criar: `src/modules/acabamento/falhas.ts`, `src/lib/log.ts` (só `mensagemDoErro`; a Tarefa 9 acrescenta a linha JSON do web)
 - Modificar: `src/modules/fila/fila.ts`, `src/modules/fila/fila.test.ts` (o `toEqual` de `opcoesDaFila` ganha `deadLetter`), `src/worker/index.ts`
-- Testes: `src/modules/acabamento/falhas.test.ts`, `src/modules/acabamento/falhas.int.test.ts`, `src/worker/falhas.int.test.ts`
+- Testes: `src/lib/log.test.ts`, `src/modules/acabamento/falhas.test.ts`, `src/modules/acabamento/falhas.int.test.ts`, `src/worker/falhas.int.test.ts`
 
 **Interfaces:**
 - Consome: `criarPgBoss`, `criarFilas`, `iniciarWorker` (P2), `ehNomeTarefa`, `ERRO_MAXIMO`, `falhasTarefas` (Tarefa 1).
@@ -551,11 +565,13 @@ git commit -m "feat(acabamento): vocabulário, tabelas falhas_tarefas e execucoe
   - `fila.ts`:
     - `export const FILA_FALHAS = 'falhas'` e `export const OPCOES_FILA_FALHAS`;
     - `opcoesDaFila(nome)` passa a incluir `deadLetter: FILA_FALHAS`;
-    - `criarFilas(boss)` cria e atualiza a fila `falhas` **antes** das outras (a FK `dead_letter` do pg-boss exige que ela exista).
+    - `criarFilas(boss)` cria e atualiza a fila `falhas` **antes** das outras (a FK `dead_letter` do pg-boss exige que ela exista);
+    - `criarPgBoss(url, opcoes)` aceita `intervaloSupervisaoSegundos?: number`, repassado ao pg-boss (só os testes usam; veja o Passo 2).
+  - `worker/index.ts`: `OpcoesWorker.intervaloSupervisaoSegundos?: number`, repassado ao `criarPgBoss` (só nos testes).
+  - `src/lib/log.ts` (puro, sem imports do projeto): `mensagemDoErro(saida: unknown): string`. `falhas.ts` importa dali, e não o contrário.
   - `falhas.ts`:
     - `type EntradaFalha = { tarefa: string; dados: unknown; erro: unknown; tentativas: number; jobId: string; falhouEm: Date }`;
     - `assinaturaFalha(tarefa: string, dados: unknown): string`, sha256 em hex de `tarefa + '\u0000' + JSON` com as chaves ordenadas, em qualquer profundidade;
-    - `mensagemDoErro(saida: unknown): string`;
     - `entradaDoJobMorto(job: { id: string; data: unknown; sourceName: string | null; sourceId: string | null; sourceOutput: object | null; sourceRetryCount: number | null; createdOn: Date }): EntradaFalha | null`;
     - `registrarFalha(db: DbOuTx, e: EntradaFalha): Promise<{ falhaId: string } | null>`.
   - `worker/index.ts`: dentro de `iniciarWorker`, sempre (com qualquer `manipuladores`), um `boss.work(FILA_FALHAS, { batchSize: 1, localConcurrency: 1, includeMetadata: true, pollingIntervalSeconds }, ...)` que chama `registrarFalha(db, entradaDoJobMorto(job))` e registra `{ nivel: 'erro', mensagem: 'tarefa foi para Falhas', tarefa, falhaId }`.
@@ -566,7 +582,7 @@ git commit -m "feat(acabamento): vocabulário, tabelas falhas_tarefas e execucoe
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import { assinaturaFalha, entradaDoJobMorto, mensagemDoErro } from './falhas';
+import { assinaturaFalha, entradaDoJobMorto } from './falhas';
 
 describe('assinaturaFalha (decisão 2)', () => {
   it('não depende da ordem das chaves', () => {
@@ -582,23 +598,6 @@ describe('assinaturaFalha (decisão 2)', () => {
   });
 });
 
-describe('mensagemDoErro (decisão 6)', () => {
-  it('só a message do erro que o pg-boss guardou, sem a pilha', () => {
-    expect(mensagemDoErro({ name: 'Error', message: 'Focus fora do ar', stack: 'Error: Focus fora do ar\n    at x (y.ts:1)' })).toBe('Focus fora do ar');
-  });
-  it('texto simples, vazio e outros formatos', () => {
-    expect(mensagemDoErro('tempo esgotado')).toBe('tempo esgotado');
-    expect(mensagemDoErro(null)).toBe('Sem detalhes do erro.');
-    expect(mensagemDoErro({ value: 'x' })).toBe('{"value":"x"}');
-  });
-  it('corta em 500 caracteres e tira caracteres de controle', () => {
-    const longa = mensagemDoErro({ message: 'a'.repeat(600) });
-    expect(longa).toHaveLength(500);
-    expect(longa.endsWith('…')).toBe(true);
-    expect(mensagemDoErro({ message: 'linha 1\nlinha 2\u0000' })).toBe('linha 1 linha 2');
-  });
-});
-
 describe('entradaDoJobMorto', () => {
   it('pega a tarefa, os dados, o erro e as tentativas do job original', () => {
     const criado = new Date('2026-11-20T10:00:00Z');
@@ -611,6 +610,34 @@ describe('entradaDoJobMorto', () => {
   });
   it('job sem origem (não veio de outra fila) é ignorado', () => {
     expect(entradaDoJobMorto({ id: 'j', data: {}, sourceName: null, sourceId: null, sourceOutput: null, sourceRetryCount: null, createdOn: new Date() })).toBeNull();
+  });
+});
+```
+
+`src/lib/log.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { mensagemDoErro } from './log';
+
+describe('mensagemDoErro (decisão 6)', () => {
+  it('só a message do erro que o pg-boss guardou, sem a pilha', () => {
+    expect(mensagemDoErro({ name: 'Error', message: 'Focus fora do ar', stack: 'Error: Focus fora do ar\n    at x (y.ts:1)' })).toBe('Focus fora do ar');
+  });
+  it('o tempo esgotado do pg-boss vira "Tempo esgotado"', () => {
+    expect(mensagemDoErro({ value: { message: 'job timed out' } })).toBe('Tempo esgotado');
+    expect(mensagemDoErro({ value: { message: 'outra coisa' } })).toBe('outra coisa');
+  });
+  it('texto simples, vazio e outros formatos', () => {
+    expect(mensagemDoErro('tempo esgotado')).toBe('tempo esgotado');
+    expect(mensagemDoErro(null)).toBe('Sem detalhes do erro.');
+    expect(mensagemDoErro({ value: 'x' })).toBe('{"value":"x"}');
+  });
+  it('corta em 500 caracteres e tira caracteres de controle', () => {
+    const longa = mensagemDoErro({ message: 'a'.repeat(600) });
+    expect(longa).toHaveLength(500);
+    expect(longa.endsWith('…')).toBe(true);
+    expect(mensagemDoErro({ message: 'linha 1\nlinha 2\u0000' })).toBe('linha 1 linha 2');
   });
 });
 ```
@@ -728,10 +755,31 @@ describe('Falhas (spec §11): a tarefa que esgota as 5 tentativas vai para falha
       await worker.parar();
     }
   }, 60_000);
+
+  it('a tarefa que estoura o tempo também vai para Falhas, com "Tempo esgotado"', async () => {
+    const worker = await iniciarWorker({
+      ...opcoes,
+      // O pg-boss confere o tempo na supervisão (60 s por padrão); aqui, a cada 1 s.
+      intervaloSupervisaoSegundos: 1,
+      manipuladores: {
+        'midia.retencao': () => new Promise<void>((ok) => setTimeout(ok, 10_000)),
+      },
+    });
+    try {
+      // Uma tentativa só, de 1 s, só neste teste.
+      await worker.boss.updateQueue('midia.retencao', { retryLimit: 0, expireInSeconds: 1 });
+      await worker.boss.send('midia.retencao', {});
+      await expect.poll(async () => (await db.select().from(falhasTarefas)).length, { timeout: 60_000, interval: 500 }).toBe(1);
+      const [f] = await db.select().from(falhasTarefas);
+      expect(f).toMatchObject({ tarefa: 'midia.retencao', erro: 'Tempo esgotado', situacao: 'ABERTA' });
+    } finally {
+      await worker.parar();
+    }
+  }, 90_000);
 });
 ```
 
-Rode: `npm test -- src/modules/acabamento/falhas src/modules/fila && npm run test:int -- src/modules/acabamento/falhas src/worker/falhas`
+Rode: `npm test -- src/lib/log src/modules/acabamento/falhas src/modules/fila && npm run test:int -- src/modules/acabamento/falhas src/worker/falhas`
 Esperado: FAIL.
 
 - [ ] **Passo 2: Implementar**
@@ -742,6 +790,13 @@ Esperado: FAIL.
   - em `criarFilas`, primeiro `createQueue(FILA_FALHAS, OPCOES_FILA_FALHAS)` e `updateQueue(FILA_FALHAS, OPCOES_FILA_FALHAS)`, e depois o laço de hoje.
   - Confira em `node_modules/pg-boss/dist/types.d.ts` que `QueueOptions`/`UpdateQueueOptions` aceitam `deadLetter` e `retentionSeconds`.
   - Em `fila.test.ts`, o `toEqual` de `opcoesDaFila('midia.transcodificar')` ganha `deadLetter: 'falhas'`.
+  - `criarPgBoss` repassa `intervaloSupervisaoSegundos` ao pg-boss. Confira em `node_modules/pg-boss/dist/types.d.ts` qual intervalo roda a expiração dos jobs (`superviseIntervalSeconds`, `monitorIntervalSeconds` ou `maintenanceIntervalSeconds`, todos de 60 s por padrão) e passe o valor a quem fizer o teste do tempo esgotado passar. Sem a opção, nada muda em produção.
+- `src/lib/log.ts`, `mensagemDoErro`, nesta ordem:
+  - `{ value: { message } }` (o formato do tempo esgotado do pg-boss): `'job timed out'` vira `'Tempo esgotado'`; outro texto, ele mesmo;
+  - `message` (string) → o texto; `string` → ele mesmo;
+  - `null`/`undefined`/`''` → `'Sem detalhes do erro.'`;
+  - outros → `JSON.stringify`.
+  - Depois troca `[\u0000-\u001f\u007f]+` por espaço, faz `trim`, e acima de 500 caracteres corta em 499 + `…`.
 - `falhas.ts`:
   - `registrarFalha`: devolve `null` se `!ehNomeTarefa(e.tarefa)`, e registra o caso no log JSON. Senão, um só comando:
     ```sql
@@ -756,7 +811,7 @@ Esperado: FAIL.
     ```
     No drizzle: `onConflictDoUpdate({ target: falhasTarefas.assinatura, targetWhere: sql\`"situacao" = 'ABERTA'\`, set: {...} })`.
   - `dados` é gravado como objeto; quando não for objeto, vira `{ valor: dados }`.
-  - `mensagemDoErro`: `message` (string) → o texto; `string` → ele mesmo; `null`/`undefined`/`''` → `'Sem detalhes do erro.'`; outros → `JSON.stringify`. Depois troca `[\u0000-\u001f\u007f]+` por espaço, faz `trim`, e acima de `ERRO_MAXIMO` corta em 499 caracteres + `…`.
+  - O `erro` gravado é `mensagemDoErro(e.erro)`, importado de `@/lib/log`.
 - `worker/index.ts`: o consumidor de `FILA_FALHAS`, como nas Interfaces, depois do laço das tarefas. A sobrecarga de `work` com `includeMetadata: true` entrega `JobWithMetadata` (confira em `node_modules/pg-boss/dist/index.d.ts`). Um erro no `registrarFalha` lança: o job da fila `falhas` tenta de novo.
 
 - [ ] **Passo 3: Rodar os testes**
@@ -767,7 +822,7 @@ Esperado: PASS, inclusive o `worker.int.test.ts` e o `fila.int.test.ts` da P2.
 - [ ] **Passo 4: Commit**
 
 ```bash
-git add src/modules/acabamento/falhas.ts src/modules/acabamento/falhas*.test.ts src/modules/fila/fila.ts src/modules/fila/fila.test.ts src/worker/index.ts src/worker/falhas.int.test.ts
+git add src/lib/log.ts src/lib/log.test.ts src/modules/acabamento/falhas.ts src/modules/acabamento/falhas*.test.ts src/modules/fila/fila.ts src/modules/fila/fila.test.ts src/worker/index.ts src/worker/falhas.int.test.ts
 git commit -m "feat(falhas): fila falhas do pg-boss (deadLetter) grava as tarefas que esgotaram as 5 tentativas, agrupando as repetidas" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -941,7 +996,7 @@ git commit -m "feat(falhas): tentar de novo (sem chave única), dispensar (extra
   - `manipuladoresAcabamento['midia.retencao']`: `aplicarRetencao` + `limparLinhasImportacoes`, com o resultado numa linha JSON (`{ origem: 'worker', tarefa: 'midia.retencao', devolucoes, evidencias, importacoes }`).
 
 Regra de seleção (decisão 7). Entram as devoluções com `status = 'CONCLUIDA'` e `concluida_em < agora - meses` (SQL: `${agora}::timestamptz - make_interval(months => ${meses})`), que têm evidência com situação diferente de APAGADA, e para as quais **não existe**:
-- unidade com status `SEM_FORNECEDOR`, `EM_LOTE` ou `ENVIADO`;
+- unidade com `destino = 'PROBLEMA'` e status diferente de `RESOLVIDO` (cobre `SEM_FORNECEDOR`, `EM_LOTE`, `ENVIADO` e a PROBLEMA que ficou em AGUARDANDO_NF numa devolução CONCLUIDA, D11);
 - unidade com `lote_id` de um lote com status diferente de `FINALIZADO`;
 - contestação `AGUARDANDO_GESTOR` ou `FALHOU`.
 
@@ -1027,7 +1082,7 @@ describe('midia.retencao (spec §9)', () => {
     expect(await situacoes(dev.id)).toEqual(['APAGADA', 'APAGADA']);
   });
 
-  it('nunca apaga com lote não FINALIZADO, unidade sem fornecedor ou contestação pendente; apaga quando tudo terminou', async () => {
+  it('nunca apaga com lote não FINALIZADO, unidade PROBLEMA não resolvida ou contestação pendente; apaga quando tudo terminou', async () => {
     const fornecedor = await criarFornecedorCompletoTeste(db);
     const problema = [{ destino: 'PROBLEMA' as const, motivo: 'AVARIADO' as const }];
     const noLoteAberto = await concluidaComMidias(HA_13_MESES, problema);
@@ -1039,6 +1094,8 @@ describe('midia.retencao (spec §9)', () => {
     await criarContestacaoTeste(db, aguardandoGestor.dev.id, { status: 'AGUARDANDO_GESTOR', prazo: null });
     const falhou = await concluidaComMidias(HA_13_MESES);
     await criarContestacaoTeste(db, falhou.dev.id, { status: 'FALHOU', prazo: null });
+    // D11: unidade PROBLEMA que ficou em AGUARDANDO_NF numa devolução CONCLUIDA (a fábrica a deixa assim).
+    const problemaSemLote = await concluidaComMidias(HA_13_MESES, problema);
 
     const terminada = await concluidaComMidias(HA_13_MESES, problema);
     const finalizado = await criarLoteTeste(db, { fornecedorId: fornecedor.id, status: 'FINALIZADO', tipo: 'CONSERTO' });
@@ -1049,7 +1106,7 @@ describe('midia.retencao (spec §9)', () => {
     await criarContestacaoTeste(db, terminada.dev.id, { status: 'ENVIADA', prazo: null });
 
     expect(await aplicarRetencao(db, { agora: AGORA })).toEqual({ devolucoes: 1, evidencias: 2 });
-    for (const d of [noLoteAberto, semFornecedor, aguardandoGestor, falhou]) expect(await situacoes(d.dev.id)).toEqual(['PRONTA', 'PRONTA']);
+    for (const d of [noLoteAberto, semFornecedor, aguardandoGestor, falhou, problemaSemLote]) expect(await situacoes(d.dev.id)).toEqual(['PRONTA', 'PRONTA']);
     expect(await situacoes(terminada.dev.id)).toEqual(['APAGADA', 'APAGADA']);
   });
 
@@ -1155,7 +1212,8 @@ git commit -m "feat(acabamento): midia.retencao apaga as mídias vencidas (nunca
     - `notasRejeitadas(db): Promise<{ devolucaoIds: string[]; lotes: { codigo: string }[] }>`;
     - `contarSemFornecedor(db): Promise<number>`;
     - `devolucoesEntreguesSemLeitura(db, agora): Promise<string[]>`;
-    - `devolucoesComEventoRecente(db, acao: 'ml_status_apos_chegada' | 'lote_alerta_nf_cancelada', agora): Promise<string[]>` e `lotesComAlertaNfCancelada(db, agora): Promise<{ codigo: string }[]>`.
+    - `devolucoesComMLEncerradoAposChegada(db, agora): Promise<string[]>`: eventos `ml_status_apos_chegada` dos últimos 7 dias cujo `dados->>'statusCanal'` está em `STATUS_ML_CANCELAMENTO` ou `STATUS_ML_EXTRAVIO` (decisão 10);
+    - `devolucoesComAlertaLote(db, agora): Promise<string[]>` (eventos `lote_alerta_nf_cancelada` na devolução, últimos 7 dias) e `lotesComAlertaNfCancelada(db, agora): Promise<{ codigo: string }[]>`.
   - `busca.ts`: `OpcoesBusca.ids?: readonly string[]`. Com uma lista vazia, o resultado é vazio (`sql\`false\``).
 
 - [ ] **Passo 1: Escrever os testes que falham**
@@ -1238,8 +1296,8 @@ import { criarDevolucaoTeste, criarUsuarioTeste } from '../../../tests/helpers/f
 import { criarContestacaoTeste, criarDevolucaoConcluidaTeste, criarNotaRejeitadaTeste } from '../../../tests/helpers/fabricas-acabamento';
 import { criarFornecedorCompletoTeste, criarLoteTeste } from '../../../tests/helpers/fabricas-lotes';
 import {
-  contarSemFornecedor, contestacoesComPrazoVencendo, devolucoesComEventoRecente, devolucoesComPrazoVencendo,
-  devolucoesEntreguesSemLeitura, lotesComAlertaNfCancelada, notasRejeitadas,
+  contarSemFornecedor, contestacoesComPrazoVencendo, devolucoesComAlertaLote, devolucoesComMLEncerradoAposChegada,
+  devolucoesComPrazoVencendo, devolucoesEntreguesSemLeitura, lotesComAlertaNfCancelada, notasRejeitadas,
 } from './alertas-devolucoes';
 
 const { db, sql } = criarDbTeste();
@@ -1297,19 +1355,30 @@ describe('alertas das devoluções', () => {
     expect(await devolucoesEntreguesSemLeitura(db, AGORA)).toEqual([sexta.id]);
   });
 
-  it('eventos dos últimos 7 dias: status do ML depois da chegada e NF cancelada com o lote adiante', async () => {
-    const recente = await devolucao({ status: 'AGUARDANDO_CONFERENCIA' });
+  it('status do ML depois da chegada: só cancelamento ou extravio, nos últimos 7 dias (decisão 10)', async () => {
+    const cancelada = await devolucao({ status: 'AGUARDANDO_CONFERENCIA' });
+    const extraviada = await devolucao({ status: 'AGUARDANDO_CONFERENCIA' });
+    const entregue = await devolucao({ status: 'AGUARDANDO_CONFERENCIA' });
     const antiga = await devolucao({ status: 'AGUARDANDO_CONFERENCIA' });
-    await registrarEvento(db, { entidade: 'devolucao', entidadeId: recente.id, acao: 'ml_status_apos_chegada', usuarioId: null, em: horas(-24) });
-    await registrarEvento(db, { entidade: 'devolucao', entidadeId: antiga.id, acao: 'ml_status_apos_chegada', usuarioId: null, em: horas(-24 * 8) });
-    expect(await devolucoesComEventoRecente(db, 'ml_status_apos_chegada', AGORA)).toEqual([recente.id]);
+    const evento = (entidadeId: string, statusCanal: string, em: Date) =>
+      registrarEvento(db, { entidade: 'devolucao', entidadeId, acao: 'ml_status_apos_chegada', usuarioId: null, em, dados: { statusCanalAnterior: 'shipped', statusCanal } });
+    await evento(cancelada.id, 'cancelled', horas(-24));
+    await evento(extraviada.id, 'not_delivered', horas(-24));
+    // A vida normal de quase toda devolução do ML: "delivered" depois da leitura física NÃO alerta.
+    await evento(entregue.id, 'delivered', horas(-24));
+    await evento(antiga.id, 'cancelled', horas(-24 * 8));
+    expect((await devolucoesComMLEncerradoAposChegada(db, AGORA)).sort()).toEqual([cancelada.id, extraviada.id].sort());
+  });
+
+  it('NF cancelada com o lote adiante: devolução e lote, nos últimos 7 dias', async () => {
+    const recente = await devolucao({ status: 'CONCLUIDA' });
 
     const f = await criarFornecedorCompletoTeste(db);
     const lote = await criarLoteTeste(db, { fornecedorId: f.id, status: 'ENVIADO', tipo: 'CONSERTO' });
     await registrarEvento(db, { entidade: 'lote', entidadeId: lote.id, acao: 'lote_alerta_nf_cancelada', usuarioId: null, em: horas(-2) });
     await registrarEvento(db, { entidade: 'devolucao', entidadeId: recente.id, acao: 'lote_alerta_nf_cancelada', usuarioId: null, em: horas(-2) });
     expect(await lotesComAlertaNfCancelada(db, AGORA)).toEqual([{ codigo: lote.codigo }]);
-    expect(await devolucoesComEventoRecente(db, 'lote_alerta_nf_cancelada', AGORA)).toEqual([recente.id]);
+    expect(await devolucoesComAlertaLote(db, AGORA)).toEqual([recente.id]);
   });
 
   it('buscarDevolucoes com ids traz só essas (a página dos alertas usa)', async () => {
@@ -1331,7 +1400,7 @@ Esperado: FAIL.
 - `alertas-devolucoes.ts`: uma consulta por função, como na decisão 9 e nas Interfaces.
   - "Antes da conferência" = `PENDENTE_CHEGADA`, `AGUARDANDO_CONFERENCIA` e `EM_CONFERENCIA`.
   - `devolucoesEntreguesSemLeitura` traz as candidatas (`status = 'PENDENTE_CHEGADA' and entregue_segundo_canal_em is not null`) e filtra com `diasUteisDepois(...) >= 2` no TypeScript.
-  - Os eventos usam `acao = ? and em > agora - JANELA_ALERTA_EVENTO_MS`, com `distinct entidade_id` (o índice da Tarefa 1 atende).
+  - Os eventos usam `acao = ? and em > agora - JANELA_ALERTA_EVENTO_MS`, com `distinct entidade_id` (o índice da Tarefa 1 atende). Em `devolucoesComMLEncerradoAposChegada`, acrescente `dados->>'statusCanal' in (...)`, com a lista montada de `[...STATUS_ML_CANCELAMENTO, ...STATUS_ML_EXTRAVIO]` (import de `@/modules/mercado-livre/status`; nada de copiar os valores).
 
 - [ ] **Passo 3: Rodar os testes**
 
@@ -1351,7 +1420,7 @@ git commit -m "feat(alertas): regras dos alertas do painel (prazo do ML, NF reje
 
 **Arquivos:**
 - Criar: `src/modules/acabamento/backup.ts`, `src/modules/acabamento/disco.ts`, `src/modules/acabamento/alertas.ts`
-- Testes: `src/modules/acabamento/alertas.int.test.ts`
+- Testes: `src/modules/acabamento/alertas.int.test.ts`, `src/modules/acabamento/backup.test.ts`
 
 **Interfaces:**
 - Consome: Tarefas 3 (`contarFalhasAbertas`) e 5; `obterContaML` e `sincronizacaoAtrasada` (Fase 3); `execucoesBackup`; `lerEnv().MIDIA_DIR`; `contaMLTeste` (`tests/helpers/fabricas-ml.ts`).
@@ -1359,14 +1428,22 @@ git commit -m "feat(alertas): regras dos alertas do painel (prazo do ML, NF reje
   - `backup.ts`:
     - `type ResumoBackup = { situacao: SituacaoBackup; iniciadoEm: Date; terminadoEm: Date | null; tamanhoBanco: number | null; erro: string | null }`;
     - `ultimoBackup(db): Promise<ResumoBackup | null>` (a execução mais recente);
-    - `backupEstaAtrasado(db, agora): Promise<boolean>`.
+    - `backupEstaAtrasado(db, agora): Promise<boolean>`;
+    - `INTERROMPIDO_APOS_MS = 6 * 60 * 60 * 1000`;
+    - `type VistaBackup = { texto: string; tom: 'bom' | 'atencao' | 'erro'; erro: string | null }`;
+    - `vistaDoBackup(b: ResumoBackup | null, agora: Date): VistaBackup | null` (pura), com os textos:
+      - sem backup → `null`;
+      - OK → "Último backup: {data} ({tamanho})", tom `bom`, com o tamanho em MB e uma casa decimal ("120,4 MB");
+      - FALHOU → "O último backup falhou em {data}.", tom `erro`, com o erro;
+      - EM_ANDAMENTO com menos de 6 h → "Backup em andamento desde {hora}.", tom `atencao`;
+      - EM_ANDAMENTO com mais de 6 h → "Backup interrompido (começou em {data}).", tom `erro` (decisão 21).
   - `disco.ts`: `usoDiscoMidia(): Promise<UsoDisco | null>` (`statfs` de `MIDIA_DIR`; `null` se falhar).
   - `alertas.ts`:
     - `type AlertaPainel = { id: IdAlerta; titulo: string; quantidade: number | null; detalhe: string | null; tom: TomSelo; href: string }`;
     - `type FontesAlertas = { usoDisco?: () => Promise<UsoDisco | null> }`;
     - `carregarAlertas(db: DbOuTx, perfil: Perfil, agora?: Date, fontes?: FontesAlertas): Promise<AlertaPainel[]>`: só os do perfil, na ordem de `IDS_ALERTA`, e só os que estão ativos (contagem > 0 ou condição verdadeira). O prazo do ML do Gestor soma devoluções e contestações. No disco, `detalhe` = `"92% em uso"`.
     - `type DetalheAlerta = { id: IdAlerta; titulo: string; devolucaoIds: string[]; links: { texto: string; href: string }[] }`;
-    - `detalhesDosAlertas(db: DbOuTx, perfil: Perfil, agora?: Date): Promise<DetalheAlerta[]>`: só os alertas que listam devoluções (`prazo_ml`, `nf_rejeitada`, `entregue_sem_leitura`, `ml_status_apos_chegada`, `lote_nf_cancelada`) e que são do perfil. Os links são as contestações ("Contestação da DEV-…" → `/contestacoes/{id}`) e os lotes ("LOT-…" → `/lotes/LOT-…`).
+    - `detalhesDosAlertas(db: DbOuTx, perfil: Perfil, agora?: Date): Promise<DetalheAlerta[]>`: só os alertas que listam devoluções (`prazo_ml`, `nf_rejeitada`, `entregue_sem_leitura`, `ml_status_apos_chegada` via `devolucoesComMLEncerradoAposChegada`, `lote_nf_cancelada` via `devolucoesComAlertaLote`) e que são do perfil. Os links são as contestações ("Contestação da DEV-…" → `/contestacoes/{id}`) e os lotes ("LOT-…" → `/lotes/LOT-…`).
 
 - [ ] **Passo 1: Escrever os testes que falham**
 
@@ -1437,7 +1514,29 @@ describe('carregarAlertas', () => {
 });
 ```
 
-Rode: `npm run test:int -- src/modules/acabamento/alertas.int`
+`src/modules/acabamento/backup.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { vistaDoBackup } from './backup';
+
+const agora = new Date('2026-11-20T12:00:00Z');
+const base = { terminadoEm: null, tamanhoBanco: null, erro: null };
+
+describe('vistaDoBackup (decisões 21 e 22)', () => {
+  it('sem backup, OK e FALHOU', () => {
+    expect(vistaDoBackup(null, agora)).toBeNull();
+    expect(vistaDoBackup({ ...base, situacao: 'OK', iniciadoEm: new Date('2026-11-20T05:30:00Z'), tamanhoBanco: 126_248_141 }, agora)).toMatchObject({ tom: 'bom', texto: expect.stringContaining('120,4 MB') });
+    expect(vistaDoBackup({ ...base, situacao: 'FALHOU', iniciadoEm: new Date('2026-11-20T05:30:00Z'), erro: 'BACKUP_SENHA não definida.' }, agora)).toMatchObject({ tom: 'erro', erro: 'BACKUP_SENHA não definida.' });
+  });
+  it('em andamento há pouco é atenção; há mais de 6 h, interrompido', () => {
+    expect(vistaDoBackup({ ...base, situacao: 'EM_ANDAMENTO', iniciadoEm: new Date('2026-11-20T11:00:00Z') }, agora)).toMatchObject({ tom: 'atencao', texto: expect.stringMatching(/^Backup em andamento desde/) });
+    expect(vistaDoBackup({ ...base, situacao: 'EM_ANDAMENTO', iniciadoEm: new Date('2026-11-20T05:00:00Z') }, agora)).toMatchObject({ tom: 'erro', texto: expect.stringMatching(/^Backup interrompido/) });
+  });
+});
+```
+
+Rode: `npm test -- src/modules/acabamento/backup && npm run test:int -- src/modules/acabamento/alertas.int`
 Esperado: FAIL.
 
 - [ ] **Passo 2: Implementar**
@@ -1457,7 +1556,7 @@ Esperado: PASS.
 - [ ] **Passo 4: Commit**
 
 ```bash
-git add src/modules/acabamento/alertas.ts src/modules/acabamento/alertas.int.test.ts src/modules/acabamento/backup.ts src/modules/acabamento/disco.ts
+git add src/modules/acabamento/alertas.ts src/modules/acabamento/alertas.int.test.ts src/modules/acabamento/backup.ts src/modules/acabamento/backup.test.ts src/modules/acabamento/disco.ts
 git commit -m "feat(alertas): alertas do sistema (conta e sincronização do ML, Falhas, backup e disco) e carregarAlertas por perfil" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -1476,7 +1575,8 @@ git commit -m "feat(alertas): alertas do sistema (conta e sincronização do ML,
   - `MAX_FALHAS_POR_IP = 20`, `JANELA_IP_MS = 15 * 60 * 1000`
   - `MENSAGEM_LIMITE_IP = 'Muitas tentativas de entrar a partir desta rede. Tente de novo em 15 minutos.'`
   - `type LimiteLogin = { bloqueado(ip: string, agoraMs?: number): boolean; registrarFalha(ip: string, agoraMs?: number): void; limpar(): void; tamanho(): number }`
-  - `criarLimiteLogin(p?: { maximo?: number; janelaMs?: number; maxChaves?: number }): LimiteLogin`. A janela é fixa, contada da 1ª falha. Com o mapa cheio (10 mil por padrão), apaga as janelas vencidas; se ainda estiver cheio, recomeça do zero (como o `criarLimitador` da Fase 0).
+  - `criarLimiteLogin(p?: { maximo?: number; janelaMs?: number; maxChaves?: number }): LimiteLogin`. A janela é fixa, contada da 1ª falha. Com o mapa cheio (10 mil por padrão), apaga as janelas vencidas; se ainda estiver cheio, apaga as **mais antigas** (o `Map` guarda a ordem de inserção), nunca o mapa inteiro.
+  - `chaveDoIp(ip: string): string`: IPv4 e textos que não são IP ficam como estão; IPv6 vira o prefixo /64 (os 4 primeiros grupos, depois de expandir o `::`), em minúsculas. `bloqueado` e `registrarFalha` usam a chave.
   - `limiteLoginPadrao(): LimiteLogin`, um só por processo (`globalThis`, para o recarregamento do `next dev`).
 
 - [ ] **Passo 1: Escrever os testes que falham**
@@ -1485,7 +1585,7 @@ git commit -m "feat(alertas): alertas do sistema (conta e sincronização do ML,
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import { criarLimiteLogin, JANELA_IP_MS } from './limite-login';
+import { chaveDoIp, criarLimiteLogin, JANELA_IP_MS } from './limite-login';
 
 describe('limite de login por IP (spec §10; decisão 14)', () => {
   it('bloqueia o IP depois de 20 falhas em 15 minutos; outro IP segue livre', () => {
@@ -1511,10 +1611,22 @@ describe('limite de login por IP (spec §10; decisão 14)', () => {
     for (let i = 0; i < 30; i++) expect(l.bloqueado('1.1.1.1', 0)).toBe(false);
   });
 
-  it('a memória tem limite', () => {
-    const l = criarLimiteLogin({ maxChaves: 2 });
-    for (const ip of ['a', 'b', 'c', 'd']) l.registrarFalha(ip, 0);
+  it('a memória tem limite: saem os mais antigos, e o bloqueio dos recentes continua', () => {
+    const l = criarLimiteLogin({ maximo: 1, maxChaves: 2 });
+    for (const ip of ['a', 'b', 'c']) l.registrarFalha(ip, 0);
     expect(l.tamanho()).toBeLessThanOrEqual(2);
+    expect(l.bloqueado('a', 0)).toBe(false); // o mais antigo saiu
+    expect(l.bloqueado('c', 0)).toBe(true);
+  });
+
+  it('IPv6 conta por /64', () => {
+    expect(chaveDoIp('2001:db8:1:2:aaaa::1')).toBe(chaveDoIp('2001:DB8:1:2:bbbb:cccc:dddd:2'));
+    expect(chaveDoIp('2001:db8:1:3::1')).not.toBe(chaveDoIp('2001:db8:1:2::1'));
+    expect(chaveDoIp('2001:db8::1')).toBe('2001:db8:0:0');
+    expect(chaveDoIp('203.0.113.7')).toBe('203.0.113.7');
+    const l = criarLimiteLogin();
+    for (let i = 0; i < 20; i++) l.registrarFalha(`2001:db8:1:2::${i.toString(16)}`, 0);
+    expect(l.bloqueado('2001:db8:1:2::ffff', 0)).toBe(true);
   });
 });
 ```
@@ -1532,6 +1644,8 @@ vi.mock('next/headers', () => ({
 }));
 vi.mock('next/navigation', () => ({ redirect: vi.fn(() => { throw new Error('NEXT_REDIRECT'); }) }));
 vi.mock('@/db', () => ({ obterDb: () => ({}) }));
+// O servidor.ts começa com `import 'server-only'`, que quebra fora do Next (o mesmo mock de fluxo/conferencia/acoes.test.ts).
+vi.mock('@/modules/auth/servidor', () => ({ COOKIE_SESSAO: 'sessao' }));
 vi.mock('@/modules/auth/autenticar', () => ({ autenticar }));
 vi.mock('@/modules/auth/sessoes', () => ({ criarSessao: vi.fn(async () => ({ token: 't', expiraEm: new Date() })), encerrarSessao: vi.fn() }));
 
@@ -1677,13 +1791,13 @@ Esperado: FAIL.
 - `next.config.ts`:
   - `import { cabecalhosDeSeguranca } from "./src/lib/cabecalhos-seguranca";`;
   - `poweredByHeader: false`;
-  - em `headers()`, **antes** do bloco do `/sw.js`: `{ source: "/:path*", headers: cabecalhosDeSeguranca({ desenvolvimento: process.env.NODE_ENV === "development" }) }`.
+  - em `headers()`, **antes** do bloco do `/sw.js`: `{ source: "/((?!api/).*)", headers: cabecalhosDeSeguranca({ desenvolvimento: process.env.NODE_ENV === "development" }) }`. As rotas `/api/` ficam de fora (decisão 15): o DANFE em PDF abre no visualizador do navegador, e as mídias mantêm os cabeçalhos próprios da Fase 2.
   - Se o Next recusar o import relativo de TypeScript no `next.config.ts`, mova as duas funções para `next.config.ts` e exporte-as dali; o teste passa a importar de `../../next.config`.
 
 - [ ] **Passo 3: Rodar os testes e o build**
 
 Rode: `npm test -- src/lib && npm run build && npm run test:e2e -- tests/e2e/arquivos.spec.ts tests/e2e/conferencia.spec.ts tests/e2e/camera.spec.ts tests/e2e/pwa.spec.ts`
-Esperado: PASS. O `arquivos.spec.ts` (Fase 2) cobre os cabeçalhos próprios das mídias. Se ele acusar conflito com a CSP global nas rotas de arquivo, troque o `source` por `"/((?!api/arquivos|api/midia).*)"` e anote no commit.
+Esperado: PASS. O `arquivos.spec.ts` (Fase 2) confirma que as mídias continuam com os próprios cabeçalhos. A conferência com a câmera é coberta de novo no e2e da Tarefa 13. A conexão da conta do ML com a CSP ligada (`form-action` e os redirecionamentos do OAuth) só dá para conferir com a conta real: ela entra nas conferências manuais de "Depois da fase".
 
 - [ ] **Passo 4: Commit**
 
@@ -1697,9 +1811,9 @@ git commit -m "feat(seguranca): cabeçalhos de segurança, CSP sem nonce e power
 ### Tarefa 9: `/api/saude` com 503, log JSON do web, batimento do worker e healthchecks
 
 **Arquivos:**
-- Criar: `src/modules/saude/resposta.ts`, `src/lib/log.ts`, `src/instrumentation.ts`, `src/worker/batimento.ts`, `scripts/infra.test.ts`
-- Modificar: `src/app/api/saude/route.ts`, `scripts/worker.ts`, `docker-compose.prod.yml` (healthchecks do `web` e do `worker`)
-- Testes: `src/modules/saude/resposta.test.ts`, `src/lib/log.test.ts`, `src/worker/batimento.test.ts`, `scripts/infra.test.ts`
+- Criar: `src/modules/saude/resposta.ts`, `src/instrumentation.ts`, `src/worker/batimento.ts`, `scripts/infra.test.ts`
+- Modificar: `src/lib/log.ts` (Tarefa 2; acrescenta `linhaErroRequisicao`), `src/app/api/saude/route.ts`, `scripts/worker.ts`, `docker-compose.prod.yml` (healthchecks do `web` e do `worker`)
+- Testes: `src/modules/saude/resposta.test.ts`, `src/lib/log.test.ts` (acrescenta o `describe` abaixo), `src/worker/batimento.test.ts`, `scripts/infra.test.ts`
 
 **Interfaces:**
 - Consome: `verificarSaude`, `type ResultadoSaude` (P2), `verificarFila`, `obterConexao`.
@@ -1739,10 +1853,9 @@ describe('responderSaude (spec §11; decisão 16)', () => {
 });
 ```
 
-`src/lib/log.test.ts`:
+`src/lib/log.test.ts` (acrescente ao arquivo da Tarefa 2; o import passa a trazer também `linhaErroRequisicao`):
 
 ```ts
-import { describe, expect, it } from 'vitest';
 import { linhaErroRequisicao } from './log';
 
 const req = { path: '/fluxo/busca?rastreio=BR123&pedido=9', method: 'GET', headers: { cookie: 'sessao=segredo' } };
@@ -1842,7 +1955,7 @@ Esperado: FAIL.
 - [ ] **Passo 2: Implementar**
 
 - `responderSaude`: `try { const r = await verificar(); return Response.json(r, { status: r.status === 'ok' ? 200 : 503, headers }) } catch { return Response.json({ status: 'erro', banco: 'falhou', fila: 'falhou' }, { status: 503, headers }) }`, com `headers = { 'Cache-Control': 'no-store' }`. A rota fica `export async function GET() { return responderSaude(() => verificarSaude(obterConexao().sql, verificarFila)); }`, e o `obterConexao()` **dentro** da função, para a exceção ser pega.
-- `linhaErroRequisicao`: `caminho = req.path.split('?')[0]`. A mensagem segue a mesma regra de `mensagemDoErro` (Tarefa 2): reuse-a de `@/modules/acabamento/falhas`, ou mova-a para `src/lib/log.ts` e reexporte. `digest` só quando existe.
+- `linhaErroRequisicao`: `caminho = req.path.split('?')[0]`; `mensagem = mensagemDoErro(erro)`, a função do mesmo arquivo (Tarefa 2); `digest` só quando existe. O arquivo continua puro, sem imports do projeto.
 - `instrumentation.ts`: veja `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/instrumentation.md`. Só `onRequestError`.
 - `batimento.ts`: grava com `writeFileSync(caminho, new Date().toISOString())` na hora e num `setInterval(...).unref()`; os erros de escrita vão para o log, sem derrubar o worker. `batimentoRecente` = `statSync` em `try/catch` e `agoraMs - mtimeMs < limiteMs`.
 - `scripts/worker.ts`: `const pararBatimento = iniciarBatimento();` depois de `iniciarWorker`; dentro de `parar()`, chame `pararBatimento()` antes de `worker.parar()`.
@@ -1889,17 +2002,18 @@ git commit -m "feat(saude): /api/saude responde 503 em qualquer falha, erros do 
 - Testes: `src/modules/acabamento/backup-script.int.test.ts`
 
 **Interfaces:**
-- Consome: `execucoesBackup` (Tarefa 1); `pg_dump`, `pg_restore`, `psql`, `openssl` e `sh` do PC.
+- Consome: `execucoesBackup` (Tarefa 1); `pg_dump`, `pg_restore`, `psql`, `createdb`, `dropdb`, `openssl` e `sh` do PC. O usuário `devolucoes` precisa de `CREATEDB` na instância da porta 5433 (Restrições globais).
 - Produz:
-  - `backup.sh`: sem argumentos. Lê `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, `BACKUP_*`, `ARMAZENAMENTO` e `MIDIA_DIR`. Sai com 0 e grava uma linha OK, ou sai com 1 e grava FALHOU.
+  - `backup.sh`: sem argumentos. Lê `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, `BACKUP_*`, `ARMAZENAMENTO`, `MIDIA_DIR` e `S3_BUCKET`. Sai com 0 e grava uma linha OK, ou sai com 1 e grava FALHOU.
     - O banco vai para `banco/devolucoes-AAAA-MM-DD_HHMMSS.dump.enc`.
     - As mídias vão para `midia/midia-AAAA-MM-DD_HHMMSS.tar.enc`.
-  - `restaurar.sh <arquivo> [banco]`.
+  - `restaurar.sh <arquivo> [banco]` (decisão 20). Os destinos aceitos são `devolucoes_restauracao*`, ou `PGDATABASE` com `CONFIRMAR=sim`. Ao terminar, imprime uma linha `tabela: N` por tabela principal e `Restauração concluída em <banco>.`.
   - O `rclone` aparece só por estes comandos, que o falso do teste imita: `rcat <remoto>`, `lsjson <remoto>`, `delete --min-age 30d <remoto>` e `cat <remoto>`.
+  - **Texto livre nunca vai por `psql -v`** (o `psql.exe` do Windows recusa acento vindo da linha de comando; Restrições globais). A mensagem de erro vai pela entrada padrão, já com as aspas simples dobradas. Só uuid, números e caminhos gerados pelo script vão por `-v`.
 
-- [ ] **Passo 1: Escrever o teste que falha**
+- [ ] **Passo 1: Escrever os testes que falham**
 
-`src/modules/acabamento/backup-script.int.test.ts` (o `pg_dump` e o `openssl` são de verdade; o `rclone` é falso; pula se faltar ferramenta, como os testes do ffmpeg):
+`src/modules/acabamento/backup-script.int.test.ts` (o `pg_dump`, o `pg_restore` e o `openssl` são de verdade; o `rclone` é falso; pula se faltar ferramenta, como os testes do ffmpeg):
 
 ```ts
 import { spawnSync } from 'node:child_process';
@@ -1910,8 +2024,10 @@ import { desc } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { execucoesBackup } from '@/db/schema';
 import { criarDbTeste, limparTabelas, urlBancoTeste } from '../../../tests/helpers/db';
+import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 
 const PG_BIN = process.env.PG_BIN ?? 'C:/Program Files/PostgreSQL/18/bin';
+const BANCO_RESTAURADO = 'devolucoes_restauracao_f6_teste';
 const RCLONE_FALSO = `#!/bin/sh
 # rclone falso dos testes: o "bucket" é a pasta $RCLONE_FALSO_DIR.
 cmd=$1
@@ -1919,6 +2035,7 @@ for ultimo in "$@"; do :; done
 alvo="$RCLONE_FALSO_DIR/$(printf '%s' "$ultimo" | sed 's#^backup:##')"
 case "$cmd" in
   rcat) mkdir -p "$(dirname "$alvo")"; cat > "$alvo" ;;
+  cat) cat "$alvo" ;;
   lsjson) printf '[{"Size":%s}]\\n' "$(wc -c < "$alvo" | tr -d ' ')" ;;
   delete) echo "$*" >> "$RCLONE_FALSO_DIR/delete.log" ;;
   *) echo "rclone falso: comando $cmd" >&2; exit 2 ;;
@@ -1943,24 +2060,30 @@ function ambiente(extra: Record<string, string> = {}) {
       PGHOST: url.hostname, PGPORT: url.port || '5432', PGUSER: decodeURIComponent(url.username),
       PGPASSWORD: decodeURIComponent(url.password), PGDATABASE: url.pathname.slice(1),
       BACKUP_S3_BUCKET: 'bucket-teste', BACKUP_SENHA: 'senha-de-teste', ARMAZENAMENTO: 'disco', MIDIA_DIR: midia,
-      RCLONE_FALSO_DIR: join(base, 'bucket'),
+      S3_BUCKET: 'bucket-das-midias', RCLONE_FALSO_DIR: join(base, 'bucket'),
       ...extra,
     },
   };
 }
 
-const rodar = (env: NodeJS.ProcessEnv) => spawnSync('sh', ['docker/backup/backup.sh'], { env, encoding: 'utf8' });
+const script = (nome: string, args: string[], env: NodeJS.ProcessEnv) => spawnSync('sh', [`docker/backup/${nome}`, ...args], { env, encoding: 'utf8' });
 const sh = (comando: string, env: NodeJS.ProcessEnv) => spawnSync('sh', ['-c', comando], { env, encoding: 'utf8' });
-const temFerramentas = sh('command -v pg_dump && command -v psql && command -v openssl', { ...process.env, PATH: [PG_BIN, process.env.PATH].join(delimiter) }).status === 0;
+const comPg = { ...process.env, PATH: [PG_BIN, process.env.PATH].join(delimiter) };
+const temFerramentas = sh('command -v pg_dump && command -v pg_restore && command -v psql && command -v createdb && command -v openssl', comPg).status === 0;
 
 const { db, sql } = criarDbTeste();
 beforeEach(() => limparTabelas(sql));
-afterAll(() => sql.end());
+afterAll(async () => {
+  if (temFerramentas) sh(`dropdb --if-exists ${BANCO_RESTAURADO}`, ambiente().env);
+  await sql.end();
+});
 
-describe.skipIf(!temFerramentas)('docker/backup/backup.sh (spec §10)', () => {
-  it('cifra o pg_dump e as mídias, envia ao bucket, apaga o que tem mais de 30 dias e registra OK', async () => {
+const ultima = async () => (await db.select().from(execucoesBackup).orderBy(desc(execucoesBackup.iniciadoEm)))[0];
+
+describe.skipIf(!temFerramentas)('docker/backup (spec §10)', () => {
+  it('backup.sh cifra o pg_dump e as mídias, envia ao bucket, pede a limpeza dos antigos e registra OK', async () => {
     const { base, env } = ambiente();
-    const r = rodar(env);
+    const r = script('backup.sh', [], env);
     expect(r.status, r.stderr).toBe(0);
 
     const [banco] = readdirSync(join(base, 'bucket', 'bucket-teste', 'banco'));
@@ -1976,30 +2099,57 @@ describe.skipIf(!temFerramentas)('docker/backup/backup.sh (spec §10)', () => {
     expect(tar.stdout).toContain('midia/foto.jpg');
 
     expect(readFileSync(join(base, 'bucket', 'delete.log'), 'utf8')).toMatch(/--min-age 30d backup:bucket-teste\/banco/);
-    const [linha] = await db.select().from(execucoesBackup).orderBy(desc(execucoesBackup.iniciadoEm));
+    const linha = await ultima();
     expect(linha).toMatchObject({ situacao: 'OK', arquivoBanco: `banco/${banco}`, arquivoMidia: `midia/${midia}` });
     expect(linha.tamanhoBanco).toBeGreaterThan(1024);
     expect(linha.terminadoEm).toBeInstanceOf(Date);
   }, 60_000);
 
+  it('restaurar.sh devolve o banco num banco separado e mostra as contagens (spec §14: restauração testada)', async () => {
+    await criarUsuarioTeste(db, 'GESTOR');
+    await criarUsuarioTeste(db, 'OPERADOR');
+    const { base, env } = ambiente();
+    expect(script('backup.sh', [], env).status).toBe(0);
+    const [banco] = readdirSync(join(base, 'bucket', 'bucket-teste', 'banco'));
+    const r = script('restaurar.sh', [`banco/${banco}`, BANCO_RESTAURADO], env);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('usuarios: 2');
+    expect(r.stdout).toContain(`Restauração concluída em ${BANCO_RESTAURADO}.`);
+    // Rodar de novo recria o banco de restauração do zero.
+    expect(script('restaurar.sh', [`banco/${banco}`, BANCO_RESTAURADO], env).status).toBe(0);
+  }, 120_000);
+
+  it('restaurar.sh recusa um destino fora de devolucoes_restauracao* sem CONFIRMAR, antes de apagar qualquer coisa', () => {
+    const { env } = ambiente();
+    const r = script('restaurar.sh', ['banco/qualquer.dump.enc', 'postgres'], env);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Destino recusado');
+    expect(sh(`psql -X -At -d postgres -c "select 1"`, env).stdout.trim()).toBe('1'); // o banco postgres continua lá
+  });
+
   it('com ARMAZENAMENTO=s3 não copia as mídias (já estão fora da VPS)', () => {
     const { base, env } = ambiente({ ARMAZENAMENTO: 's3' });
-    expect(rodar(env).status).toBe(0);
+    expect(script('backup.sh', [], env).status).toBe(0);
     expect(existsSync(join(base, 'bucket', 'bucket-teste', 'midia'))).toBe(false);
   }, 60_000);
 
-  it('sem BACKUP_SENHA: sai com erro e registra FALHOU com o motivo', async () => {
+  it('sem BACKUP_SENHA: sai com erro e registra FALHOU com a mensagem acentuada (psql do Windows)', async () => {
     const { base, env } = ambiente({ BACKUP_SENHA: '' });
-    expect(rodar(env).status).toBe(1);
+    expect(script('backup.sh', [], env).status).toBe(1);
     expect(existsSync(join(base, 'bucket'))).toBe(false);
-    const [linha] = await db.select().from(execucoesBackup);
-    expect(linha).toMatchObject({ situacao: 'FALHOU', erro: 'BACKUP_SENHA não definida.' });
+    expect(await ultima()).toMatchObject({ situacao: 'FALHOU', erro: 'BACKUP_SENHA não definida.' });
+  }, 60_000);
+
+  it('recusa o bucket das mídias como bucket de backup (decisão 19)', async () => {
+    const { env } = ambiente({ BACKUP_S3_BUCKET: 'bucket-das-midias' });
+    expect(script('backup.sh', [], env).status).toBe(1);
+    expect(await ultima()).toMatchObject({ situacao: 'FALHOU', erro: 'O bucket de backup não pode ser o mesmo das mídias (S3_BUCKET).' });
   }, 60_000);
 });
 ```
 
 Rode: `npm run test:int -- src/modules/acabamento/backup-script`
-Esperado: FAIL (o script não existe). Se o teste **pular**, confira o `PG_BIN` e se `sh -c "command -v openssl"` responde no Git Bash. O teste precisa rodar neste PC; não aceite o "skipped" aqui.
+Esperado: FAIL (os scripts não existem). Se o teste **pular**, confira o `PG_BIN`, o `alter role devolucoes createdb` (Restrições globais) e se `sh -c "command -v openssl"` responde no Git Bash. O teste precisa rodar neste PC; não aceite o "skipped" aqui.
 
 - [ ] **Passo 2: Os scripts**
 
@@ -2023,6 +2173,10 @@ decifrar() { openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_S
 
 # Log estruturado em JSON (spec §11), como o web e o worker.
 log() { printf '{"em":"%s","origem":"backup","nivel":"%s","mensagem":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2"; }
+
+# Texto livre para dentro de um literal SQL: dobra as aspas simples. Vai pela entrada padrão, nunca por -v
+# (o psql.exe do Windows recusa acento vindo da linha de comando).
+literal_sql() { printf '%s' "$1" | sed "s/'/''/g"; }
 ```
 
 `docker/backup/backup.sh`:
@@ -2030,8 +2184,8 @@ log() { printf '{"em":"%s","origem":"backup","nivel":"%s","mensagem":"%s"}\n' "$
 ```sh
 #!/bin/sh
 # Backup diário (spec §10): banco (pg_dump) e, com ARMAZENAMENTO=disco, as mídias de MIDIA_DIR.
-# Tudo cifrado e enviado ao bucket de backup, sem arquivo temporário no disco da VPS. Guarda 30 dias.
-# Cada execução fica em execucoes_backup (o painel do Gestor avisa quando atrasa).
+# Tudo cifrado e enviado ao bucket de backup, sem arquivo temporário no disco da VPS. Guarda 30 dias
+# (regra de ciclo de vida do bucket; o rclone delete daqui é só reforço). Cada execução fica em execucoes_backup.
 # Banco: PGHOST, PGPORT, PGUSER, PGPASSWORD e PGDATABASE (o compose define).
 set -eu
 set -o pipefail
@@ -2046,14 +2200,16 @@ ID=$(sql -c "insert into execucoes_backup default values returning id")
 
 falhar() {
   log erro "$1"
-  sql -v id="$ID" -v erro="$1" <<'SQL' || true
-update execucoes_backup set situacao = 'FALHOU', terminado_em = now(), erro = :'erro' where id = :'id';
+  msg=$(literal_sql "$1")
+  sql <<SQL || true
+update execucoes_backup set situacao = 'FALHOU', terminado_em = now(), erro = '$msg' where id = '$ID';
 SQL
   exit 1
 }
 
 [ -n "${BACKUP_SENHA:-}" ] || falhar "BACKUP_SENHA não definida."
 [ -n "${BACKUP_S3_BUCKET:-}" ] || falhar "BACKUP_S3_BUCKET não definido."
+[ "$BACKUP_S3_BUCKET" != "${S3_BUCKET:-}" ] || falhar "O bucket de backup não pode ser o mesmo das mídias (S3_BUCKET)."
 
 enviar() { rclone rcat $OPCOES_ENVIO "$REMOTO/$1"; }
 tamanho() { rclone lsjson "$REMOTO/$1" | sed -n 's/.*"Size":\([0-9]*\).*/\1/p' | head -n 1; }
@@ -2072,8 +2228,9 @@ if [ "${ARMAZENAMENTO:-disco}" = "disco" ] && [ -d "${MIDIA_DIR:-/data/midia}" ]
   TAM_MIDIA=$(tamanho "$ARQ_MIDIA")
 fi
 
-rclone delete --min-age "${DIAS_GUARDA}d" "$REMOTO/banco" || falhar "Não consegui apagar os backups antigos do banco."
-[ -z "$ARQ_MIDIA" ] || rclone delete --min-age "${DIAS_GUARDA}d" "$REMOTO/midia" || falhar "Não consegui apagar os backups antigos das mídias."
+# Reforço da guarda de 30 dias: com uma chave sem permissão de apagar (recomendada), só avisa.
+rclone delete --min-age "${DIAS_GUARDA}d" "$REMOTO/banco" || log atencao "A chave não apaga backups antigos: a regra de ciclo de vida do bucket cuida disso."
+[ -z "$ARQ_MIDIA" ] || rclone delete --min-age "${DIAS_GUARDA}d" "$REMOTO/midia" || log atencao "A chave não apaga mídias antigas do backup."
 
 sql -v id="$ID" -v arq_banco="$ARQ_BANCO" -v tam_banco="$TAM_BANCO" -v arq_midia="$ARQ_MIDIA" -v tam_midia="$TAM_MIDIA" <<'SQL'
 update execucoes_backup
@@ -2110,25 +2267,30 @@ done
 # Restaura um backup do banco (spec §10). Veja docs/operacao/backup-restauracao.md.
 # Uso: sh /backup/restaurar.sh banco/devolucoes-AAAA-MM-DD_HHMMSS.dump.enc [banco_destino]
 # Padrão: um banco SEPARADO (devolucoes_restauracao), para conferir sem tocar no banco do sistema.
+# Por cima do banco do sistema: pare o web e o worker e use CONFIRMAR=sim com o destino igual a PGDATABASE.
+# As mídias (tar do modo disco) voltam à mão: veja o documento.
 set -eu
 set -o pipefail
 . "$(dirname "$0")/comum.sh"
 
 ARQUIVO="${1:?Informe o arquivo. Liste com: rclone lsf backup:\$BACKUP_S3_BUCKET/banco}"
 DESTINO="${2:-devolucoes_restauracao}"
+
+case "$DESTINO" in
+  devolucoes_restauracao*) ;;
+  *)
+    if [ "$DESTINO" != "${PGDATABASE:-devolucoes}" ] || [ "${CONFIRMAR:-}" != "sim" ]; then
+      echo "Destino recusado: $DESTINO. Use devolucoes_restauracao (padrão), ou o banco do sistema com CONFIRMAR=sim e o web e o worker parados." >&2
+      exit 1
+    fi
+    ;;
+esac
 [ -n "${BACKUP_SENHA:-}" ] || { echo "BACKUP_SENHA não definida." >&2; exit 1; }
 
-if [ "$DESTINO" = "${PGDATABASE:-devolucoes}" ]; then
-  if [ "${CONFIRMAR:-}" != "sim" ]; then
-    echo "Para restaurar POR CIMA do banco do sistema: pare o web e o worker e rode de novo com CONFIRMAR=sim." >&2
-    exit 1
-  fi
-  rclone cat "$REMOTO/$ARQUIVO" | decifrar | pg_restore --clean --if-exists --no-owner --exit-on-error -d "$DESTINO"
-else
-  dropdb --if-exists "$DESTINO"
-  createdb "$DESTINO"
-  rclone cat "$REMOTO/$ARQUIVO" | decifrar | pg_restore --no-owner --exit-on-error -d "$DESTINO"
-fi
+# Banco limpo: dropdb e createdb conectados ao banco "postgres" (nunca ao que vai ser apagado).
+dropdb --maintenance-db=postgres --if-exists "$DESTINO"
+createdb --maintenance-db=postgres "$DESTINO"
+rclone cat "$REMOTO/$ARQUIVO" | decifrar | pg_restore --no-owner --exit-on-error -d "$DESTINO"
 
 for tabela in usuarios devolucoes itens_devolucao evidencias notas_fiscais lotes eventos_historico; do
   printf '%s: %s\n' "$tabela" "$(psql -X -At -d "$DESTINO" -c "select count(*) from $tabela")"
@@ -2138,21 +2300,30 @@ echo "Restauração concluída em $DESTINO."
 
 - [ ] **Passo 3: O serviço no compose e a checagem**
 
-Em `docker-compose.prod.yml`, depois do `postgres`:
+Em `docker-compose.prod.yml`, depois do `postgres`. **Sem `env_file`** (decisão 19): só as variáveis que o backup usa, interpoladas do `--env-file .env.producao`.
 
 ```yaml
   backup:
     # Backup diário (spec §10; decisão 19): pg_dump cifrado e, com ARMAZENAMENTO=disco, as mídias.
     # A imagem é a do banco, para o pg_dump ser da mesma versão. rclone, openssl e tzdata entram na subida.
+    # Sem env_file: este container roda "apk add" como root e não deve ver os outros segredos do sistema.
     image: postgres:17-alpine
     restart: unless-stopped
-    env_file: .env.producao
     environment:
       TZ: America/Sao_Paulo
       PGHOST: postgres
       PGUSER: devolucoes
       PGDATABASE: devolucoes
       PGPASSWORD: ${POSTGRES_PASSWORD}
+      ARMAZENAMENTO: ${ARMAZENAMENTO:-disco}
+      MIDIA_DIR: ${MIDIA_DIR:-/data/midia}
+      S3_BUCKET: ${S3_BUCKET:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_REGIAO: ${BACKUP_S3_REGIAO:-}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_CHAVE_ID: ${BACKUP_S3_CHAVE_ID:-}
+      BACKUP_S3_CHAVE_SECRETA: ${BACKUP_S3_CHAVE_SECRETA:-}
+      BACKUP_SENHA: ${BACKUP_SENHA:-}
     volumes:
       - ./docker/backup:/backup:ro
       - midia:/data:ro
@@ -2169,7 +2340,7 @@ Em `docker-compose.prod.yml`, depois do `postgres`:
 Em `scripts/infra.test.ts`, inclua `'backup'` no laço do limite de memória e acrescente:
 
 ```ts
-  it('backup: postgres 17, scripts e mídias só leitura, fuso de Brasília (decisão 19)', () => {
+  it('backup: postgres 17, scripts e mídias só leitura, fuso de Brasília, sem porta (decisão 19)', () => {
     const b = servico('backup');
     expect(b).toContain('image: postgres:17-alpine');
     expect(b).toContain('./docker/backup:/backup:ro');
@@ -2177,43 +2348,53 @@ Em `scripts/infra.test.ts`, inclua `'backup'` no laço do limite de memória e a
     expect(b).toContain('TZ: America/Sao_Paulo');
     expect(b).not.toMatch(/ports:/);
   });
+
+  it('backup: sem env_file e sem os segredos do sistema (decisão 19)', () => {
+    const b = servico('backup');
+    expect(b).not.toMatch(/^\s+env_file:/m); // o comentário do serviço cita a palavra; a chave não pode existir
+    for (const segredo of ['ML_CLIENT_SECRET', 'CHAVE_CRIPTOGRAFIA', 'FOCUS_TOKEN', 'S3_CHAVE_ID', 'S3_CHAVE_SECRETA', 'SEGREDO_LINKS', 'DATABASE_URL']) {
+      expect(b.replaceAll('BACKUP_S3_CHAVE', 'BACKUP_X')).not.toContain(segredo);
+    }
+  });
 ```
 
-- [ ] **Passo 4: A documentação da restauração**
+- [ ] **Passo 4: A documentação**
 
 `docs/operacao/backup-restauracao.md` (texto para o usuário, em passos curtos):
-1. **O que é salvo, quando e por quanto tempo** (decisão 19).
-2. **Primeira vez:**
-   - criar o bucket de backup no B2 e uma chave restrita a ele;
-   - preencher `BACKUP_*` no `.env.producao`;
-   - guardar a `BACKUP_SENHA` fora da VPS (num cofre de senhas): sem ela, o backup não abre.
-3. **Rodar um backup agora:** `docker compose --env-file .env.producao -f docker-compose.prod.yml exec backup sh /backup/backup.sh`.
-4. **Listar os backups:** `docker compose ... exec backup sh -c '. /backup/comum.sh && rclone lsf "$REMOTO/banco"'`.
-5. **Teste de restauração**, no mínimo uma vez por mês, e **obrigatório antes de dar a Fase 6 por pronta** (spec §14): `exec backup sh /backup/restaurar.sh banco/<arquivo>`. As contagens que aparecem têm de bater com as do sistema. Depois, apague o banco de teste: `exec backup dropdb devolucoes_restauracao`.
-6. **Restauração de verdade (desastre):**
+1. **O que é salvo, quando e por quanto tempo** (decisão 19). Inclui o aviso: no modo disco, o `tar` das mídias é inteiro por dia, então o bucket cresce até 30 vezes o tamanho das mídias.
+2. **Primeira vez, no B2:**
+   - criar um bucket **só de backup**, diferente do bucket das mídias;
+   - ligar nele a regra de ciclo de vida **"Keep only the last version of the file"** com a exclusão das versões antigas depois de 1 dia, e a exclusão dos arquivos com mais de 30 dias. O `rclone delete` do B2 só esconde, e a chave recomendada nem apaga;
+   - criar uma application key **restrita a esse bucket**, com leitura e escrita e **sem `deleteFiles`** (proteção contra ransomware);
+   - preencher `BACKUP_*` no `.env.producao`.
+3. **A senha:** a `BACKUP_SENHA` é gerada no gerenciador de senhas do usuário e colada **só** no `.env.producao` da VPS. Nunca vai para o chat, o git ou um e-mail. Sem ela, o backup não abre.
+4. **Rodar um backup agora:** `docker compose --env-file .env.producao -f docker-compose.prod.yml exec backup sh /backup/backup.sh`.
+5. **Listar os backups:** `docker compose ... exec backup sh -c '. /backup/comum.sh && rclone lsf "$REMOTO/banco"'`.
+6. **Teste de restauração**, no mínimo uma vez por mês, e **obrigatório antes de dar a Fase 6 por pronta** (spec §14): `exec backup sh /backup/restaurar.sh banco/<arquivo>`. As contagens que aparecem têm de bater com as do sistema. Depois, apague o banco de teste: `exec backup dropdb --maintenance-db=postgres devolucoes_restauracao`.
+7. **Restauração de verdade (desastre):**
    - parar o `web` e o `worker` (`docker compose ... stop web worker`);
    - `exec -e CONFIRMAR=sim backup sh /backup/restaurar.sh banco/<arquivo> devolucoes`;
    - subir de novo (`docker compose ... up -d`);
    - conferir `/api/saude`.
-7. **Mídias:**
-   - com `disco`, o `tar` cifrado restaura com `rclone cat … | openssl enc -d … | tar -xf - -C /data`, num container com `midia:/data` sem `:ro`;
-   - com `s3`, as mídias ficam no B2, e a regra de versões do bucket cobre os 30 dias.
+8. **Mídias, à mão:**
+   - com `disco`, num container temporário com `midia:/data` sem `:ro` e as variáveis do backup: `rclone cat "$REMOTO/midia/<arquivo>" | openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_SENHA | tar -xf - -C /data`;
+   - com `s3`, as mídias ficam no B2, e a regra de versões do bucket das mídias cobre os 30 dias.
 
 Em `docs/operacao/deploy-vps.md`:
 - acrescente o serviço `backup` e o limite de 256 MB na lista do topo;
-- acrescente uma seção curta "Backup diário" com o link para `backup-restauracao.md`;
+- acrescente uma seção curta "Backup diário" com o link para `backup-restauracao.md` e o risco que sobra: o container instala `rclone`, `openssl` e `tzdata` pelo `apk` a cada subida, sem versão fixa. Se a instalação falhar, o backup não roda, e o alerta "Backup diário atrasado" avisa o Gestor. A melhoria opcional é uma imagem própria compilada pelo GitHub Actions;
 - acrescente a seção "Saúde dos containers": `docker compose ... ps` mostra `healthy`.
 
 - [ ] **Passo 5: Rodar os testes**
 
 Rode: `npm test -- scripts && npm run test:int -- src/modules/acabamento/backup-script`
-Esperado: PASS (3 testes do script, **não pulados**).
+Esperado: PASS (6 testes do script, **não pulados**).
 
 - [ ] **Passo 6: Commit**
 
 ```bash
 git add docker/backup docker-compose.prod.yml scripts/infra.test.ts src/modules/acabamento/backup-script.int.test.ts docs/operacao/backup-restauracao.md docs/operacao/deploy-vps.md
-git commit -m "feat(backup): backup diário cifrado do banco e das mídias para o bucket de backup, 30 dias, restauração em banco separado" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat(backup): backup diário cifrado (banco e mídias), restauração testada em banco separado, serviço sem os segredos do sistema" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2234,7 +2415,7 @@ git commit -m "feat(backup): backup diário cifrado do banco e das mídias para 
     - um `<article aria-labelledby>` por falha: título (h2) = `rotuloTarefa`; o erro; "Falhou N vezes" quando `ocorrencias > 1`; "5 tentativas"; a última falha (e a primeira, quando são diferentes); e a referência (link, ou texto);
     - **dois formulários** por cartão, cada um com `falha` e `operacao` escondidos: "Tentar de novo" (`BOTAO_PRIMARIO`, submit) e "Dispensar" (`BotaoConfirmar` com `rotuloConfirmar="Toque de novo para dispensar"`);
     - sem falhas: `VAZIO` "Nenhuma tarefa em Falhas.".
-  - `CartaoBackup({ backup }: { backup: { situacao: string; quando: string; tamanho: string | null; erro: string | null } | null })` (extra, decisão 22): título "Backup diário"; sem backup: "Nenhum backup registrado ainda."; OK: "Último backup: {quando} ({tamanho})"; FALHOU: `ALERTA_ERRO` com o erro.
+  - `CartaoBackup({ backup }: { backup: VistaBackup | null })` (extra, decisão 22; `VistaBackup` e `vistaDoBackup` são da Tarefa 6): título "Backup diário"; sem backup, "Nenhum backup registrado ainda."; senão, o `texto` no estilo do tom (`ALERTA_OK`, `ALERTA_ATENCAO` ou `ALERTA_ERRO`) e, quando há, o `erro` logo abaixo.
   - `acoes.ts`: `acaoFalha(anterior: EstadoFalhas, dados: FormData): Promise<EstadoFalhas>` (`'use server'`):
     - `exigirPermissao('administrar')`; `operacao` ∈ {`reenviar`, `dispensar`}; `falha` com `ehUuid`;
     - mensagens ok: `Tarefa "${ROTULO_TAREFA[tarefa]}" reenviada. Ela roda em instantes.` e `'Falha dispensada.'`;
@@ -2302,7 +2483,7 @@ describe('ListaFalhas (spec §6.8)', () => {
 });
 ```
 
-`src/components/acabamento/CartaoBackup.test.tsx`: três casos (sem backup, OK com o tamanho, FALHOU com o erro), com os textos das Interfaces.
+`src/components/acabamento/CartaoBackup.test.tsx`: quatro casos (sem backup; OK com o tamanho; FALHOU com o erro; "Backup interrompido…" com o tom de erro), recebendo a `VistaBackup` pronta.
 
 Rode: `npm test -- src/components/acabamento`
 Esperado: FAIL.
@@ -2388,7 +2569,7 @@ export default async function PaginaFalhas({ searchParams }: { searchParams: Pro
       <Link href="/configuracoes" className={`${LINK_VOLTAR} self-start`}>← Configurações</Link>
       <h1 className="text-xl font-bold">Falhas</h1>
       <p className="text-sm text-texto-2">Tarefas de fundo que esgotaram as 5 tentativas.</p>
-      <CartaoBackup backup={backup && vistaDoBackup(backup)} />
+      <CartaoBackup backup={vistaDoBackup(backup, new Date())} />
       <ListaFalhas falhas={falhas} acao={acaoFalha} />
       <Paginacao pagina={pagina} total={total} porPagina={POR_PAGINA} hrefDaPagina={(p) => `/configuracoes/falhas?pagina=${p}`} />
     </div>
@@ -2396,7 +2577,7 @@ export default async function PaginaFalhas({ searchParams }: { searchParams: Pro
 }
 ```
 
-`vistaDoBackup` fica em `src/modules/acabamento/backup.ts`: formata a data com `formatarDataHora` e o tamanho em MB com uma casa decimal ("120,4 MB").
+A página é um componente de servidor assíncrono: a hora (`new Date()`) é lida ali e passada a `vistaDoBackup` (Tarefa 6), e o `CartaoBackup` continua puro.
 
 Rode: `npm test -- src/components/acabamento && npm run test:e2e -- tests/e2e/falhas.spec.ts tests/e2e/configuracoes.spec.ts`
 Esperado: PASS nos projetos `computador` e `celular`. O `configuracoes.spec.ts` da Fase 1 pode esperar o "Em breve" de Falhas: troque **só essa expectativa** pelo título "Falhas".
@@ -2420,13 +2601,16 @@ git commit -m "feat(falhas): tela Falhas com Tentar de novo, Dispensar (extra) e
 **Interfaces:**
 - Consome: Tarefa 6 (`carregarAlertas`, `detalhesDosAlertas`, `AlertaPainel`), Tarefa 5 (`buscarDevolucoes` com `ids`), `CartaoDevolucao`, `apoio-acabamento.ts` (Tarefa 11), `prepararSemFornecedor` (Fase 5, `tests/e2e/apoio-lotes.ts`).
 - Produz:
-  - `AlertasPainel({ alertas }: { alertas: AlertaPainel[] })`, componente de servidor e puro:
+  - `ALERTAS_NO_PAINEL = 3`.
+  - `AlertasPainel({ alertas, limite }: { alertas: AlertaPainel[]; limite?: number })`, componente de servidor e puro:
     - nada quando a lista vem vazia;
+    - com `limite` e mais alertas do que ele, mostra só os `limite` primeiros (já vêm na ordem de prioridade) e, abaixo da lista, o link **"Ver todos os alertas (N)"** para `/fluxo/alertas` (decisão 13);
     - senão, `<section aria-labelledby="titulo-alertas">`, com o `<h2 id="titulo-alertas">` "Alertas" e um `<ul>`;
     - cada alerta é um `<Link>` `min-h-11 flex items-center justify-between gap-2 rounded-lg px-3`, com as cores do tom (erro: `bg-erro-suave text-erro`; atenção: `bg-atencao-suave text-atencao`);
     - o texto do link é o título, mais a contagem (em `font-mono`, quando há) ou o `detalhe`. O nome acessível começa com o título.
   - Página `/fluxo/alertas` (`ver_listas`):
     - `LINK_VOLTAR` "← Fluxo", `<h1>` "Alertas";
+    - logo abaixo, `<AlertasPainel alertas={todos} />` **sem limite**: é ali que aparecem os alertas do sistema (Falhas, backup, disco, conta do ML), que não têm devoluções;
     - para cada `DetalheAlerta`, um `<section id={id} aria-labelledby>` com `<h2>` "{titulo} ({total})", os `CartaoDevolucao` (`buscarDevolucoes(db, {}, { ids, porPagina: 50 })`, em `grid gap-2 md:grid-cols-2`) e os `links` em `ITEM_LISTA`;
     - sem nada: `VAZIO` "Nenhum alerta agora.".
     - `metadata.title`: `Alertas · Gestão de Devoluções`.
@@ -2457,6 +2641,16 @@ describe('AlertasPainel (spec §6.0.1)', () => {
     expect(screen.getByRole('link', { name: /^Prazo do ML vencendo/ })).toHaveTextContent('3');
     expect(screen.getByRole('link', { name: /^Disco do servidor quase cheio/ })).toHaveTextContent('92% em uso');
     expect(regiao.querySelectorAll('li')).toHaveLength(2);
+    expect(screen.queryByRole('link', { name: /^Ver todos os alertas/ })).not.toBeInTheDocument();
+  });
+
+  it('no painel, só os 3 primeiros e "Ver todos os alertas (N)" (celular, decisão 13)', () => {
+    const alertas = (['falhas', 'backup', 'disco', 'prazo_ml', 'nf_rejeitada'] as const).map((id) => ({
+      id, titulo: `Alerta ${id}`, quantidade: 1, detalhe: null, tom: 'erro' as const, href: `/x#${id}`,
+    }));
+    render(<AlertasPainel alertas={alertas} limite={3} />);
+    expect(screen.getByRole('region', { name: 'Alertas' }).querySelectorAll('li')).toHaveLength(3);
+    expect(screen.getByRole('link', { name: 'Ver todos os alertas (5)' })).toHaveAttribute('href', '/fluxo/alertas');
   });
 
   it('sem alertas, nada', () => {
@@ -2504,9 +2698,17 @@ test('Fiscal vê "NF rejeitada" e "Itens sem fornecedor"', async ({ page }) => {
   await expect(page.getByRole('region', { name: /^NF rejeitada/ }).getByRole('link', { name: new RegExp(`^${codigo}`) })).toBeVisible();
 });
 
-test('Gestor vê "Tarefas em Falhas" e vai para a tela Falhas', async ({ page }) => {
+test('Gestor: o painel mostra no máximo 3 alertas; "Ver todos" leva a "Tarefas em Falhas"', async ({ page }) => {
   await prepararFalha();
+  await prepararPrazoVencendo();
+  await prepararNotaRejeitada();
+  await prepararSemFornecedor();
   await entrarComo(page, USUARIOS_E2E.gestor);
+  const alertas = page.getByRole('region', { name: 'Alertas' });
+  await expect(alertas.getByRole('listitem')).toHaveCount(3);
+  await alertas.getByRole('link', { name: /^Ver todos os alertas \(\d+\)$/ }).click();
+  await expect(page).toHaveURL(/\/fluxo\/alertas$/);
+  await semRolagemLateral(page);
   await page.getByRole('region', { name: 'Alertas' }).getByRole('link', { name: /^Tarefas em Falhas/ }).click();
   await expect(page.getByRole('heading', { name: 'Falhas', level: 1 })).toBeVisible();
 });
@@ -2523,7 +2725,7 @@ Esperado: PASS.
 
 - [ ] **Passo 4: Painel e página**
 
-- `fluxo/page.tsx`: `const alertas = await carregarAlertas(obterDb(), usuario.perfil);` e `<AlertasPainel alertas={alertas} />` logo depois do bloco do título e dos botões. Nada mais muda na página.
+- `fluxo/page.tsx`: `const alertas = await carregarAlertas(obterDb(), usuario.perfil);` e `<AlertasPainel alertas={alertas} limite={ALERTAS_NO_PAINEL} />` logo depois do bloco do título e dos botões. Nada mais muda na página.
 - `fluxo/alertas/page.tsx`: como nas Interfaces.
 
 Rode: `npm test -- src/components && npm run test:e2e -- tests/e2e/alertas.spec.ts tests/e2e/fluxo.spec.ts`
@@ -2545,7 +2747,7 @@ git commit -m "feat(alertas): bloco Alertas no painel por perfil e a página dos
 - Modificar: `tests/e2e/saude.spec.ts` (só acrescenta testes)
 
 **Interfaces:**
-- Consome: `MENSAGEM_LIMITE_IP` (Tarefa 7), `ARQUIVO_BATIMENTO` e `batimentoRecente` (Tarefa 9), `entrar`, `entrarComo` e `codigoUnico` (`apoio.ts`).
+- Consome: `MENSAGEM_LIMITE_IP` (Tarefa 7), `ARQUIVO_BATIMENTO` e `batimentoRecente` (Tarefa 9), `entrar`, `entrarComo` e `codigoUnico` (`apoio.ts`), `prepararConferencia` e `conferirDevolucao` (Fase 2, `apoio-conferencia.ts`; contrato E11).
 - Produz: os testes ponta a ponta das pendências da Fase 6, nos dois projetos.
 
 - [ ] **Passo 1: Escrever os testes**
@@ -2553,10 +2755,28 @@ git commit -m "feat(alertas): bloco Alertas no painel por perfil e a página dos
 `tests/e2e/seguranca.spec.ts`:
 
 ```ts
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { MENSAGEM_LIMITE_IP } from '../../src/modules/auth/limite-login';
 import { codigoUnico, entrar, entrarComo } from './apoio';
+import { conferirDevolucao, prepararConferencia } from './apoio-conferencia';
 import { USUARIOS_E2E } from './dados';
+
+/**
+ * Junta as violações da CSP (evento securitypolicyviolation do próprio navegador) numa lista do lado do teste.
+ * A lista fica no Node, e não na janela: sobrevive às navegações (a conferência termina abrindo outra página).
+ */
+async function vigiarCsp(page: Page): Promise<string[]> {
+  const lista: string[] = [];
+  await page.exposeFunction('registrarViolacaoCsp', (texto: string) => lista.push(texto));
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) => {
+      void (window as unknown as { registrarViolacaoCsp: (t: string) => Promise<void> }).registrarViolacaoCsp(
+        `${e.violatedDirective} ${e.blockedURI} em ${location.pathname}`,
+      );
+    });
+  });
+  return lista;
+}
 
 test('cabeçalhos de segurança e sem X-Powered-By (decisão 15)', async ({ request }) => {
   const h = (await request.get('/login')).headers();
@@ -2569,15 +2789,32 @@ test('cabeçalhos de segurança e sem X-Powered-By (decisão 15)', async ({ requ
 });
 
 test('as telas principais abrem sem violar a CSP', async ({ page }) => {
-  const violacoes: string[] = [];
-  page.on('console', (m) => {
-    if (/Content Security Policy/i.test(m.text())) violacoes.push(m.text());
-  });
+  const violacoes = await vigiarCsp(page);
   await entrarComo(page, USUARIOS_E2E.gestor);
-  for (const rota of ['/fluxo', '/fluxo/alertas', '/fluxo/recebimento', '/fluxo/devolucoes/nova', '/lotes', '/cadastros', '/contestacoes', '/configuracoes', '/configuracoes/falhas', '/configuracoes/fiscal']) {
+  for (const rota of ['/fluxo', '/fluxo/alertas', '/fluxo/devolucoes/nova', '/lotes', '/cadastros', '/contestacoes', '/configuracoes', '/configuracoes/falhas', '/configuracoes/fiscal']) {
     await page.goto(rota, { waitUntil: 'networkidle' });
   }
   expect(violacoes).toEqual([]);
+});
+
+test.describe('com a câmera falsa do navegador', () => {
+  test.use({ permissions: ['camera'], launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } });
+
+  test('o leitor do Recebimento e uma conferência inteira (fotos, vídeo, ZXing) não violam a CSP', async ({ page }) => {
+    test.setTimeout(240_000);
+    const violacoes = await vigiarCsp(page);
+    const { codigo } = await prepararConferencia();
+    await entrarComo(page, USUARIOS_E2E.operador);
+    // O leitor de código pela câmera (o mesmo caminho do camera.spec.ts da Fase 2): carrega o ZXing (wasm).
+    await page.goto('/fluxo/recebimento');
+    await page.getByRole('button', { name: 'Ler com a câmera' }).click();
+    await expect(page.getByLabel('Imagem da câmera')).toBeVisible();
+    await page.waitForTimeout(2000); // dá tempo de o leitor carregar o wasm e tentar ler
+    await page.getByRole('button', { name: 'Fechar câmera' }).click();
+    // A conferência pela tela (Fase 2, E11): Fotos 1 a 4, Vídeo de Prova, envio tus e as miniaturas.
+    await conferirDevolucao(page, codigo, ['BOM']);
+    expect(violacoes).toEqual([]);
+  });
 });
 
 test('limite de login por IP: 20 falhas bloqueiam o IP; outro IP entra (decisão 14)', async ({ page }) => {
@@ -2607,11 +2844,17 @@ test('/api/saude nunca fica em cache (decisão 16)', async ({ request }) => {
 });
 
 test('o worker do e2e grava o batimento do healthcheck (decisão 17)', async () => {
-  await expect.poll(() => batimentoRecente(ARQUIVO_BATIMENTO, Date.now()), { timeout: 60_000 }).toBe(true);
+  // A pasta temporária é a mesma para todas as worktrees deste PC: um arquivo velho de outro worker não vale.
+  // Exige uma gravação feita DEPOIS do início do teste (o worker grava a cada 30 s).
+  const inicio = Date.now();
+  await expect
+    .poll(() => (existsSync(ARQUIVO_BATIMENTO) ? statSync(ARQUIVO_BATIMENTO).mtimeMs : 0), { timeout: 60_000, interval: 1000 })
+    .toBeGreaterThan(inicio);
+  expect(batimentoRecente(ARQUIVO_BATIMENTO, Date.now())).toBe(true);
 });
 ```
 
-(com `import { ARQUIVO_BATIMENTO, batimentoRecente } from '../../src/worker/batimento';`).
+(com `import { existsSync, statSync } from 'node:fs';` e `import { ARQUIVO_BATIMENTO, batimentoRecente } from '../../src/worker/batimento';`).
 
 - [ ] **Passo 2: Rodar**
 
@@ -2708,9 +2951,10 @@ Push e deploy ficam com o usuário.
 >
 > 1. `cd /opt/devolucoes && git pull --ff-only`
 > 2. Confira se o `.env.producao` já tem `SEGREDO_LINKS` com 64 caracteres hexadecimais (contrato E17). Se não tiver, gere com `openssl rand -hex 32` e acrescente `SEGREDO_LINKS=<valor>`. **Sem ele o sistema dá erro 500.**
-> 3. Acrescente ao `.env.producao` o bloco do backup, copiado do fim do `.env.producao.example`:
->    - endpoint, região, bucket e chave do bucket de backup no B2. Esse bucket é **novo e só de backup**, com uma chave que só enxerga ele;
->    - `BACKUP_SENHA` gerada com `openssl rand -hex 32`. **Mostre a senha para eu guardar fora da VPS**, e depois `chmod 600 .env.producao`.
+> 3. Acrescente ao `.env.producao` o bloco do backup, copiado do fim do `.env.producao.example`, com os valores que **eu** vou colar direto no arquivo (não me peça para mandá-los no chat):
+>    - endpoint, região, bucket e chave do bucket de backup no B2. Esse bucket é **novo e só de backup**, diferente do bucket das mídias, com uma chave que só enxerga ele e não pode apagar arquivos;
+>    - `BACKUP_SENHA`: eu a gero no meu gerenciador de senhas e colo só no `.env.producao`. **Não mostre, não copie e não registre essa senha em lugar nenhum.**
+>    - Depois, `chmod 600 .env.producao`.
 > 4. `docker compose --env-file .env.producao -f docker-compose.prod.yml pull && docker compose --env-file .env.producao -f docker-compose.prod.yml up -d`
 > 5. Espere 1 minuto e rode `docker compose --env-file .env.producao -f docker-compose.prod.yml ps`. O `web` e o `worker` devem aparecer `healthy`, e o `backup`, `running`.
 > 6. Rode um backup agora: `docker compose --env-file .env.producao -f docker-compose.prod.yml exec backup sh /backup/backup.sh`. Deve terminar com `backup concluído`.
@@ -2718,11 +2962,14 @@ Push e deploy ficam com o usuário.
 >    - liste os backups com `docker compose ... exec backup sh -c '. /backup/comum.sh && rclone lsf "$REMOTO/banco"'`;
 >    - restaure o mais recente com `docker compose ... exec backup sh /backup/restaurar.sh banco/<arquivo>`;
 >    - me mostre as contagens;
->    - apague o banco de teste com `docker compose ... exec backup dropdb devolucoes_restauracao`.
+>    - apague o banco de teste com `docker compose ... exec backup dropdb --maintenance-db=postgres devolucoes_restauracao`.
 > 8. `curl -s http://127.0.0.1:3020/api/saude` e `curl -sI https://<domínio>/login | grep -i -E "content-security|x-frame|x-powered"`. O esperado: status ok, a CSP e o X-Frame-Options presentes, e **sem** X-Powered-By.
 > 9. Para liberar espaço, apague só as imagens sem nome deste projeto (o `scripts/deploy.sh` já faz).
 
-Com as mídias no B2 (`ARMAZENAMENTO=s3`): no painel do B2, ligue no bucket das mídias a regra **"Keep prior versions for 30 days"** (decisão 19).
+Antes do passo 3, o próprio usuário faz no painel do B2 (decisão 19 e `docs/operacao/backup-restauracao.md`):
+- cria o bucket **só de backup** e liga nele a regra de ciclo de vida que apaga os arquivos com mais de 30 dias (o `rclone delete` do B2 só esconde);
+- cria uma application key restrita a esse bucket, **sem** a permissão de apagar (proteção contra ransomware);
+- com as mídias no B2 (`ARMAZENAMENTO=s3`), liga no bucket das **mídias** a regra **"Keep prior versions for 30 days"**.
 
 ### 2. Passagem para produção da NF-e (spec §8.1 e §14: "NF em produção aprovada pelo contador")
 1. Emitir em homologação uma NF de devolução e uma NF de remessa de teste (etapa "Ligação das contas reais") e mandar os DANFEs ao contador, com as regras fiscais da tela (CFOP, CST/CSOSN, natureza e informações complementares). Os pontos que o contador valida estão no fim dos planos das Fases 4 e 5.
@@ -2733,6 +2980,8 @@ Com as mídias no B2 (`ARMAZENAMENTO=s3`): no painel do B2, ligue no bucket das 
 ### 3. Conferências manuais que ficaram das fases anteriores
 - Testar a câmera real (leitura do código e Vídeo de Prova) num Android e num iPhone da bancada (pendência da Fase 2). Com a CSP ligada, confira também o leitor ZXing no iPhone.
 - Confirmar no ML real o formato do número do pedido (pendência da Fase 3).
+- **Conectar a conta do ML com a CSP ligada** (Configurações › Mercado Livre → "Conectar"): o `form-action` e os redirecionamentos do OAuth (`auth.mercadolivre.com.br` e a volta para `/api/ml/retorno`) só dão para conferir com a conta real. Se o navegador acusar a CSP, libere só a origem que apareceu no erro (Tarefa 8).
+- Abrir um DANFE em PDF pelo detalhe da devolução e conferir que o visualizador do navegador o mostra (as rotas `/api/` estão fora da CSP).
 
 ### 4. Pergunta em aberto para o usuário (andamento.md)
 - **A empresa tem Inscrição Estadual ou é isenta?** Hoje a configuração fiscal só aceita o número. Se for isenta, falta uma mudança pequena na Fase 4: aceitar "ISENTO" no campo IE da empresa e mandar `inscricao_estadual` vazia com o indicador certo na Focus. O contador confirma o indicador.
