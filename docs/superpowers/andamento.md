@@ -13,7 +13,7 @@ Atualizado em 14/11/2026 (Fases 2, 3 e 4 juntadas no `main`; Fase 5 começando; 
   - Contrato (obrigatório para as Fases 2 a 6): [plans/2026-11-12-contrato-fases-2-6.md](plans/2026-11-12-contrato-fases-2-6.md). A §10 tem as emendas E1–E18.
   - Fases 2, 3 e 4: planos de 12/11 (já executados).
   - **Fase 5:** [plans/2026-11-14-fase-5-remessas.md](plans/2026-11-14-fase-5-remessas.md), 16 tarefas (0 a 15). Revisado e aprovado. A Tarefa 0 (emenda E18) já está no `main`. A 15 é a Integração.
-  - **Fase 6:** plano na branch `planos-fase-6` (`docs/superpowers/plans/2026-11-14-fase-6-acabamento.md`), em correção depois da revisão. Entra no `main` quando a re-revisão aprovar.
+  - **Fase 6:** [plans/2026-11-14-fase-6-acabamento.md](plans/2026-11-14-fase-6-acabamento.md), 15 tarefas (0 a 14). Revisado e aprovado. A Tarefa 0 (emenda E19 no `main`) roda só depois que a Fase 5 for juntada, porque mexe em arquivo congelado.
 - **Pendências deixadas pela junção (14/11):**
   - Teste instável da Fase 2: `tests/e2e/conferencia.spec.ts:96` ("desistir"), cerca de 1 falha em 50, só no projeto `computador`. A correção sugerida está em `.superpowers/sdd/fases-2-6/f4-task-11-report.md`.
   - O npm 11.6.1 deste PC tira os campos `libc` e as entradas `@emnapi` do `package-lock.json` ao rodar `npm install`. Revise o diff do lockfile antes de commitar.
@@ -37,7 +37,7 @@ Atualizado em 14/11/2026 (Fases 2, 3 e 4 juntadas no `main`; Fase 5 começando; 
 - **Atenção ao publicar na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500.
 - **Próximos passos, em ordem:**
   1. Fase 5 (time rodando desde 14/11), revisão final e Integração.
-  2. Plano da Fase 6: terminar a correção e a re-revisão; juntar o plano no `main`.
+  2. Fase 6: Tarefa 0 no `main` depois da junção da Fase 5; depois o time.
   3. Fase 6.
   4. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação (certificado A1), B2 e domínio. O usuário deve separar o certificado A1, a conta da Focus e o app do ML.
   5. Publicação na VPS e a pergunta da Inscrição Estadual.
