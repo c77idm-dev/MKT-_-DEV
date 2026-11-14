@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useActionState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { FotosPacote } from '@/components/conferencia/FotosPacote';
 import { ALERTA_ERRO, BOTAO_PRIMARIO, CAMPO, ROTULO } from '@/components/estilos';
 import { useLeitorCamera } from '@/components/leitor/useLeitorCamera';
 import { registrarChegadaAcao, type EstadoRecebimento } from './acoes';
@@ -215,6 +216,9 @@ export function FormularioRecebimento() {
       >
         {cameraAberta && botaoCamera}
         <Resultado estado={estado} acao={acao} pendente={pendente} />
+        {estado.tipo === 'sucesso' && estado.naoIdentificada && !cameraAberta && (
+          <FotosPacote key={estado.naoIdentificada.id} devolucaoId={estado.naoIdentificada.id} />
+        )}
         <form ref={formularioRef} action={acao} className="flex flex-col gap-3">
           <input type="hidden" name="intencao" value="receber" />
           <label htmlFor="rastreio" className={ROTULO}>

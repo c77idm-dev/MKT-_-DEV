@@ -10,7 +10,7 @@ import { criarNaoIdentificada, receberPorRastreio } from '@/modules/devolucoes/r
 
 export type EstadoRecebimento =
   | { tipo: 'inicial' }
-  | { tipo: 'sucesso'; titulo: string; mensagem: string; codigos: string[] }
+  | { tipo: 'sucesso'; titulo: string; mensagem: string; codigos: string[]; naoIdentificada?: { id: string; codigo: string } }
   | { tipo: 'aviso'; titulo: string; mensagem: string; codigos: string[] }
   | { tipo: 'nao_encontrada'; rastreio: string }
   | { tipo: 'erro'; mensagem: string };
@@ -26,8 +26,9 @@ export async function registrarChegadaAcao(_anterior: EstadoRecebimento, dados: 
       return {
         tipo: 'sucesso',
         titulo: 'Pacote não identificado registrado',
-        mensagem: `${criada.codigo} foi para "Pedidos Chegados - Aguardando Conferência", marcada como não identificada. O Gestor liga ao pedido depois.`,
+        mensagem: `${criada.codigo} foi para "Pedidos Chegados - Aguardando Conferência", marcada como não identificada. Tire a Foto 1 e a Foto 2 abaixo; o Gestor liga ao pedido depois.`,
         codigos: [criada.codigo],
+        naoIdentificada: { id: criada.id, codigo: criada.codigo },
       };
     }
     const r = await receberPorRastreio(db, rastreio, usuario);
