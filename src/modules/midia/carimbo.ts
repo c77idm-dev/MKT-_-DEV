@@ -33,7 +33,7 @@ export async function carimbarFoto(
   entrada: Buffer,
   p: { quando: Date; codigo: string; usuario: string },
 ): Promise<{ conteudo: Buffer; largura: number; altura: number }> {
-  const { data, info } = await sharp(entrada, { failOn: 'error' })
+  const { data, info } = await sharp(entrada, { failOn: 'error', limitInputPixels: 50_000_000 })
     .autoOrient()
     .resize({ width: LADO_MAIOR, height: LADO_MAIOR, fit: 'inside', withoutEnlargement: true })
     .toBuffer({ resolveWithObject: true });
