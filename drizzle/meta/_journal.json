@@ -71,6 +71,13 @@
       "when": 1794642809644,
       "tag": "0009_fase5_remessas",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794679490745,
+      "tag": "0010_fase6_acabamento",
+      "breakpoints": true
     }
   ]
 }
