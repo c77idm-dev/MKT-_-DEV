@@ -59,6 +59,8 @@ export type PedidoInclusao = {
   ator: Ator;
   usuarioId: string | null;
   agora: Date;
+  /** Quando a unidade ganha o produto recebido na própria inclusão (associar produto): vai nos dados do evento da unidade. */
+  produtoRecebidoId?: string;
 };
 
 /** Põe a unidade no lote ABERTO do fornecedor (criando-o se preciso) e registra os eventos da unidade e do lote. */
@@ -74,7 +76,12 @@ export async function incluirNoLote(tx: DbOuTx, p: PedidoInclusao): Promise<{ lo
     para: 'EM_LOTE',
     usuarioId: p.usuarioId,
     em: p.agora,
-    dados: { loteId: lote.id, loteCodigo: lote.codigo, devolucaoId: p.devolucaoId },
+    dados: {
+      loteId: lote.id,
+      loteCodigo: lote.codigo,
+      devolucaoId: p.devolucaoId,
+      ...(p.produtoRecebidoId ? { produtoRecebidoId: p.produtoRecebidoId } : {}),
+    },
   });
   await registrarEvento(tx, {
     entidade: 'lote',

@@ -1,7 +1,10 @@
 import { and, count, desc, eq, ne } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { itensDevolucao, lotes, notasFiscais } from '@/db/schema';
+import type { UsuarioSessao } from '@/modules/auth/usuarios';
+import { pode } from '@/modules/auth/permissoes';
 import type { NotaFiscalLinha } from '@/modules/fiscal/notas';
+import { ErroLotes } from './erros';
 
 export type LoteLinha = typeof lotes.$inferSelect;
 
@@ -31,4 +34,9 @@ export async function notaAtivaDoLote(db: DbOuTx, loteId: string): Promise<NotaF
     .orderBy(desc(notasFiscais.criadaEm))
     .limit(1);
   return nota ?? null;
+}
+
+/** Vale para toda ação dos lotes (spec §3): só o Fiscal e o Gestor, que têm `gerir_fiscal`. */
+export function exigirPodeGerirLotes(usuario: UsuarioSessao): void {
+  if (!pode(usuario.perfil, 'gerir_fiscal')) throw new ErroLotes('Só o Fiscal ou o Gestor mexem nos lotes.');
 }
