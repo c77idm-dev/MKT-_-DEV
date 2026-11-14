@@ -1,10 +1,11 @@
 import { sql } from 'drizzle-orm';
-import { check, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { check, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { Destinatario } from '../../conectores/nfe/tipos';
 import { OPERACOES_FISCAIS, ORIGENS_NOTA_VENDA, SITUACOES_NOTA, TIPOS_NOTA, type ItemNotaVenda } from '../../modules/fiscal/dominio';
 import { usuarios } from './auth';
 import { ambienteNfeEnum } from './configuracoes';
 import { devolucoes } from './devolucoes';
+import { lotes } from './lotes';
 
 export const tipoNotaEnum = pgEnum('tipo_nota', TIPOS_NOTA);
 export const situacaoNotaEnum = pgEnum('situacao_nota', SITUACOES_NOTA);
@@ -13,14 +14,14 @@ export const origemNotaVendaEnum = pgEnum('origem_nota_venda', ORIGENS_NOTA_VEND
 
 const COM_FUSO = { withTimezone: true } as const;
 
-/** Spec §5.1 (NotaFiscal) e contrato §4.3. A FK de `lote_id` para `lotes` entra na Fase 5. */
+/** Spec §5.1 (NotaFiscal) e contrato §4.3. `lote_id` referencia `lotes` (Fase 5). */
 export const notasFiscais = pgTable(
   'notas_fiscais',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     tipo: tipoNotaEnum('tipo').notNull(),
     devolucaoId: uuid('devolucao_id').references(() => devolucoes.id),
-    loteId: uuid('lote_id'),
+    loteId: uuid('lote_id').references((): AnyPgColumn => lotes.id),
     ambiente: ambienteNfeEnum('ambiente').notNull(),
     serie: text('serie'),
     numero: text('numero'),
