@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useActionState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { FotosPacote } from '@/components/conferencia/FotosPacote';
 import { ALERTA_ERRO, BOTAO_PRIMARIO, CAMPO, ROTULO } from '@/components/estilos';
+import { useManterFilaAtiva } from '@/components/midia/useFilaEnvios';
 import { useLeitorCamera } from '@/components/leitor/useLeitorCamera';
 import { registrarChegadaAcao, type EstadoRecebimento } from './acoes';
 import { podeAceitarLeitura } from './guarda';
@@ -127,6 +128,8 @@ function Resultado({ estado, acao, pendente }: { estado: EstadoRecebimento; acao
  * Com a câmera aberta, o vídeo ocupa a tela e o painel com o campo fica embaixo.
  */
 export function FormularioRecebimento() {
+  // As Fotos 1 e 2 do pacote anterior continuam subindo depois de outro código ser registrado (o FotosPacote desmonta).
+  useManterFilaAtiva();
   const [estado, acao, pendente] = useActionState(registrarChegadaAcao, INICIAL);
   const formularioRef = useRef<HTMLFormElement>(null);
   const campoRef = useRef<HTMLInputElement>(null);

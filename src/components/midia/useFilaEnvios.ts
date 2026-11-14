@@ -15,6 +15,30 @@ function fila(): FilaEnvios {
 }
 
 /**
+ * Mantém a fila andando (a cada 2 s, quando a rede volta e quando o app volta ao primeiro plano) sem depender de uma
+ * tela de devolução. Para telas que deixam fotos na fila e seguem para outra coisa (ex.: recebimento).
+ */
+export function useManterFilaAtiva() {
+  useEffect(() => {
+    const f = fila();
+    const tentar = () => void f.processar();
+    const voltouARede = () => void f.processar(true);
+    const voltouAoApp = () => {
+      if (document.visibilityState === 'visible') tentar();
+    };
+    window.addEventListener('online', voltouARede);
+    document.addEventListener('visibilitychange', voltouAoApp);
+    const relogio = window.setInterval(tentar, 2000);
+    tentar();
+    return () => {
+      window.removeEventListener('online', voltouARede);
+      document.removeEventListener('visibilitychange', voltouAoApp);
+      window.clearInterval(relogio);
+    };
+  }, []);
+}
+
+/**
  * Envios de uma devolução. Tenta de novo ao abrir a tela, quando a rede volta, quando o app volta ao primeiro
  * plano e a cada 2 s (só o que já passou da espera). O iPhone não envia com o app fechado (pesquisa §4).
  */
