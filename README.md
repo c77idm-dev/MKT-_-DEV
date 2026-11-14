@@ -19,7 +19,7 @@ npm run usuario:criar -- --nome "Seu Nome" --email voce@empresa.com --perfil GES
 npm run dev                   # http://localhost:3000
 ```
 
-## O que existe hoje (Fases 0, 1, 2 e 3)
+## O que existe hoje (Fases 0, 1, 2, 3 e 4)
 Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, formulários em uma coluna, barra de abas embaixo, alvos de toque de 44 px, app instalável (PWA).
 - Login, três perfis (Operador, Fiscal, Gestor) e permissões por ação; barra de abas que muda conforme o perfil.
 - Quadro de Fluxo com as 5 etapas do PDF e Busca Avançada.
@@ -27,10 +27,11 @@ Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, f
 - Recebimento com a câmera em tela cheia (leitor de código de barras) ou digitando o código. Pacote não identificado com as Fotos 1 e 2.
 - Conferência no celular, unidade por unidade: Fotos 1 a 4, leitura do código (EAN), Serial Number, lote e validade, Vídeo de Prova comprimido, destino e unidade ausente. Trava da conferência, que o Gestor pode liberar. Funciona sem rede: as fotos e os vídeos esperam no aparelho e sobem sozinhos quando a conexão volta.
 - Mercado Livre (com o ML simulado até a "Ligação das contas reais"): conexão da conta administradora em Configurações › Mercado Livre, devoluções que entram sozinhas pelos avisos e pela varredura de 15 min, status do ML no detalhe da devolução, "OK" automático quando todas as unidades vão para o Estoque Bom e a tela Contestações ML, onde o Gestor revisa o motivo, a mensagem e as fotos e toca em "Enviar ao ML".
+- Fiscal (com o emissor de NF-e simulado até a "Ligação das contas reais"): Configurações fiscais (dados da empresa, ambiente da NF-e e regras fiscais), etapa 4 "Destinação Fiscal e Estoque" com as abas Estoque Bom e Estoque Problema, NF de venda buscada no Mercado Livre ou anexada pelo XML, NF de devolução emitida, corrigida e reenviada depois de uma rejeição, cancelada em até 24 h, DANFE e XML de cada nota e o ZIP dos XMLs do período.
 - Cadastros de produtos e fornecedores, com importação por planilha (extra).
 - Usuários (só o Gestor): criar, mudar o perfil, desativar e reativar. Desativar encerra as sessões na hora, e o sistema nunca fica sem um Gestor ativo (extra).
 
-Ainda não existem: lotes e remessas, NF de devolução e relatórios. Ficam para as próximas fases.
+Ainda não existem: lotes e remessas (com a NF de remessa) e relatórios. Ficam para as próximas fases.
 
 ## Conferência no celular (Fase 2)
 A conferência (Fotos 1 a 4, leitura do código, Vídeo de Prova e destino de cada unidade) precisa de duas coisas além do site:
@@ -72,6 +73,24 @@ No PC e nos testes o sistema usa o **ML simulado** (`ML_CONECTOR=falso`): ele re
 
 **Como funciona:** a conferência concluída de uma devolução do ML põe na fila `ml.enviar-resultado`. Se todas as unidades foram para o Estoque Bom, o "OK" vai sozinho ao ML. Se alguma foi para o Estoque Problema, nasce uma contestação "Aguardando o Gestor" com as Fotos 1 a 4 (o Vídeo de Prova não vai ao ML). Ela aparece na aba Contestações ML com o prazo em destaque.
 
+## Fiscal (Fase 4)
+No PC e nos testes o sistema usa o **emissor simulado** (`EMISSOR_NFE=falso`): ele responde como a Focus NFe e autoriza a nota, a menos que a natureza da operação contenha "REJEITAR" (é assim que os testes simulam uma rejeição). Ele nunca fala com a Focus NFe nem com a SEFAZ.
+
+1. **Configurações › Fiscal** (o Gestor edita; o Fiscal só consulta): dados da empresa (CNPJ, IE, endereço, regime tributário e série), ambiente da NF-e (homologação ou produção) e as regras fiscais (CFOP, CST/CSOSN e natureza) de cada tipo de nota, dentro e fora do estado. Os valores sugeridos só valem depois de salvos, e o contador valida antes da produção.
+2. **Worker** rodando (`npm run worker`): a emissão é assíncrona. "Emitir NF de devolução" grava a nota como "Processando" e põe na fila `nfe.emitir`; o worker envia e consulta de novo (`nfe.consultar`) com espera crescente até a nota ser autorizada ou rejeitada.
+3. **NF de venda:** numa devolução do Mercado Livre, o sistema busca o XML no ML (botão "Buscar no Mercado Livre", e também antes de emitir). Nos outros canais, o Fiscal anexa o XML da NF de venda na Seção Fiscal do detalhe da devolução.
+
+**Como funciona:** a conferência concluída deixa a devolução em "Aguardando NF", na etapa 4, nas abas Estoque Bom e/ou Estoque Problema. Quando a NF de devolução é autorizada, as unidades do Estoque Bom ficam disponíveis para venda e a devolução vai para "Concluída". Uma NF rejeitada mostra o motivo, e o Gestor corrige a regra e toca em "Corrigir e reenviar". Em até 24 h a NF pode ser cancelada com uma justificativa, e a devolução volta para "Aguardando NF". Na etapa 4, "Baixar XMLs do período" gera o ZIP para a contabilidade.
+
+**Variáveis do `.env`** (todas já estão no `.env.example`):
+
+| Variável | Para quê |
+|---|---|
+| `EMISSOR_NFE` | `falso` (PC e testes) ou `focus` (Focus NFe, na "Ligação das contas reais") |
+| `FOCUS_TOKEN_HOMOLOGACAO`, `FOCUS_TOKEN_PRODUCAO` | Tokens da empresa no painel da Focus NFe. Só com `EMISSOR_NFE=focus` |
+
+Antes da produção, o contador valida os CFOP, os CST/CSOSN e os valores da NF de devolução, e a primeira NF real sai em homologação (checklist no fim do [plano da Fase 4](docs/superpowers/plans/2026-11-12-fase-4-fiscal.md)).
+
 ## Andamento
 No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi publicada em 12/11/2026.
 
@@ -81,8 +100,8 @@ No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi p
 | 1. Cadastros e recebimento | Produtos e fornecedores, devolução manual e por planilha, etapas 1 e 2, Busca Avançada, Recebimento com câmera, usuários | Pronta e publicada |
 | 2. Conferência no celular | Fotos 1 a 4, Vídeo de Prova, leitura do código, destino, mídia (compressão, armazenamento e links) | Pronta e no `main` (14/11/2026). Falta publicar na VPS e testar nos aparelhos reais da bancada |
 | 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Pronta e no `main` (14/11/2026), com o ML simulado. Falta publicar na VPS e ligar a conta real ("Ligação das contas reais") |
-| 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Pronta e revisada (branch `fase-4-fiscal`). É a próxima a entrar no `main` |
-| 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | Depois da Fase 4 |
+| 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Pronta e no `main` (14/11/2026), com o emissor simulado. Falta publicar na VPS, a validação do contador e a NF real em homologação ("Ligação das contas reais") |
+| 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | É a próxima |
 | Ligação das contas reais | ML real, Focus NFe em homologação, B2 para as mídias, domínio próprio | Depois da Fase 5 |
 | 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Por último |
 
