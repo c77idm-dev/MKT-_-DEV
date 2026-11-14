@@ -42,7 +42,7 @@ export function EtapasCelular({
                 {c.total}
               </span>
               <span className="sr-only">
-                {c.titulo}: {rotuloTotal(c.total)}
+                {c.titulo}: {rotuloTotal(c.total, c.unidade)}
               </span>
             </Link>
           );
@@ -53,7 +53,9 @@ export function EtapasCelular({
           {atual.numero}. {atual.titulo}
         </h2>
         {conteudoEtapa?.[atual.numero]}
-        {cartoes.length === 0 ? (
+        {atual.conteudo ? (
+          atual.conteudo
+        ) : cartoes.length === 0 ? (
           <p className={VAZIO}>{atual.nota ?? 'Nenhuma devolução nesta etapa.'}</p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -66,7 +68,7 @@ export function EtapasCelular({
         )}
         {atual.href && atual.total > 0 && (
           <Link href={atual.href} className={BOTAO_SECUNDARIO}>
-            {atual.total > cartoes.length ? `Ver todas as ${rotuloTotal(atual.total)}` : 'Ver lista'}
+            {atual.total > (atual.exibidos ?? cartoes.length) ? `Ver todas as ${rotuloTotal(atual.total, atual.unidade)}` : 'Ver lista'}
             <span className="sr-only">: {atual.titulo}</span>
           </Link>
         )}

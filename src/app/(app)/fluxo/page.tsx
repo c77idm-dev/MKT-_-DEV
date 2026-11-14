@@ -3,14 +3,15 @@ import Link from 'next/link';
 import { BuscaAvancada } from '@/components/BuscaAvancada';
 import { EtapasCelular } from '@/components/EtapasCelular';
 import { QuadroFluxo } from '@/components/QuadroFluxo';
-import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO } from '@/components/estilos';
+import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, VAZIO } from '@/components/estilos';
 import { DivisaoEstoque } from '@/components/fiscal/DivisaoEstoque';
+import { CartaoLote } from '@/components/lotes/CartaoLote';
 import { obterDb } from '@/db';
 import { primeiroValor, type ParametrosBusca } from '@/lib/parametros';
 import { pode } from '@/modules/auth/permissoes';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
-import { montarQuadro, NOTA_ETAPA_LOTES } from '@/modules/devolucoes/quadro';
+import { montarQuadro } from '@/modules/devolucoes/quadro';
 
 export const metadata: Metadata = { title: 'Fluxo · Gestão de Devoluções' };
 
@@ -20,7 +21,29 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
   const pedida = /^\d+$/.test(textoEtapa) ? Number(textoEtapa) : 0;
   const quadro = await montarQuadro(obterDb());
   // Coluna 4: os links Estoque Bom e Estoque Problema substituem o "Ver lista" (spec §6.4, D16).
-  const colunas = quadro.map((c) => (c.numero === 5 ? { ...c, nota: NOTA_ETAPA_LOTES } : c.numero === 4 ? { ...c, href: undefined } : c));
+  // Coluna 5: os lotes por fornecedor (decisão 15), contados em "lotes".
+  const colunas = quadro.map((c) => {
+    if (c.numero === 4) return { ...c, href: undefined };
+    if (c.numero !== 5) return c;
+    const lotes = c.lotes ?? [];
+    return {
+      ...c,
+      unidade: { singular: 'lote', plural: 'lotes' },
+      exibidos: lotes.length,
+      conteudo:
+        lotes.length > 0 ? (
+          <ul className="flex flex-col gap-2">
+            {lotes.map((l) => (
+              <li key={l.id}>
+                <CartaoLote lote={l} href={`/lotes/${l.codigo}`} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={VAZIO}>Nenhum lote em andamento.</p>
+        ),
+    };
+  });
   const estoque = quadro.find((c) => c.numero === 4)?.estoque;
   // Sem etapa válida na URL, o celular abre a primeira etapa que tem devoluções (ou a 1).
   const selecionada = ETAPAS.some((e) => e.numero === pedida) ? pedida : (colunas.find((c) => c.total > 0)?.numero ?? 1);

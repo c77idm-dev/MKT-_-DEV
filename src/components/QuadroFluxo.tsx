@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import type { ResumoDevolucao } from '@/modules/devolucoes/busca';
 import { CartaoDevolucao } from './CartaoDevolucao';
 import { VAZIO } from './estilos';
@@ -14,10 +15,17 @@ export type ColunaFluxo = {
   nota?: string;
   /** Coluna 4: Estoque Bom e Estoque Problema (spec §6.0, D16). */
   estoque?: { bom: number; problema: number };
+  /** Conteúdo próprio da coluna (coluna 5: cartões dos lotes); substitui os cartões de devolução e o aviso de vazio. */
+  conteudo?: ReactNode;
+  /** Unidade de contagem do total; o padrão é devolução/devoluções (coluna 5: lote/lotes). */
+  unidade?: { singular: string; plural: string };
+  /** Quantos itens o `conteudo` já mostra (para o "+ N" / "Ver lista"); o padrão é o número de cartões. */
+  exibidos?: number;
 };
 
-export function rotuloTotal(total: number): string {
-  return `${total} ${total === 1 ? 'devolução' : 'devoluções'}`;
+export function rotuloTotal(total: number, unidade?: { singular: string; plural: string }): string {
+  const { singular, plural } = unidade ?? { singular: 'devolução', plural: 'devoluções' };
+  return `${total} ${total === 1 ? singular : plural}`;
 }
 
 /**
@@ -30,7 +38,7 @@ export function QuadroFluxo({ colunas }: { colunas: ColunaFluxo[] }) {
       <div className="flex min-w-[1300px] items-start gap-3.5">
         {colunas.map((coluna) => {
           const cartoes = coluna.cartoes ?? [];
-          const escondidas = coluna.total - cartoes.length;
+          const escondidas = coluna.total - (coluna.exibidos ?? cartoes.length);
           return (
             <section
               key={coluna.numero}
@@ -46,12 +54,13 @@ export function QuadroFluxo({ colunas }: { colunas: ColunaFluxo[] }) {
                 </h2>
                 <span className="text-[13px] font-semibold text-texto-2">
                   <span aria-hidden="true">{coluna.total}</span>
-                  <span className="sr-only">{rotuloTotal(coluna.total)}</span>
+                  <span className="sr-only">{rotuloTotal(coluna.total, coluna.unidade)}</span>
                 </span>
               </div>
               {coluna.estoque && <DivisaoEstoque bom={coluna.estoque.bom} problema={coluna.estoque.problema} empilhada />}
-              {coluna.total === 0 && <p className={VAZIO}>{coluna.nota ?? 'Nenhuma devolução nesta etapa.'}</p>}
-              {cartoes.length > 0 && (
+              {coluna.conteudo}
+              {!coluna.conteudo && coluna.total === 0 && <p className={VAZIO}>{coluna.nota ?? 'Nenhuma devolução nesta etapa.'}</p>}
+              {!coluna.conteudo && cartoes.length > 0 && (
                 <ul className="flex flex-col gap-2">
                   {cartoes.map((d) => (
                     <li key={d.id}>
@@ -65,7 +74,7 @@ export function QuadroFluxo({ colunas }: { colunas: ColunaFluxo[] }) {
                   href={coluna.href}
                   className="flex min-h-11 items-center justify-center rounded-lg text-sm font-semibold text-destaque-escuro hover:bg-superficie"
                 >
-                  {escondidas > 0 ? `+ ${rotuloTotal(escondidas)}` : 'Ver lista'}
+                  {escondidas > 0 ? `+ ${rotuloTotal(escondidas, coluna.unidade)}` : 'Ver lista'}
                   {escondidas > 0 && ' '}
                   <span className="sr-only">{escondidas > 0 ? `em ${coluna.titulo}` : `: ${coluna.titulo}`}</span>
                 </Link>

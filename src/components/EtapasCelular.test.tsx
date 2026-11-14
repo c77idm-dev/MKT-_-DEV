@@ -69,4 +69,15 @@ describe('EtapasCelular', () => {
     rerender(<EtapasCelular colunas={COLUNAS} selecionada={3} conteudoEtapa={{ 2: <nav aria-label="Extra da etapa 2">extra</nav> }} />);
     expect(screen.queryByRole('navigation', { name: 'Extra da etapa 2' })).toBeNull();
   });
+
+  it('etapa 5 no celular: conteúdo da coluna e contagem em lotes', () => {
+    render(
+      <EtapasCelular
+        selecionada={5}
+        colunas={[{ numero: 5, titulo: 'Agrupamento por Fornecedor (Remessas)', total: 1, unidade: { singular: 'lote', plural: 'lotes' }, conteudo: <p>cartão do lote</p> }]}
+      />,
+    );
+    expect(screen.getByText('cartão do lote')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Agrupamento por Fornecedor (Remessas): 1 lote' })).toBeTruthy();
+  });
 });
