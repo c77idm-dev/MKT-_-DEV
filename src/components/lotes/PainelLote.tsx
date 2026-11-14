@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, type FormEvent } from 'react';
 import type { DetalheLote } from '@/modules/lotes/consultas';
 import { ListaErros } from '../ListaErros';
 import { MensagemSucesso } from '../MensagemSucesso';
@@ -20,7 +21,15 @@ type Props = {
  * `revalidatePath` troca os blocos (ex.: "Fechar lote" some), mas a mensagem continua na área fixa do topo.
  */
 export function PainelLote({ detalhe, podeGerir, links, acao }: Props) {
-  const [estado, aoEnviar, pendente] = useEnvioFormulario(acao, ESTADO_INICIAL_LOTE, 'erros-lote');
+  const [estado, enviar, pendente] = useEnvioFormulario(acao, ESTADO_INICIAL_LOTE, 'erros-lote');
+  // Um só `pendente` para a página: guarda qual operação foi enviada para o texto de andamento aparecer só nela.
+  const [operacao, setOperacao] = useState('');
+  function aoEnviar(evento: FormEvent<HTMLFormElement>) {
+    setOperacao(String(new FormData(evento.currentTarget).get('operacao') ?? ''));
+    enviar(evento);
+  }
+  const ocupado = (nome: string) => pendente && operacao === nome;
+  const temUnidades = detalhe.unidades.length > 0;
   const podeReabrir = podeGerir && detalhe.status === 'FECHADO' && detalhe.editavel;
   return (
     <div className="flex flex-col gap-4">
@@ -28,25 +37,26 @@ export function PainelLote({ detalhe, podeGerir, links, acao }: Props) {
         {estado.ok && <MensagemSucesso key={estado.ok} texto={estado.ok} />}
         <ListaErros erros={estado.erros} id="erros-lote" />
       </div>
-      {podeGerir && detalhe.status === 'ABERTO' && <BlocoFechar aoEnviar={aoEnviar} pendente={pendente} />}
+      {podeGerir && detalhe.status === 'ABERTO' && temUnidades && <BlocoFechar aoEnviar={aoEnviar} pendente={pendente} ocupado={ocupado('fechar')} />}
       {detalhe.status !== 'ABERTO' && (
         <BlocoNotaRemessa
           nota={detalhe.nota}
           anteriores={detalhe.anteriores}
           links={links}
           status={detalhe.status}
-          podeEmitir={podeGerir && detalhe.status === 'FECHADO' && !detalhe.nota}
+          podeEmitir={podeGerir && detalhe.status === 'FECHADO' && !detalhe.nota && temUnidades}
           podeReenviar={podeGerir && detalhe.nota?.situacao === 'REJEITADA'}
           podeCancelar={podeGerir && detalhe.status === 'NF_EMITIDA' && Boolean(detalhe.nota?.podeCancelar)}
           aoEnviar={aoEnviar}
           pendente={pendente}
+          operacaoAtual={pendente ? operacao : null}
         />
       )}
       {podeGerir && detalhe.temLista && <BlocoListaConsolidada codigo={detalhe.codigo} />}
-      {podeGerir && detalhe.status === 'NF_EMITIDA' && <BlocoEnvio aoEnviar={aoEnviar} pendente={pendente} />}
-      {podeGerir && detalhe.status === 'ENVIADO' && <BlocoResultado unidades={detalhe.unidades} aoEnviar={aoEnviar} pendente={pendente} />}
-      <BlocoUnidades unidades={detalhe.unidades} editavel={podeGerir && detalhe.editavel} destinos={detalhe.destinos} aoEnviar={aoEnviar} pendente={pendente} />
-      {podeReabrir && <BlocoReabrir outroAberto={detalhe.outroAberto} aoEnviar={aoEnviar} pendente={pendente} />}
+      {podeGerir && detalhe.status === 'NF_EMITIDA' && <BlocoEnvio aoEnviar={aoEnviar} pendente={pendente} ocupado={ocupado('envio')} />}
+      {podeGerir && detalhe.status === 'ENVIADO' && <BlocoResultado unidades={detalhe.unidades} aoEnviar={aoEnviar} pendente={pendente} ocupado={ocupado('resultado')} />}
+      <BlocoUnidades unidades={detalhe.unidades} editavel={podeGerir && detalhe.editavel} destinos={detalhe.destinos} aoEnviar={aoEnviar} pendente={pendente} ocupado={ocupado('mover')} />
+      {podeReabrir && <BlocoReabrir outroAberto={detalhe.outroAberto} vazio={!temUnidades} aoEnviar={aoEnviar} pendente={pendente} ocupado={ocupado('reabrir')} />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { DetalheLote } from '@/modules/lotes/consultas';
 import { PainelLote } from './PainelLote';
@@ -61,5 +61,41 @@ describe('PainelLote (Tarefa 12: remessa)', () => {
     const seletor = screen.getByLabelText('Resultado do fornecedor (unidade 2 da DEV-000123)');
     expect([...seletor.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Escolha', 'Trocado', 'Consertado', 'Crédito', 'Descartado', 'Devolvido sem solução']);
     expect(screen.getByRole('link', { name: 'Baixar Excel' }).getAttribute('href')).toBe('/api/lotes/LOT-000045/lista-consolidada?formato=xlsx');
+  });
+});
+
+describe('PainelLote (revisão final: ações sem volta, andamento, lote vazio)', () => {
+  const enviada = { ...detalhe().unidades[0], status: 'ENVIADO' as const, rotuloStatus: 'Enviado ao fornecedor' };
+  const enviado = () => detalhe({ status: 'ENVIADO', rotuloStatus: 'Enviado', tipo: 'CONSERTO', rotuloTipo: 'Conserto', editavel: false, unidades: [enviada] });
+
+  it('Registrar resultado é definitivo: o 1º toque pede confirmação e só o 2º chama a ação', async () => {
+    const acao = vi.fn(async () => ({ erros: [], ok: 'Resultado registrado.' }));
+    render(<PainelLote detalhe={enviado()} podeGerir links={null} acao={acao} />);
+    fireEvent.change(screen.getByLabelText('Resultado do fornecedor (unidade 2 da DEV-000123)'), { target: { value: 'CONSERTADO' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar resultado' }));
+    expect(acao).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Toque de novo: o resultado é definitivo' }));
+    await vi.waitFor(() => expect(acao).toHaveBeenCalledTimes(1));
+  });
+
+  it('o texto de andamento aparece só na ação que está rodando', async () => {
+    const acao = vi.fn(() => new Promise<never>(() => {}));
+    render(<PainelLote detalhe={detalhe({ status: 'FECHADO', rotuloStatus: 'Fechado', tipo: 'CONSERTO', rotuloTipo: 'Conserto' })} podeGerir links={null} acao={acao} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Mover unidade 2 da DEV-000123' }));
+    fireEvent.change(screen.getByLabelText('Para onde'), { target: { value: 'novo' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Mover unidades' }));
+    });
+    expect(screen.getByRole('button', { name: 'Movendo…' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Emitir NF de Remessa' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Enviando…' })).toBeNull();
+    expect((screen.getByRole('button', { name: 'Emitir NF de Remessa' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('lote FECHADO sem unidades: sem "Emitir NF de Remessa"; ABERTO sem unidades: sem "Fechar lote"', () => {
+    const { rerender } = render(<PainelLote detalhe={detalhe({ status: 'FECHADO', rotuloStatus: 'Fechado', tipo: 'CONSERTO', rotuloTipo: 'Conserto', unidades: [] })} podeGerir links={null} acao={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Emitir NF de Remessa' })).toBeNull();
+    rerender(<PainelLote detalhe={detalhe({ unidades: [] })} podeGerir links={null} acao={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Fechar lote' })).toBeNull();
   });
 });
