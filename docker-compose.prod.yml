@@ -8,6 +8,9 @@ services:
     image: ghcr.io/c77idm-dev/devolucoes:${IMAGEM_TAG:-main}
     restart: unless-stopped
     env_file: .env.producao
+    # Mídia: o web recebe os uploads (tus) e o worker processa. Os dois enxergam o mesmo /data.
+    volumes:
+      - midia:/data
     ports:
       - "127.0.0.1:3020:3000"
     depends_on:
@@ -23,6 +26,9 @@ services:
     image: ghcr.io/c77idm-dev/devolucoes:${IMAGEM_TAG:-main}
     restart: unless-stopped
     env_file: .env.producao
+    # Mídia: o web recebe os uploads (tus) e o worker processa. Os dois enxergam o mesmo /data.
+    volumes:
+      - midia:/data
     command: ["node", "dist/worker.mjs"]
     depends_on:
       postgres:
@@ -55,3 +61,4 @@ services:
 
 volumes:
   pgdata:
+  midia:

@@ -5,7 +5,19 @@ const nextConfig: NextConfig = {
   // O e2e faz o build de produção em outra pasta (NEXT_DIST_DIR=.next-e2e), sem sobrescrever o .next do dev.
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   // Pacotes que o Next não deve empacotar: usam recursos do Node e rodam do node_modules (o standalone os inclui).
-  serverExternalPackages: ["pg-boss"],
+  serverExternalPackages: ["pg-boss", "@tus/server", "@tus/file-store"],
+  // O service worker nunca fica em cache (cada deploy entrega o novo) e é servido como JavaScript.
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
+  },
   experimental: {
     serverActions: {
       // Planilhas de até 5 MB (spec §6.8) mais a folga do multipart. O nginx da VPS precisa aceitar o mesmo (6m).

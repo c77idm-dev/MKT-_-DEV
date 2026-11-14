@@ -2,7 +2,7 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ArmazenamentoArquivos, definirArmazenamentoParaTestes, provedorAtual } from './armazenamento';
 import { ArmazenamentoDisco } from './armazenamento-disco';
 import { ArmazenamentoMemoria } from './armazenamento-memoria';
@@ -79,5 +79,26 @@ describe('provedorAtual com o armazenamento dos testes', () => {
     expect(provedorAtual()).toBe('disco');
     definirArmazenamentoParaTestes(new ArmazenamentoMemoria());
     expect(provedorAtual()).toBe('memoria');
+  });
+});
+
+describe('escolha do provedor (ARMAZENAMENTO)', () => {
+  it('s3 usa o ArmazenamentoS3 com as variáveis S3_*', async () => {
+    const { obterArmazenamento, definirArmazenamentoParaTestes } = await import('./armazenamento');
+    const { ArmazenamentoS3 } = await import('./armazenamento-s3');
+    vi.stubEnv('DATABASE_URL', 'postgres://u:s@h/b');
+    vi.stubEnv('ARMAZENAMENTO', 's3');
+    vi.stubEnv('S3_ENDPOINT', 'https://s3.us-west-004.backblazeb2.com');
+    vi.stubEnv('S3_REGIAO', 'us-west-004');
+    vi.stubEnv('S3_BUCKET', 'midias');
+    vi.stubEnv('S3_CHAVE_ID', 'id');
+    vi.stubEnv('S3_CHAVE_SECRETA', 'segredo');
+    try {
+      definirArmazenamentoParaTestes(null);
+      expect(obterArmazenamento()).toBeInstanceOf(ArmazenamentoS3);
+    } finally {
+      vi.unstubAllEnvs();
+      definirArmazenamentoParaTestes(null);
+    }
   });
 });

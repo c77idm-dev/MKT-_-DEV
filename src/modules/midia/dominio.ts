@@ -51,3 +51,11 @@ export const ROTULO_SITUACAO_PROCESSAMENTO: Record<SituacaoProcessamento, string
   FALHOU: 'Falhou',
   APAGADA: 'Apagada (prazo de guarda)',
 };
+
+/** Limites do envio (decisão 5). O celular já manda a foto em JPEG de ~1600 px; o vídeo vem como foi gravado. */
+export const LIMITE_FOTO_BYTES = 15 * 1024 * 1024;
+export const LIMITE_VIDEO_BYTES = 300 * 1024 * 1024;
+export const TIPOS_FOTO_ACEITOS: readonly string[] = ['image/jpeg', 'image/png', 'image/webp'];
+
+/** Spec §9: o link temporário vale 10 minutos. */
+export const DURACAO_LINK_SEGUNDOS = 600;

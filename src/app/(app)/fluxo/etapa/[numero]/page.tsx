@@ -39,8 +39,20 @@ function acoesDaEtapa(numero: number, podeOperar: boolean): ReactNode {
   }
   if (numero === 2) {
     return (
-      <Link href="/fluxo/recebimento" className={BOTAO_PRIMARIO}>
-        Recebimento
+      <>
+        <Link href="/fluxo/recebimento" className={BOTAO_PRIMARIO}>
+          Recebimento
+        </Link>
+        <Link href="/fluxo/conferencia" className={BOTAO_SECUNDARIO}>
+          Conferir pacote
+        </Link>
+      </>
+    );
+  }
+  if (numero === 3) {
+    return (
+      <Link href="/fluxo/conferencia" className={BOTAO_PRIMARIO}>
+        Conferir pacote
       </Link>
     );
   }
