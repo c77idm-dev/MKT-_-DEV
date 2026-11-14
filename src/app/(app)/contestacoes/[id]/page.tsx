@@ -56,7 +56,7 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
         </div>
       </div>
 
-      {pedido && <MensagemSucesso texto="Envio pedido ao Mercado Livre. O resultado aparece aqui em instantes." />}
+      {pedido && c.status !== 'FALHOU' && <MensagemSucesso texto="Envio pedido ao Mercado Livre. O resultado aparece aqui em instantes." />}
       {c.status === 'FALHOU' && c.erro && (
         <p role="alert" className={`${ALERTA_ERRO} [overflow-wrap:anywhere]`}>
           O envio falhou: {c.erro}
@@ -131,7 +131,10 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
             <Dado rotulo="Mensagem">
               <span className="whitespace-pre-wrap">{c.mensagem}</span>
             </Dado>
-            <Dado rotulo="Fotos enviadas">{fotos.filter((f) => f.selecionada).length}</Dado>
+            <Dado rotulo="Fotos escolhidas">
+              {fotos.filter((f) => f.selecionada).length}
+              <span className="block text-xs text-texto-2">Fotos acima de 5 MB não vão ao ML (spec §7.4).</span>
+            </Dado>
           </dl>
         </section>
       )}
