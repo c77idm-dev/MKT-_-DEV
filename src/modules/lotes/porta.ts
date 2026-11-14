@@ -1,7 +1,8 @@
 import type { NotaParaEmissao } from '@/conectores/nfe/tipos';
 import type { DbOuTx } from '@/db/client';
-import { ErroFiscal } from '@/modules/fiscal/erros';
 import { alocarItensProblema, desfazerAlocacao, motivoParaNaoCancelarDevolucao } from './alocacao';
+import { aoAutorizarRemessa, aoCancelarRemessa } from './efeitos-remessa';
+import { montarNotaRemessa } from './montar-remessa';
 
 /** Contrato §5.7. A Fase 4 cria a implementação "sem lotes"; a Fase 5 troca o corpo (e só ela). */
 export interface PortaLotes {
@@ -19,9 +20,10 @@ export interface PortaLotes {
   aoCancelarRemessa(tx: DbOuTx, loteId: string, agora: Date): Promise<void>;
 }
 
-const REMESSAS_NA_FASE_5 = 'As remessas chegam na Fase 5';
-
-/** Fase 5: alocação e cancelamento ligados; o restante da porta continua "sem lotes" até a Tarefa 6. */
+/**
+ * Fase 5: porta inteira ligada (alocação, cancelamento e remessa). Só importa módulos que não importam `fiscal/emissao.ts`
+ * (a porta é importada pelo ciclo da Fase 4); os atalhos das telas ficam em `remessa.ts`.
+ */
 export const portaLotes: PortaLotes = {
   async alocarItensProblema(tx, devolucaoId, agora) {
     await alocarItensProblema(tx, devolucaoId, agora);
@@ -32,13 +34,13 @@ export const portaLotes: PortaLotes = {
   async desfazerAlocacao(tx, devolucaoId, agora) {
     await desfazerAlocacao(tx, devolucaoId, agora);
   },
-  async montarNotaRemessa() {
-    throw new ErroFiscal(REMESSAS_NA_FASE_5);
+  async montarNotaRemessa(tx, loteId, referencia) {
+    return montarNotaRemessa(tx, loteId, referencia);
   },
-  async aoAutorizarRemessa() {
-    throw new ErroFiscal(REMESSAS_NA_FASE_5);
+  async aoAutorizarRemessa(tx, loteId, notaFiscalId, agora) {
+    await aoAutorizarRemessa(tx, loteId, notaFiscalId, agora);
   },
-  async aoCancelarRemessa() {
-    throw new ErroFiscal(REMESSAS_NA_FASE_5);
+  async aoCancelarRemessa(tx, loteId, agora) {
+    await aoCancelarRemessa(tx, loteId, agora);
   },
 };
