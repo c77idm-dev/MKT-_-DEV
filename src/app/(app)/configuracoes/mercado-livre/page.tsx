@@ -9,16 +9,12 @@ import { formatarDataHora } from '@/lib/formatar';
 import { primeiroValor } from '@/lib/parametros';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { ehErroConexao, MENSAGEM_ERRO_CONEXAO } from '@/modules/mercado-livre/conexao';
+import { mensagemOkConexao } from '@/modules/mercado-livre/mensagem-ok';
 import { listarSemEnvioFisico, resumoContaML } from '@/modules/mercado-livre/consultas';
 import { ROTULO_SITUACAO_CONTA, rotuloStatusML } from '@/modules/mercado-livre/dominio';
 import { BotaoConectar, BotaoDesconectar } from './AcoesConta';
 
 export const metadata: Metadata = { title: 'Mercado Livre · Gestão de Devoluções' };
-
-const MENSAGEM_OK: Record<string, string> = {
-  conectada: 'Conta do Mercado Livre conectada.',
-  desconectada: 'Conta do Mercado Livre desconectada.',
-};
 
 type Props = { searchParams: Promise<{ ok?: string | string[]; erro?: string | string[] }> };
 
@@ -26,7 +22,7 @@ type Props = { searchParams: Promise<{ ok?: string | string[]; erro?: string | s
 export default async function PaginaMercadoLivre({ searchParams }: Props) {
   await exigirPermissao('administrar');
   const parametros = await searchParams;
-  const ok = MENSAGEM_OK[primeiroValor(parametros.ok)];
+  const ok = mensagemOkConexao(primeiroValor(parametros.ok));
   const codigoErro = primeiroValor(parametros.erro);
   const erro = ehErroConexao(codigoErro) ? MENSAGEM_ERRO_CONEXAO[codigoErro] : null;
   const db = obterDb();
