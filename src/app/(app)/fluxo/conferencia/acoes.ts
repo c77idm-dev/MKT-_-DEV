@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { obterDb } from '@/db';
 import { textoDoForm } from '@/lib/formulario';
@@ -22,5 +23,6 @@ export async function abrirConferenciaAcao(_anterior: EstadoConferirPacote, dado
     if (erro instanceof ErroDevolucao) return { erros: [erro.message] };
     throw erro;
   }
+  revalidatePath('/fluxo', 'layout');
   redirect(`/fluxo/devolucoes/${codigo}/conferencia`);
 }
