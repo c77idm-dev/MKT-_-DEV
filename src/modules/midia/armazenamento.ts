@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream';
 import { lerEnv } from '@/lib/env';
 import { ArmazenamentoDisco } from './armazenamento-disco';
+import { ArmazenamentoS3, criarClienteS3 } from './armazenamento-s3';
 
 /** Spec §4.3 e contrato §5.2. A Fase 2 (Parte B) acrescenta o ArmazenamentoS3 (B2 ou R2). */
 export interface ArmazenamentoArquivos {
@@ -38,7 +39,22 @@ export function armazenamentoDoProvedor(provedor: string): ArmazenamentoArquivos
   if (existente) return existente;
   let criado: ArmazenamentoArquivos;
   if (provedor === 'disco') criado = discoLocal();
-  else throw new Error(`Provedor de armazenamento não disponível: ${provedor}`);
+  else if (provedor === 's3') {
+    const env = lerEnv();
+    if (!env.S3_ENDPOINT || !env.S3_REGIAO || !env.S3_BUCKET || !env.S3_CHAVE_ID || !env.S3_CHAVE_SECRETA) {
+      throw new Error('Há mídias no S3, mas as variáveis S3_* não estão configuradas.');
+    }
+    criado = new ArmazenamentoS3(
+      criarClienteS3({
+        endpoint: env.S3_ENDPOINT,
+        regiao: env.S3_REGIAO,
+        bucket: env.S3_BUCKET,
+        chaveId: env.S3_CHAVE_ID,
+        chaveSecreta: env.S3_CHAVE_SECRETA,
+      }),
+      env.S3_BUCKET,
+    );
+  } else throw new Error(`Provedor de armazenamento não disponível: ${provedor}`);
   instancias.set(provedor, criado);
   return criado;
 }

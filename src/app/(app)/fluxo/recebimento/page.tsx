@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LINK_VOLTAR } from '@/components/estilos';
+import { RegistrarServiceWorker } from '@/components/pwa/RegistrarServiceWorker';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { FormularioRecebimento } from './FormularioRecebimento';
@@ -13,6 +14,7 @@ export default async function PaginaRecebimento() {
   await exigirPermissao('operar_devolucoes');
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-3">
+      <RegistrarServiceWorker />
       <Link href="/fluxo/etapa/2" className={LINK_VOLTAR}>
         ← {ETAPA_RECEBIMENTO?.titulo}
       </Link>
