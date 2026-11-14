@@ -3,7 +3,8 @@ import { criarClienteML, ErroML, type ClienteML } from '@/conectores/marketplace
 import { formatarDataML } from '@/conectores/marketplace/mercadolivre/datas';
 import { redigir } from '@/lib/redigir';
 import { obterTokensValidos } from './comum';
-import { idsDaDevolucao, reclamacoesComDevolucao, resumirCorpoErro, type DevolucaoML, type ReclamacaoResumo } from './selecao';
+import { resumirCorpoErro } from '@/conectores/marketplace/mercadolivre/erros';
+import { idsDaDevolucao, reclamacoesComDevolucao, type DevolucaoML, type ReclamacaoResumo } from './selecao';
 
 const PASTA = 'tests/fixtures/ml';
 const DIAS = 60;

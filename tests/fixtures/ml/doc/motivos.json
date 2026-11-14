@@ -1,0 +1,7 @@
+[
+  { "id": "SRF2", "name": "O produto chegou danificado", "position": 1, "apply": "package" },
+  { "id": "SRF3", "name": "Faltam peças ou acessórios", "position": 2, "apply": "package" },
+  { "id": "SRF4", "name": "É um produto diferente", "position": 3, "apply": "order" },
+  { "id": "SRF5", "name": "O produto não veio no pacote", "position": 4, "apply": "order" },
+  { "id": "SRF6", "name": "Outro motivo", "position": 5, "apply": "package" }
+]

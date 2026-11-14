@@ -1,0 +1,11 @@
+{
+  "id": 41896532561,
+  "status": "shipped",
+  "substatus": null,
+  "tracking_number": "QB123456789BR",
+  "tracking_method": "Correios",
+  "date_created": "2026-11-06T08:00:00.000-03:00",
+  "last_updated": "2026-11-09T14:20:00.000-03:00",
+  "status_history": { "date_shipped": "2026-11-07T09:00:00.000-03:00", "date_delivered": null },
+  "logistic": { "mode": "me2", "type": "default", "direction": "reverse" }
+}

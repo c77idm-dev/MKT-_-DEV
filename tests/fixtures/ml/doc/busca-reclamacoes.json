@@ -1,0 +1,21 @@
+{
+  "paging": { "total": 2, "offset": 0, "limit": 100 },
+  "data": [
+    {
+      "id": 5292183123,
+      "type": "mediations",
+      "status": "opened",
+      "resource_id": 2000008003035430,
+      "related_entities": ["return"],
+      "last_updated": "2026-11-09T14:20:00.000-03:00"
+    },
+    {
+      "id": 5292183999,
+      "type": "mediations",
+      "status": "opened",
+      "resource_id": 2000008003035999,
+      "related_entities": [],
+      "last_updated": "2026-11-09T15:00:00.000-03:00"
+    }
+  ]
+}

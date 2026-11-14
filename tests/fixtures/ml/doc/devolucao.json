@@ -1,0 +1,34 @@
+{
+  "id": 14958493,
+  "claim_id": 5292183123,
+  "type": "claim",
+  "subtype": "return_total",
+  "status": "shipped",
+  "status_money": "retained",
+  "resource_type": "order",
+  "shipments": [
+    {
+      "shipment_id": 41896532561,
+      "status": "shipped",
+      "tracking_number": "QB123456789BR",
+      "type": "return",
+      "destination": { "name": "seller_address" }
+    }
+  ],
+  "orders": [
+    {
+      "order_id": 2000008003035430,
+      "item_id": "MLB3456789012",
+      "variation_id": 178234567890,
+      "context_type": "total",
+      "total_quantity": "1.0",
+      "return_quantity": "1.0"
+    }
+  ],
+  "date_created": "2026-11-05T10:15:00.000-03:00",
+  "last_updated": "2026-11-09T14:20:00.000-03:00",
+  "date_closed": null,
+  "refund_at": "delivered",
+  "related_entities": [],
+  "intermediate_check": false
+}

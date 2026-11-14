@@ -5,7 +5,7 @@ import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { listarEventos } from '@/modules/historico/eventos';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
-import { criarDevolucao, type DadosNovaDevolucao } from './criar';
+import { criarDevolucao, type DadosCanal, type DadosNovaDevolucao } from './criar';
 import { ErroDevolucao, ErroDevolucaoDuplicada } from './erros';
 import { criarNaoIdentificada } from './recebimento';
 import { ErroTransicao } from './transicoes';
@@ -128,5 +128,59 @@ describe('criarDevolucao: rastreio de pacote não identificado e limite de unida
     await expect(criarDevolucao(db, dados, { origem: 'MANUAL', usuario: operador })).rejects.toThrow(
       'Uma devolução aceita no máximo 200 unidades no total (foram informadas 201). Divida em mais de uma devolução.',
     );
+  });
+});
+
+describe('criarDevolucao pela API do canal (contrato §5.5)', () => {
+  const CANAL: DadosCanal = {
+    devolucaoExternaId: '14958493',
+    tipo: 'TROCA',
+    pedidos: ['2000008003035430', '2000008003035431'],
+    statusCanal: 'shipped/shipped',
+    entregueSegundoCanalEm: null,
+    prazoConferenciaCanal: new Date('2026-11-20T12:00:00Z'),
+  };
+  const ML: DadosNovaDevolucao = { ...DADOS, canal: 'MERCADO_LIVRE', pedido: '2000008003035430', reclamacaoId: '5292183123' };
+  const AGORA = new Date('2026-11-12T15:00:00Z');
+
+  it('cria como SISTEMA, sem usuário, com os dados do canal e todos os pedidos', async () => {
+    const criada = await criarDevolucao(db, ML, { origem: 'API', usuario: null, canal: CANAL, agora: AGORA });
+    expect(criada.unidades).toBe(3);
+    const [d] = await db.select().from(devolucoes).where(eq(devolucoes.id, criada.id));
+    expect(d).toMatchObject({
+      origem: 'API',
+      canal: 'MERCADO_LIVRE',
+      status: 'PENDENTE_CHEGADA',
+      criadoPor: null,
+      devolucaoExternaId: '14958493',
+      reclamacaoId: '5292183123',
+      tipo: 'TROCA',
+      pedidosExternos: ['2000008003035430', '2000008003035431'],
+      statusCanal: 'shipped/shipped',
+      prazoConferenciaCanal: CANAL.prazoConferenciaCanal,
+      entregueSegundoCanalEm: null,
+      criadaEm: AGORA,
+    });
+    expect(await listarEventos(db, 'devolucao', criada.id)).toEqual([
+      expect.objectContaining({ acao: 'criada', de: null, para: 'PENDENTE_CHEGADA', usuarioNome: null, em: AGORA, dados: { origem: 'API', unidades: 3 } }),
+    ]);
+  });
+
+  it('o mesmo id externo no mesmo canal é ErroDevolucaoDuplicada com o código da existente', async () => {
+    const primeira = await criarDevolucao(db, ML, { origem: 'API', usuario: null, canal: CANAL });
+    const erro = await criarDevolucao(db, ML, { origem: 'API', usuario: null, canal: CANAL }).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroDevolucaoDuplicada);
+    expect((erro as ErroDevolucaoDuplicada).codigo).toBe(primeira.codigo);
+  });
+
+  it('pela API a chave é o id externo: outra devolução do mesmo pedido entra', async () => {
+    await criarDevolucao(db, ML, { origem: 'API', usuario: null, canal: CANAL });
+    const segunda = await criarDevolucao(db, ML, { origem: 'API', usuario: null, canal: { ...CANAL, devolucaoExternaId: '14958494' } });
+    expect(segunda.codigo).toMatch(/^DEV-\d{6}$/);
+  });
+
+  it('pela API não confere o pacote não identificado do mesmo rastreio (decisão 12 do plano)', async () => {
+    await criarNaoIdentificada(db, 'BR123456789BR', operador);
+    await expect(criarDevolucao(db, ML, { origem: 'API', usuario: null, canal: CANAL })).resolves.toMatchObject({ unidades: 3 });
   });
 });

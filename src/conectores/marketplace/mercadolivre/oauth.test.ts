@@ -104,3 +104,21 @@ describe('renovarTokens', () => {
     });
   });
 });
+
+describe('resposta do token validada com zod (pendência da Fase 0)', () => {
+  it('sem refresh_token é ErroML, e o erro não guarda o access_token', async () => {
+    const fetchFn = fetchQueResponde({ access_token: 'APP_USR-secreto', expires_in: 21600, user_id: 1 });
+    const erro = await trocarCodigo({ clientId: '1', clientSecret: 's', code: 'c', redirectUri: 'https://x', fetchFn }).catch(
+      (e: unknown) => e,
+    );
+    expect(erro).toBeInstanceOf(ErroML);
+    expect((erro as ErroML).corpo).toContain('refresh_token');
+    expect((erro as ErroML).corpo).not.toContain('APP_USR-secreto');
+  });
+
+  it('aceita user_id em texto e scope ausente', async () => {
+    const fetchFn = fetchQueResponde({ ...RESPOSTA, user_id: '123', scope: undefined });
+    const t = await renovarTokens({ clientId: '1', clientSecret: 's', refreshToken: 'r', fetchFn, agora: new Date('2026-11-11T12:00:00Z') });
+    expect(t).toMatchObject({ userId: 123, escopo: '', expiraEm: '2026-11-11T18:00:00.000Z' });
+  });
+});

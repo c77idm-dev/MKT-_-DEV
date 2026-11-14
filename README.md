@@ -19,17 +19,18 @@ npm run usuario:criar -- --nome "Seu Nome" --email voce@empresa.com --perfil GES
 npm run dev                   # http://localhost:3000
 ```
 
-## O que existe hoje (Fases 0, 1 e 2)
+## O que existe hoje (Fases 0, 1, 2 e 3)
 Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, formulários em uma coluna, barra de abas embaixo, alvos de toque de 44 px, app instalável (PWA).
 - Login, três perfis (Operador, Fiscal, Gestor) e permissões por ação; barra de abas que muda conforme o perfil.
 - Quadro de Fluxo com as 5 etapas do PDF e Busca Avançada.
 - Devoluções: cadastro manual, importação por planilha agrupando por pedido (extra), histórico de eventos.
 - Recebimento com a câmera em tela cheia (leitor de código de barras) ou digitando o código. Pacote não identificado com as Fotos 1 e 2.
 - Conferência no celular, unidade por unidade: Fotos 1 a 4, leitura do código (EAN), Serial Number, lote e validade, Vídeo de Prova comprimido, destino e unidade ausente. Trava da conferência, que o Gestor pode liberar. Funciona sem rede: as fotos e os vídeos esperam no aparelho e sobem sozinhos quando a conexão volta.
+- Mercado Livre (com o ML simulado até a "Ligação das contas reais"): conexão da conta administradora em Configurações › Mercado Livre, devoluções que entram sozinhas pelos avisos e pela varredura de 15 min, status do ML no detalhe da devolução, "OK" automático quando todas as unidades vão para o Estoque Bom e a tela Contestações ML, onde o Gestor revisa o motivo, a mensagem e as fotos e toca em "Enviar ao ML".
 - Cadastros de produtos e fornecedores, com importação por planilha (extra).
 - Usuários (só o Gestor): criar, mudar o perfil, desativar e reativar. Desativar encerra as sessões na hora, e o sistema nunca fica sem um Gestor ativo (extra).
 
-Ainda não existem: lotes e remessas, contestações, integração com o Mercado Livre, NF de devolução e relatórios. Ficam para as próximas fases.
+Ainda não existem: lotes e remessas, NF de devolução e relatórios. Ficam para as próximas fases.
 
 ## Conferência no celular (Fase 2)
 A conferência (Fotos 1 a 4, leitura do código, Vídeo de Prova e destino de cada unidade) precisa de duas coisas além do site:
@@ -51,6 +52,26 @@ A conferência (Fotos 1 a 4, leitura do código, Vídeo de Prova e destino de ca
 
 As opções da conferência (vídeo obrigatório e prazo de guarda das mídias) ficam em Configurações › Conferência e mídias.
 
+## Mercado Livre (Fase 3)
+No PC e nos testes o sistema usa o **ML simulado** (`ML_CONECTOR=falso`): ele responde como a API do ML, com cenários fixos em `tests/fixtures/ml-falso/`, e nunca fala com o ML de verdade.
+
+1. **Chave dos tokens:** `CHAVE_CRIPTOGRAFIA` no `.env`, com 32 bytes em base64. Gere com `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Os tokens do ML são guardados cifrados no banco. Se a chave se perder, basta conectar a conta de novo.
+2. **Worker** rodando (`npm run worker`): ele busca as reclamações avisadas, faz a varredura a cada 15 min, renova os tokens a cada 5 h, manda o "OK" e envia as contestações.
+3. **Conectar:** Configurações › Mercado Livre › "Conectar conta do Mercado Livre" (só o Gestor). No modo simulado a conexão volta direto, sem sair do sistema.
+
+**Endereços para o app do ML Developers** (a tela Configurações › Mercado Livre mostra os dois): retorno `https://<domínio>/api/ml/retorno` e notificações `https://<domínio>/api/ml/notificacoes` (tópico `post_purchase`).
+
+**Variáveis do `.env`** (todas já estão no `.env.example`):
+
+| Variável | Para quê |
+|---|---|
+| `ML_CONECTOR` | `falso` (PC e testes) ou `api` (ML real, na "Ligação das contas reais") |
+| `ML_CLIENT_ID`, `ML_CLIENT_SECRET`, `ML_REDIRECT_URI` | Dados do app no ML Developers. Só com `ML_CONECTOR=api` |
+| `ML_USAR_PKCE` | `true` se o app do ML pedir PKCE |
+| `CHAVE_CRIPTOGRAFIA` | Cifra os tokens do ML no banco (AES-256-GCM, 32 bytes em base64) |
+
+**Como funciona:** a conferência concluída de uma devolução do ML põe na fila `ml.enviar-resultado`. Se todas as unidades foram para o Estoque Bom, o "OK" vai sozinho ao ML. Se alguma foi para o Estoque Problema, nasce uma contestação "Aguardando o Gestor" com as Fotos 1 a 4 (o Vídeo de Prova não vai ao ML). Ela aparece na aba Contestações ML com o prazo em destaque.
+
 ## Andamento
 No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi publicada em 12/11/2026.
 
@@ -59,8 +80,8 @@ No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi p
 | 0. Fundação | Projeto, banco, login e perfis, visual, publicação na VPS com HTTPS | Pronta. Falta o teste real da API do ML, que vai para a etapa "Ligação das contas reais" |
 | 1. Cadastros e recebimento | Produtos e fornecedores, devolução manual e por planilha, etapas 1 e 2, Busca Avançada, Recebimento com câmera, usuários | Pronta e publicada |
 | 2. Conferência no celular | Fotos 1 a 4, Vídeo de Prova, leitura do código, destino, mídia (compressão, armazenamento e links) | Pronta e no `main` (14/11/2026). Falta publicar na VPS e testar nos aparelhos reais da bancada |
-| 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Em construção (branch `fase-3-mercado-livre`): 14 das 16 tarefas prontas |
-| 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Pronta e revisada (branch `fase-4-fiscal`). Espera a junção das Fases 2 e 3 para entrar no `main` |
+| 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Pronta e no `main` (14/11/2026), com o ML simulado. Falta publicar na VPS e ligar a conta real ("Ligação das contas reais") |
+| 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Pronta e revisada (branch `fase-4-fiscal`). É a próxima a entrar no `main` |
 | 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | Depois da Fase 4 |
 | Ligação das contas reais | ML real, Focus NFe em homologação, B2 para as mídias, domínio próprio | Depois da Fase 5 |
 | 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Por último |
