@@ -51,6 +51,22 @@ describe('carregarListaConsolidada (spec §6.5)', () => {
     });
   });
 
+  it('o SKU da lista e o do produto recebido (o da NF), nao o da venda', async () => {
+    const f = await criarFornecedorCompletoTeste(db);
+    const p = await criarProdutoDoFornecedorTeste(db, { cnpjFornecedor: f.cnpj });
+    const dev = await criarDevolucaoComProblemasTeste(db, gestor, {
+      unidades: [{ destino: 'PROBLEMA', motivo: 'AVARIADO', serial: 'SN-1', sku: 'VENDIDO-1', produtoId: p.id }],
+    });
+    const l = await criarLoteTeste(db, { fornecedorId: f.id, status: 'NF_EMITIDA', tipo: 'CONSERTO', itemIds: dev.itens.map((i) => i.id) });
+    const [nota] = await db
+      .insert(notasFiscais)
+      .values({ tipo: 'REMESSA_CONSERTO', loteId: l.id, ambiente: 'HOMOLOGACAO', referenciaEmissor: 'ref2', situacao: 'AUTORIZADA', numero: '124', serie: '1', chave: '35261111222333000181550010000001241123456784', autorizadaEm: new Date('2026-11-14T13:00:00Z') })
+      .returning();
+    await db.update(lotes).set({ notaFiscalId: nota.id }).where(eq(lotes.id, l.id));
+    const lista = await carregarListaConsolidada(db, l.codigo, AGORA);
+    expect(lista?.linhas.map((x) => x.sku)).toEqual([p.sku]);
+  });
+
   it('sem NF autorizada não há lista; lote que não existe devolve null', async () => {
     const f = await criarFornecedorCompletoTeste(db);
     const l = await criarLoteTeste(db, { fornecedorId: f.id, status: 'FECHADO' });

@@ -21,6 +21,11 @@ export type ListaConsolidada = {
   linhas: LinhaLista[];
 };
 
+/** A ordem das células de uma linha, igual a COLUNAS_LISTA: usada pelo Excel e pelo PDF. */
+export function celulasDaLinha(x: LinhaLista): [string, string, string, string, string, number, string] {
+  return [x.sku, x.descricao, x.serial, x.motivo, x.devolucao, x.unidade, x.observacao];
+}
+
 export function cabecalhoDaLista(l: ListaConsolidada): [string, string][] {
   return [
     ['Fornecedor', l.fornecedor.razaoSocial],
@@ -57,9 +62,13 @@ export async function carregarListaConsolidada(db: DbOuTx, codigo: string, agora
     .orderBy(asc(devolucoes.codigo), asc(itensDevolucao.unidade));
   const ids = [...new Set(unidades.flatMap(({ item }) => [item.produtoRecebidoId, item.produtoEsperadoId]).filter((x): x is string => !!x))];
   const descricoes = new Map<string, string>();
+  const skus = new Map<string, string>();
   if (ids.length > 0) {
-    const linhas = await db.select({ id: produtos.id, descricao: produtos.descricao }).from(produtos).where(inArray(produtos.id, ids));
-    for (const p of linhas) descricoes.set(p.id, p.descricao);
+    const linhas = await db.select({ id: produtos.id, sku: produtos.sku, descricao: produtos.descricao }).from(produtos).where(inArray(produtos.id, ids));
+    for (const p of linhas) {
+      descricoes.set(p.id, p.descricao);
+      skus.set(p.id, p.sku);
+    }
   }
   const descricaoDe = (id: string | null) => (id ? descricoes.get(id) || '' : '');
 
@@ -81,7 +90,8 @@ export async function carregarListaConsolidada(db: DbOuTx, codigo: string, agora
     linhas: unidades.map(({ item, devolucaoCodigo }) => ({
       devolucao: devolucaoCodigo,
       unidade: item.unidade,
-      sku: item.sku,
+      // O lote é do fornecedor do produto recebido (e a NF usa ele): o SKU da venda só vale sem produto recebido.
+      sku: (item.produtoRecebidoId ? skus.get(item.produtoRecebidoId) : undefined) ?? item.sku,
       descricao: descricaoDe(item.produtoRecebidoId) || descricaoDe(item.produtoEsperadoId) || VAZIO,
       serial: item.serial ?? VAZIO,
       motivo: item.motivo ? ROTULO_MOTIVO[item.motivo] : VAZIO,
