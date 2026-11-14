@@ -2,4 +2,5 @@
 export const ROTULOS_ACABAMENTO: Record<string, string> = {
   midia_apagada_retencao: 'Mídia apagada pelo prazo de guarda',
   tarefa_reenviada: 'Tarefa reenviada',
+  tarefa_dispensada: 'Falha dispensada',
 };
