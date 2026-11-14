@@ -37,9 +37,9 @@ No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi p
 |---|---|---|
 | 0. Fundação | Projeto, banco, login e perfis, visual, publicação na VPS com HTTPS | Pronta. Falta o teste real da API do ML, que vai para a etapa "Ligação das contas reais" |
 | 1. Cadastros e recebimento | Produtos e fornecedores, devolução manual e por planilha, etapas 1 e 2, Busca Avançada, Recebimento com câmera, usuários | Pronta e publicada |
-| 2. Conferência no celular | Fotos 1 a 4, Vídeo de Prova, leitura do código, destino, mídia (compressão, armazenamento e links) | Plano sendo escrito. Começa pela base comum (fila, armazenamento e tabelas novas) |
-| 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Plano sendo escrito. Roda em paralelo com as Fases 2 e 4 |
-| 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Plano sendo escrito. Roda em paralelo com as Fases 2 e 3 |
+| 2. Conferência no celular | Fotos 1 a 4, Vídeo de Prova, leitura do código, destino, mídia (compressão, armazenamento e links) | Em construção (branch `fase-2-conferencia`): 10 das 14 tarefas prontas |
+| 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Em construção (branch `fase-3-mercado-livre`): 14 das 16 tarefas prontas |
+| 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Pronta e revisada (branch `fase-4-fiscal`). Espera a junção das Fases 2 e 3 para entrar no `main` |
 | 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | Depois da Fase 4 |
 | Ligação das contas reais | ML real, Focus NFe em homologação, B2 para as mídias, domínio próprio | Depois da Fase 5 |
 | 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Por último |

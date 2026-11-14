@@ -1,26 +1,63 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 12/11/2026. Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 13/11/2026, 18h24 (Fase 4 pronta e revisada; Fases 2 e 3 trabalhando). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Fases 0 e 1:** prontas, no `main` e publicadas na VPS (https://devolucoes.179-199-128-100.sslip.io).
-- **Fases 2, 3 e 4:** em andamento, em **paralelo, com um time de agentes por fase** (pedido do usuário).
-  - As regras do paralelo estão no contrato [plans/2026-11-12-contrato-fases-2-6.md](plans/2026-11-12-contrato-fases-2-6.md). Ele é obrigatório para as Fases 2 a 6.
-  - **P1 (isolamento dos testes por worktree):** feita.
-  - **Planos de cada fase:**
-    - Fase 2 (com a "Parte A", a base comum): [plans/2026-11-12-fase-2-conferencia.md](plans/2026-11-12-fase-2-conferencia.md)
-    - Fase 3: [plans/2026-11-12-fase-3-mercado-livre.md](plans/2026-11-12-fase-3-mercado-livre.md)
-    - Fase 4: [plans/2026-11-12-fase-4-fiscal.md](plans/2026-11-12-fase-4-fiscal.md)
-  - Um plano está incompleto se tiver um marcador `<!-- CONTINUA -->` ou se ainda não estiver no repositório. Nesse caso, continue a partir da última tarefa escrita, seguindo o contrato.
-- **Atenção ao publicar a Parte A na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500.
+- **Planos e contrato:** prontos e conciliados.
+  - Contrato (obrigatório para as Fases 2 a 6): [plans/2026-11-12-contrato-fases-2-6.md](plans/2026-11-12-contrato-fases-2-6.md). A §10 tem as emendas E1–E17.
+  - Fase 2: [plans/2026-11-12-fase-2-conferencia.md](plans/2026-11-12-fase-2-conferencia.md), 23 tarefas: 1–8 são a Parte A (base comum), 9–22 a conferência, 23 a Integração.
+  - Fase 3: [plans/2026-11-12-fase-3-mercado-livre.md](plans/2026-11-12-fase-3-mercado-livre.md), 17 tarefas; a 17 é a Integração.
+  - Fase 4: [plans/2026-11-12-fase-4-fiscal.md](plans/2026-11-12-fase-4-fiscal.md), 11 tarefas; a 11 é a Integração.
+- **P1 e Parte A (base comum) da Fase 2:** prontas, revisadas e no `main` (`f38e320`, enviado ao GitHub).
+  - Inclui: variáveis de ambiente, migração 0006, vocabulário e rótulos, fila pg-boss com o worker, armazenamento com links assinados, tipos dos conectores e esqueletos das telas.
+  - Testes: 293 de unidade, 144 de integração, 69 no navegador.
+- **Times das Fases 2, 3 e 4:** trabalham em paralelo desde 13/11, cada um na sua worktree: `C:/Users/idmpc/devolucoes-wt/fase-2`, `fase-3` e `fase-4`, nas branches `fase-2-conferencia`, `fase-3-mercado-livre` e `fase-4-fiscal`, todas a partir do `main` `f38e320`. Cada uma tem `.env` próprio (banco, banco de testes e porta), conforme o contrato §6. O que cada tarefa já fechou fica na branch, no GitHub.
+  - **Estado em 13/11, 18h24:** os times pararam no limite de uso por volta das 17h50 e voltaram com a troca de conta. A Fase 4 terminou; as Fases 2 e 3 seguem trabalhando.
+
+    | Fase | Prontas e revisadas | Em andamento | No GitHub |
+    |---|---|---|---|
+    | 2, conferência | Tarefas 9 a 18 (`55de648`). A T18 (assistente da conferência no celular) foi revisada e aprovada sem mudanças. | **T19**: a conferência a partir do detalhe e da etapa | `55de648` |
+    | 3, Mercado Livre | Tarefas 1 a 14 (`e3c2778`). A T14 é a seção Mercado Livre no detalhe da devolução. | **T15**: Configurações › Mercado Livre (conectar a conta) | `e3c2778` |
+    | 4, fiscal | Tarefas 1 a 10 e **revisão final aprovada** (`2967789`) | Nada. Espera a vez dela na junção: a Integração (T11) roda depois das Fases 2 e 3 (contrato §7). | `2967789` |
+
+  - **A revisão final da Fase 4 foi aprovada em 13/11.** A re-revisão confirmou as 5 correções, sem precisar de rodada extra:
+    - O XML do cancelamento ainda indisponível na Focus volta para a fila e, se não chegar, vai para Falhas. Antes ele sumia, e o ZIP do período saía sem esse cancelamento (`46806fe`).
+    - Um teste novo prova que a chave das consultas muda a cada reenvio, conforme a E4 (`b01bef8`).
+    - Três correções nas telas (`2967789`):
+      - o botão "Remover" da NF de venda pede confirmação;
+      - o Fiscal pode trocar o item da NF de venda mesmo quando o casamento automático (pelo SKU ou pelo EAN) já escolheu um;
+      - a seção Fiscal segue a ordem do trabalho: NF de venda, depois os itens, depois "Emitir NF de devolução".
+    - Ficaram de propósito cerca de 50 itens menores, cada um com o motivo. São cosméticos, cobertos de outro jeito, ou caminhos da Fase 5 (remessa e lotes). Para a Fase 5, ficou anotado: repetir a checagem da porta de lotes dentro de `desfazerAlocacao`. As revisões completas estão em `.superpowers/sdd/fases-2-6/f4-final-*.md`, só neste PC.
+  - **Runs atuais (para `resumeFromRunId` se pararem de novo):**
+    - Fase 2: `wf_3b9280f3-f70`, com o script do fluxo dos times.
+    - Fase 3: `wf_c5c15a75-faa`, com o script do fluxo dos times.
+    - Os argumentos são os mesmos de antes (veja abaixo).
+    - Em outro computador ou em outra sessão não há cache. Rode o fluxo só com as tarefas que faltam: a Fase 2 a partir da T19 (`[19,…,22]`) e a Fase 3 a partir da T15 (`[15,16]`). Antes, confira na branch o que já entrou.
+  - Os `git stash` "parcial da T1" (Fases 3 e 4) e "parcial da T14" (Fase 3) são antigos e podem ser descartados: essas tarefas já foram refeitas.
+- **Decisões tomadas no caminho:**
+  - Citar o ERP **Bitbrain** nas telas está certo (spec §8 e §8.7): a NF de venda é baixada dele, o ZIP de XMLs é importado nele, e a série não pode colidir com a dele. A regra é só não usar domínio nem marca bitbrain no sistema.
+- **Pergunta em aberto para o usuário (fica para o fim do sistema, a pedido dele em 14/11):** a empresa tem Inscrição Estadual ou é isenta? Hoje a configuração fiscal só aceita o número. Se for isenta, é preciso aceitar "ISENTO".
+- **Segundo PC (usuário Windows "JEFFERSON LIMA"), preparado em 14/11:**
+  - Worktrees em `/c/Users/JEFFERSON LIMA/devolucoes-wt/fase-2`, `fase-3` e `fase-4`, cada uma com `.env` próprio.
+  - PostgreSQL 18 numa instância só do projeto, na **porta 5433**, com os dados em `C:\Users\JEFFERSON LIMA\pg-devolucoes\data`. A senha do `postgres` fica em `C:\Users\JEFFERSON LIMA\.postgres-superusuario.txt`. O PostgreSQL 18 da porta 5432 é de outra coisa: não mexa.
+  - A instância não é serviço: depois de reiniciar o PC, suba com `"/c/Program Files/PostgreSQL/18/bin/pg_ctl.exe" -D "/c/Users/JEFFERSON LIMA/pg-devolucoes/data" -l "/c/Users/JEFFERSON LIMA/pg-devolucoes/postgres.log" start`.
+  - Nos fluxos, passe também `"raiz":"/c/Users/JEFFERSON LIMA/MKT-_-DEV"` e a `pasta` deste PC.
+- **Para retomar os times:** use o fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js). Para cada tarefa, ele faz: implementar, revisar, até 2 rodadas de correção, enviar ao GitHub. Rode um fluxo por fase, os três em paralelo, com os argumentos:
+  - Fase 2: `{"fase":2,"pasta":"/c/Users/idmpc/devolucoes-wt/fase-2","branch":"fase-2-conferencia","pref":"f2","tarefas":[9,…,22],"porta":3102,"bancoTeste":"devolucoes_test_f2"}`
+  - Fase 3: `{"fase":3,"pasta":".../fase-3","branch":"fase-3-mercado-livre","pref":"f3","tarefas":[1,…,16],"porta":3103,"bancoTeste":"devolucoes_test_f3"}`
+  - Fase 4: `{"fase":4,"pasta":".../fase-4","branch":"fase-4-fiscal","pref":"f4","tarefas":[1,…,10],"porta":3104,"bancoTeste":"devolucoes_test_f4"}`
+  - O fluxo lê os resumos de cada tarefa e as regras comuns em `.superpowers/sdd/fases-2-6/`, que não vão para o git. Em outro computador, recrie esses resumos a partir dos planos: cada resumo é o trecho de uma tarefa `### Tarefa N:`, salvo em `fN-task-N-brief.md`. Recrie também o `contexto-comum.md`: pasta, banco e porta de cada time, regras de celular, TDD, relatório.
+  - Se uma tarefa já tiver sido concluída, ela aparece no registro `progress-fN.md` e na branch. Retome a partir da seguinte.
+  - As tarefas de Integração (Fase 2 T23, Fase 3 T17, Fase 4 T11) ficam fora dos fluxos. Elas rodam na ordem de junção 2 → 3 → 4 (contrato §7).
+  - Quando um time termina as tarefas, rode o fluxo [workflows/fase-final.js](workflows/fase-final.js) na fase. Ele faz a revisão final (servidor e telas), as correções, a re-revisão e o push. Argumentos: os mesmos do outro fluxo, mais `"base":"f38e320"`, `"plano":"docs/superpowers/plans/<plano da fase>.md"` e, se precisar, `"decisoes"` (texto com decisões já tomadas).
+- **Atenção ao publicar na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500.
 - **Próximos passos, em ordem:**
-  1. Executar a **Parte A da Fase 2** no `main`.
-  2. Criar as worktrees e os bancos (contrato §6).
-  3. Executar as Fases 2, 3 e 4 em paralelo.
-  4. Juntar na ordem 2 → 3 → 4 (contrato §7).
-  5. Fase 5.
-  6. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação, B2 e domínio.
-  7. Fase 6.
+  1. Retomar os três times depois das 19h50 (veja acima). Quando a Fase 2 terminar a T22 e a Fase 3 a T16, rode a revisão final de cada uma.
+  2. Juntar na ordem 2 → 3 → 4, com a Integração de cada uma (contrato §7).
+  3. Fase 5.
+  4. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação, B2 e domínio.
+  5. Fase 6.
 - O andamento resumido para o usuário fica no [README](../../README.md#andamento).
 
 ## Como trabalhamos
