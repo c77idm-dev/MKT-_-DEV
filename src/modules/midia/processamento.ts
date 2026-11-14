@@ -107,6 +107,15 @@ export async function registrarErro(db: Db, e: EvidenciaEmProcessamento, tarefa:
   });
 }
 
+/**
+ * concluirProcessamento devolveu false: ou a evidência foi refeita (linha sumiu, o arquivo sobra) ou outra execução da
+ * mesma tarefa já marcou PRONTA com a mesma chave (o arquivo é dela e fica).
+ */
+async function apagarSeSobrou(db: Db, evidenciaId: string, chave: string, armazenamento: ReturnType<typeof obterArmazenamento>): Promise<void> {
+  const [atual] = await db.select({ caminho: evidencias.caminho }).from(evidencias).where(eq(evidencias.id, evidenciaId));
+  if (!atual || atual.caminho !== chave) await armazenamento.apagar(chave);
+}
+
 /** Tarefa midia.processar-foto: carimbo (extra), SHA-256 final e envio ao armazenamento final. */
 export async function processarFoto(db: Db, evidenciaId: string, ctx: ContextoProcessamento): Promise<void> {
   const e = await comecar(db, evidenciaId);
@@ -122,7 +131,7 @@ export async function processarFoto(db: Db, evidenciaId: string, ctx: ContextoPr
     await armazenamento.salvar(chave, Readable.from([conteudo]), { tipoConteudo: 'image/jpeg', tamanho: conteudo.length });
     const ok = await concluirProcessamento(db, e, { chave, tipoConteudo: 'image/jpeg', tamanho: conteudo.length, sha256Final: sha256DoBuffer(conteudo) }, ctx.agora);
     if (!ok) {
-      await armazenamento.apagar(chave);
+      await apagarSeSobrou(db, e.id, chave, armazenamento);
       return;
     }
     // A foto original é descartada depois do carimbo; fica o sha256_original (contrato D6).
@@ -156,7 +165,7 @@ export async function transcodificarVideo(
     const ok = await concluirProcessamento(db, e, { chave, tipoConteudo: 'video/mp4', tamanho, sha256Final }, ctx.agora);
     await rm(saida, { force: true });
     if (!ok) {
-      await armazenamento.apagar(chave);
+      await apagarSeSobrou(db, e.id, chave, armazenamento);
       return;
     }
     await apagarTemporario(e.caminhoTemporario);

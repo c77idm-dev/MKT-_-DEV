@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eventosHistorico, evidencias } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
@@ -88,5 +88,21 @@ describe('processarFoto (tarefa midia.processar-foto)', () => {
     expect(e.situacaoProcessamento).toBe('FALHOU');
     expect(e.erroProcessamento).toBeTruthy();
     expect(await db.select({ id: eventosHistorico.id }).from(eventosHistorico).where(eq(eventosHistorico.acao, 'evidencia_falhou'))).toHaveLength(1);
+  });
+
+  it('execução concorrente que perde a corrida não apaga o arquivo que a outra já registrou como PRONTA', async () => {
+    const { d, id } = await fotoRecebida();
+    const chave = `evidencias/${d.id}/${id}.jpg`;
+    const armazenamento = obterArmazenamento();
+    const salvarReal = armazenamento.salvar.bind(armazenamento);
+    // A segunda execução (B) está em PROCESSANDO e, ao terminar de salvar, a primeira (A) já concluiu tudo.
+    vi.spyOn(armazenamento, 'salvar').mockImplementationOnce(async (...args) => {
+      await salvarReal(...args);
+      await processarFoto(db, id, { tentativa: 1, agora });
+    });
+    await processarFoto(db, id, { tentativa: 1, agora });
+    vi.restoreAllMocks();
+    expect(await linha(id)).toMatchObject({ situacaoProcessamento: 'PRONTA', caminho: chave });
+    expect((armazenamento as ArmazenamentoMemoria).arquivos.has(chave)).toBe(true);
   });
 });
