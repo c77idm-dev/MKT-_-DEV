@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ResumoDevolucao } from '@/modules/devolucoes/busca';
 import { CartaoDevolucao } from './CartaoDevolucao';
 import { VAZIO } from './estilos';
+import { DivisaoEstoque } from './fiscal/DivisaoEstoque';
 
 export type ColunaFluxo = {
   numero: number;
@@ -11,6 +12,8 @@ export type ColunaFluxo = {
   href?: string;
   /** Texto curto no lugar do aviso de vazio (etapa 5: os lotes chegam numa fase posterior). */
   nota?: string;
+  /** Coluna 4: Estoque Bom e Estoque Problema (spec §6.0, D16). */
+  estoque?: { bom: number; problema: number };
 };
 
 export function rotuloTotal(total: number): string {
@@ -46,11 +49,8 @@ export function QuadroFluxo({ colunas }: { colunas: ColunaFluxo[] }) {
                   <span className="sr-only">{rotuloTotal(coluna.total)}</span>
                 </span>
               </div>
-              {coluna.total === 0 && (
-                <p className={VAZIO}>
-                  {coluna.nota ?? 'Nenhuma devolução nesta etapa.'}
-                </p>
-              )}
+              {coluna.estoque && <DivisaoEstoque bom={coluna.estoque.bom} problema={coluna.estoque.problema} empilhada />}
+              {coluna.total === 0 && <p className={VAZIO}>{coluna.nota ?? 'Nenhuma devolução nesta etapa.'}</p>}
               {cartoes.length > 0 && (
                 <ul className="flex flex-col gap-2">
                   {cartoes.map((d) => (

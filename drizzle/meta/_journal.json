@@ -57,6 +57,13 @@
       "when": 1794595397798,
       "tag": "0007_fase3_mercado_livre",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794639272626,
+      "tag": "0008_fase4_fiscal",
+      "breakpoints": true
     }
   ]
 }

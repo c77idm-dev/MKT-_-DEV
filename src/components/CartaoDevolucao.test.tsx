@@ -35,3 +35,16 @@ describe('CartaoDevolucao', () => {
     expect(screen.getByText('Sem rastreio')).toBeTruthy();
   });
 });
+
+describe('CartaoDevolucao na etapa 4', () => {
+  it('mostra quantas unidades vão para Estoque Bom e Estoque Problema (spec §6.4)', () => {
+    render(<CartaoDevolucao devolucao={{ ...BASE, status: 'AGUARDANDO_NF', selos: [], destinos: { bom: 2, problema: 1 } }} />);
+    expect(screen.getByText('Estoque Bom: 2')).toBeTruthy();
+    expect(screen.getByText('Estoque Problema: 1')).toBeTruthy();
+  });
+
+  it('sem unidades aguardando NF, nada de contagem', () => {
+    render(<CartaoDevolucao devolucao={{ ...BASE, selos: [], destinos: { bom: 0, problema: 0 } }} />);
+    expect(screen.queryByText(/^Estoque/)).toBeNull();
+  });
+});

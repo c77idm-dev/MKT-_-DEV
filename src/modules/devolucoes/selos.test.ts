@@ -36,3 +36,14 @@ describe('selosDaDevolucao (cartão do protótipo C)', () => {
     ]);
   });
 });
+
+describe('selos da NF de devolução (Fase 4)', () => {
+  const aguardando = { ...BASE, canal: 'SHOPEE' as const, status: 'AGUARDANDO_NF' as const };
+
+  it('em processamento, rejeitada e autorizada; sem NF ativa, nada', () => {
+    expect(selosDaDevolucao({ ...aguardando, situacaoNota: 'PROCESSANDO' }, AGORA)).toEqual([{ texto: 'NF em processamento', tom: 'destaque' }]);
+    expect(selosDaDevolucao({ ...aguardando, situacaoNota: 'REJEITADA' }, AGORA)).toEqual([{ texto: 'NF rejeitada', tom: 'erro' }]);
+    expect(selosDaDevolucao({ ...aguardando, status: 'CONCLUIDA', situacaoNota: 'AUTORIZADA' }, AGORA)).toEqual([{ texto: 'NF autorizada', tom: 'bom' }]);
+    expect(selosDaDevolucao({ ...aguardando, situacaoNota: null }, AGORA)).toEqual([]);
+  });
+});
