@@ -22,3 +22,26 @@ describe('mensagemDoErro (decisão 6)', () => {
     expect(mensagemDoErro({ message: 'linha 1\nlinha 2\u0000' })).toBe('linha 1 linha 2');
   });
 });
+
+import { linhaErroRequisicao } from './log';
+
+const req = { path: '/fluxo/busca?rastreio=BR123&pedido=9', method: 'GET', headers: { cookie: 'sessao=segredo' } };
+const ctx = { routePath: '/fluxo/busca', routeType: 'render' };
+
+describe('linhaErroRequisicao (spec §11; decisão 18)', () => {
+  it('uma linha JSON com caminho sem query, método, rota, tipo, mensagem e digest', () => {
+    const erro = Object.assign(new Error('falhou ao ler'), { digest: '123' });
+    expect(JSON.parse(linhaErroRequisicao(erro, req, ctx, new Date('2026-11-20T10:00:00Z')))).toEqual({
+      em: '2026-11-20T10:00:00.000Z', nivel: 'erro', origem: 'web', caminho: '/fluxo/busca', metodo: 'GET',
+      rota: '/fluxo/busca', tipo: 'render', mensagem: 'falhou ao ler', digest: '123',
+    });
+  });
+  it('nunca leva cabeçalhos, query nem pilha; mensagem até 500 caracteres', () => {
+    const linha = linhaErroRequisicao(new Error('x'.repeat(900)), req, ctx, new Date());
+    expect(linha).not.toContain('segredo');
+    expect(linha).not.toContain('BR123');
+    expect(linha).not.toContain('at ');
+    expect(JSON.parse(linha).mensagem).toHaveLength(500);
+    expect(linha).not.toMatch(/\n/);
+  });
+});

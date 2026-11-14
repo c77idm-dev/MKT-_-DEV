@@ -29,3 +29,27 @@ export function mensagemDoErro(saida: unknown): string {
   if (limpo === '') return SEM_DETALHES;
   return limpo.length > LIMITE ? `${limpo.slice(0, LIMITE - 1)}…` : limpo;
 }
+
+/** Uma linha JSON por erro de requisição do web (decisão 18): sem query, cabeçalhos nem pilha. */
+export function linhaErroRequisicao(
+  erro: unknown,
+  req: { path: string; method: string },
+  ctx: { routePath: string; routeType: string },
+  agora: Date,
+): string {
+  const digest =
+    typeof erro === 'object' && erro !== null && 'digest' in erro && (erro as { digest?: unknown }).digest != null
+      ? String((erro as { digest: unknown }).digest)
+      : undefined;
+  return JSON.stringify({
+    em: agora.toISOString(),
+    nivel: 'erro',
+    origem: 'web',
+    caminho: req.path.split('?')[0],
+    metodo: req.method,
+    rota: ctx.routePath,
+    tipo: ctx.routeType,
+    mensagem: mensagemDoErro(erro),
+    ...(digest !== undefined ? { digest } : {}),
+  });
+}
