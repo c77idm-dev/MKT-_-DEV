@@ -36,6 +36,7 @@ test('o Gestor vê quem está conferindo e libera a trava', async ({ page }, tes
   const secao = page.getByRole('region', { name: 'Conferência' });
   await expect(secao).toContainText(`Em conferência por ${USUARIOS_E2E.operador.nome}`);
   await secao.getByRole('button', { name: 'Liberar trava' }).click();
+  await secao.getByRole('button', { name: 'Confirmar liberação' }).click();
   await expect(secao).toContainText('Aguardando conferência.');
   await expect(page.getByText('Trava da conferência liberada pelo Gestor')).toBeVisible();
 });
