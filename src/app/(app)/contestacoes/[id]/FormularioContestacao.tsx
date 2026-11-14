@@ -84,7 +84,14 @@ export function FormularioContestacao({ acao, motivo, mensagem, limiteMensagem, 
       </fieldset>
       <ListaErros erros={estado.erros} />
       <RodapeFormulario>
-        <BotaoConfirmar rotulo="Enviar ao ML" rotuloConfirmar="Toque de novo para enviar ao ML" desabilitado={pendente} className={BOTAO_PRIMARIO} />
+        <BotaoConfirmar
+          rotulo="Enviar ao ML"
+          rotuloConfirmar="Toque de novo para enviar ao ML"
+          desabilitado={pendente}
+          pendente={pendente}
+          rotuloPendente="Enviando ao ML…"
+          className={BOTAO_PRIMARIO}
+        />
       </RodapeFormulario>
     </form>
   );

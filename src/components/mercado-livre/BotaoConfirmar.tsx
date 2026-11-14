@@ -13,11 +13,16 @@ export function BotaoConfirmar({
   rotulo,
   rotuloConfirmar,
   desabilitado = false,
+  pendente = false,
+  rotuloPendente,
   className,
 }: {
   rotulo: string;
   rotuloConfirmar: string;
   desabilitado?: boolean;
+  /** Envio em andamento: o botão mostra `rotuloPendente` e o leitor de tela anuncia o mesmo texto. */
+  pendente?: boolean;
+  rotuloPendente?: string;
   className: string;
 }) {
   const [confirmando, setConfirmando] = useState(false);
@@ -26,21 +31,27 @@ export function BotaoConfirmar({
     const espera = setTimeout(() => setConfirmando(false), TEMPO_CONFIRMACAO_MS);
     return () => clearTimeout(espera);
   }, [confirmando]);
+  const textoPendente = pendente ? (rotuloPendente ?? '') : '';
   return (
-    <button
-      type="button"
-      disabled={desabilitado}
-      className={className}
-      onClick={(evento) => {
-        if (!confirmando) {
-          setConfirmando(true);
-          return;
-        }
-        setConfirmando(false);
-        evento.currentTarget.form?.requestSubmit();
-      }}
-    >
-      {confirmando ? rotuloConfirmar : rotulo}
-    </button>
+    <>
+      <button
+        type="button"
+        disabled={desabilitado}
+        className={className}
+        onClick={(evento) => {
+          if (!confirmando) {
+            setConfirmando(true);
+            return;
+          }
+          setConfirmando(false);
+          evento.currentTarget.form?.requestSubmit();
+        }}
+      >
+        {textoPendente || (confirmando ? rotuloConfirmar : rotulo)}
+      </button>
+      <span role="status" className="sr-only">
+        {textoPendente}
+      </span>
+    </>
   );
 }

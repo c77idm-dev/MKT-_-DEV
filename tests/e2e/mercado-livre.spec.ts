@@ -16,7 +16,7 @@ test('gestor conecta a conta do ML (falso), vê a última sincronização e desc
   await alvosDeToque44(page.locator('main'));
 
   await page.getByRole('button', { name: 'Conectar conta do Mercado Livre' }).click();
-  await expect(page.getByRole('status')).toHaveText('Conta do Mercado Livre conectada.');
+  await expect(page.getByRole('status').filter({ hasText: 'Conta do Mercado Livre conectada.' })).toBeVisible();
   // No modo falso o redirecionamento da Server Action passa por /api/ml/retorno (navegação suave) e a barra de endereço
   // fica nessa URL intermediária; volta à página limpa antes de recarregar (recarregar o retorno repetiria o OAuth).
   await page.goto('/configuracoes/mercado-livre');
@@ -106,7 +106,7 @@ test('contestação recusada pelo ML aparece com o motivo e pode ser revisada de
   await page.goto(`/contestacoes/${id}`);
   await page.getByRole('button', { name: 'Enviar ao ML' }).click();
   await page.getByRole('button', { name: 'Toque de novo para enviar ao ML' }).click();
-  await expect(page.getByRole('status')).toBeVisible();
+  await expect(page).toHaveURL(/\?ok=solicitado$/);
   await expect
     .poll(
       async () => {
@@ -116,6 +116,7 @@ test('contestação recusada pelo ML aparece com o motivo e pode ser revisada de
       { timeout: 30_000, intervals: [1000, 2000] },
     )
     .toBe(1);
+  await expect(page.getByText('Envio pedido ao Mercado Livre')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Enviar ao ML' })).toBeVisible();
   await semRolagemLateral(page);
   await page.goto('/contestacoes?status=FALHOU');

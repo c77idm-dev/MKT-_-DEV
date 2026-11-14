@@ -8,11 +8,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function montar(desabilitado = false) {
+function montar(desabilitado = false, pendente = false) {
   const aoEnviar = vi.fn((e: FormEvent) => e.preventDefault());
   render(
     <form onSubmit={aoEnviar}>
-      <BotaoConfirmar rotulo="Enviar ao ML" rotuloConfirmar="Toque de novo para enviar ao ML" desabilitado={desabilitado} className="x" />
+      <BotaoConfirmar rotulo="Enviar ao ML" rotuloConfirmar="Toque de novo para enviar ao ML" desabilitado={desabilitado} pendente={pendente} rotuloPendente="Enviando ao ML…" className="x" />
     </form>,
   );
   return aoEnviar;
@@ -45,5 +45,16 @@ describe('BotaoConfirmar (ação sem volta pede segundo toque)', () => {
     fireEvent.click(botao);
     fireEvent.click(botao);
     expect(aoEnviar).not.toHaveBeenCalled();
+  });
+
+  it('pendente mostra o rótulo de progresso e o anuncia numa região de status', () => {
+    montar(true, true);
+    expect(screen.getByRole('button', { name: 'Enviando ao ML…' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Enviando ao ML…');
+  });
+
+  it('sem pendente a região de status fica vazia', () => {
+    montar();
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 });

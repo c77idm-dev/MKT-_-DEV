@@ -16,6 +16,9 @@ export function BotaoConectar({ rotulo }: { rotulo: string }) {
       <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} w-full md:w-auto`}>
         {pendente ? 'Abrindo o Mercado Livre…' : rotulo}
       </button>
+      <span role="status" className="sr-only">
+        {pendente ? 'Abrindo o Mercado Livre…' : ''}
+      </span>
       <ListaErros erros={estado.erros} id="erros-conectar" />
     </form>
   );
@@ -26,7 +29,14 @@ export function BotaoDesconectar() {
   const [estado, aoEnviar, pendente] = useEnvioFormulario(desconectarAcao, INICIAL, 'erros-desconectar');
   return (
     <form onSubmit={aoEnviar} className="flex flex-col gap-2 border-t border-borda pt-3">
-      <BotaoConfirmar rotulo="Desconectar" rotuloConfirmar="Toque de novo para desconectar" desabilitado={pendente} className={BOTAO_PERIGO} />
+      <BotaoConfirmar
+        rotulo="Desconectar"
+        rotuloConfirmar="Toque de novo para desconectar"
+        desabilitado={pendente}
+        pendente={pendente}
+        rotuloPendente="Desconectando…"
+        className={BOTAO_PERIGO}
+      />
       <ListaErros erros={estado.erros} id="erros-desconectar" />
     </form>
   );
