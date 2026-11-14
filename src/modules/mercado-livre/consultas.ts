@@ -3,7 +3,9 @@ import type { MotivoCanal } from '@/conectores/marketplace/tipos';
 import type { DbOuTx } from '@/db/client';
 import { contestacoesCanal, devolucoes, eventosHistorico, reclamacoesMl } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
-import { ehMotivoCanal, type StatusContestacao } from './dominio';
+import { configML, faltasConfigML, type ConfigML, type ModoML } from './config';
+import { obterContaML, type ContaML } from './contas';
+import { ehMotivoCanal, sincronizacaoAtrasada, type StatusContestacao } from './dominio';
 
 export type ResultadoNoML =
   | { tipo: 'ok'; em: Date }
@@ -83,4 +85,52 @@ export async function resumoMLDaDevolucao(db: DbOuTx, devolucaoId: string): Prom
     sincronizadaEm: reclamacao?.sincronizadaEm ?? null,
     resultado,
   };
+}
+
+export type ResumoContaML = {
+  conta: ContaML | null;
+  modo: ModoML;
+  faltas: string[];
+  sincronizacaoAtrasada: boolean;
+  redirectUri: string;
+  urlNotificacoes: string | null;
+};
+
+/**
+ * Tela Configurações › Mercado Livre. O atraso conta desde a última varredura, ou desde a conexão quando ainda não
+ * houve nenhuma (logo depois de conectar não é "parada").
+ */
+export async function resumoContaML(db: DbOuTx, config: ConfigML = configML(), agora: Date = new Date()): Promise<ResumoContaML> {
+  const conta = await obterContaML(db);
+  let urlNotificacoes: string | null = null;
+  try {
+    urlNotificacoes = config.redirectUri ? new URL('/api/ml/notificacoes', config.redirectUri).toString() : null;
+  } catch {
+    urlNotificacoes = null;
+  }
+  return {
+    conta,
+    modo: config.modo,
+    faltas: faltasConfigML(config),
+    sincronizacaoAtrasada: conta !== null && conta.situacao === 'ATIVA' && sincronizacaoAtrasada(conta.ultimaSincronizacaoEm ?? conta.conectadaEm, agora),
+    redirectUri: config.redirectUri,
+    urlNotificacoes,
+  };
+}
+
+export type ConsultaSemEnvio = { reclamacaoId: string; returnId: string | null; statusDevolucao: string | null; sincronizadaEm: Date };
+
+/** D10: devoluções low_cost (sem envio físico), só para consulta. */
+export async function listarSemEnvioFisico(db: DbOuTx, limite = 50): Promise<ConsultaSemEnvio[]> {
+  return db
+    .select({
+      reclamacaoId: reclamacoesMl.claimId,
+      returnId: reclamacoesMl.returnId,
+      statusDevolucao: reclamacoesMl.statusDevolucao,
+      sincronizadaEm: reclamacoesMl.sincronizadaEm,
+    })
+    .from(reclamacoesMl)
+    .where(eq(reclamacoesMl.subtipo, 'low_cost'))
+    .orderBy(desc(reclamacoesMl.sincronizadaEm))
+    .limit(limite);
 }

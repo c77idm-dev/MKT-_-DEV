@@ -4,8 +4,9 @@ import { contestacoesCanal } from '@/db/schema';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
-import { dadosDevolucaoMLTeste, devolucaoExternaTeste, devolucaoMLConferidaTeste } from '../../../tests/helpers/fabricas-ml';
-import { resumoMLDaDevolucao } from './consultas';
+import { configMLTeste, contaMLTeste, dadosDevolucaoMLTeste, devolucaoExternaTeste, devolucaoMLConferidaTeste } from '../../../tests/helpers/fabricas-ml';
+import { listarSemEnvioFisico, resumoContaML, resumoMLDaDevolucao } from './consultas';
+import { marcarSincronizacao } from './contas';
 import { processarResultadoConferencia } from './resultado';
 import { aplicarReclamacao } from './sincronizar';
 
@@ -50,5 +51,33 @@ describe('resumoMLDaDevolucao (seção "Mercado Livre" do detalhe)', () => {
     await processarResultadoConferencia(db, dev.id, AGORA);
     await db.update(contestacoesCanal).set({ revisadoPor: gestor.id }).where(eq(contestacoesCanal.devolucaoId, dev.id));
     expect((await resumoMLDaDevolucao(db, dev.id))?.resultado).toMatchObject({ tipo: 'contestacao', status: 'AGUARDANDO_GESTOR', enviando: true, motivo: 'SRF2' });
+  });
+});
+
+describe('resumoContaML e listarSemEnvioFisico (Configurações › Mercado Livre)', () => {
+  it('sem conta: o que falta no servidor (modo api) e nenhum atraso', async () => {
+    const r = await resumoContaML(db, configMLTeste({ modo: 'api', clientId: '', clientSecret: '', redirectUri: '', chaveBase64: '' }), AGORA);
+    expect(r).toMatchObject({ conta: null, modo: 'api', sincronizacaoAtrasada: false, urlNotificacoes: null });
+    expect(r.faltas).toEqual(['ML_CLIENT_ID', 'ML_CLIENT_SECRET', 'ML_REDIRECT_URI', 'CHAVE_CRIPTOGRAFIA']);
+  });
+
+  it('com conta: endereço dos avisos a partir do retorno, e atraso depois de 1 h sem sincronizar', async () => {
+    const { contaId } = await contaMLTeste(db);
+    const config = configMLTeste({ redirectUri: 'https://devolucoes.exemplo.com/api/ml/retorno' });
+    expect((await resumoContaML(db, config, new Date())).urlNotificacoes).toBe('https://devolucoes.exemplo.com/api/ml/notificacoes');
+    await marcarSincronizacao(db, contaId, new Date(Date.now() - 2 * 60 * 60 * 1000));
+    expect((await resumoContaML(db, config, new Date())).sincronizacaoAtrasada).toBe(true);
+    await marcarSincronizacao(db, contaId, new Date());
+    expect((await resumoContaML(db, config, new Date())).sincronizacaoAtrasada).toBe(false);
+  });
+
+  it('lista só as low_cost (D10), da mais recente para a mais antiga', async () => {
+    await aplicarReclamacao(db, dadosDevolucaoMLTeste(devolucaoExternaTeste({ semEnvioFisico: true, statusCanal: 'closed', rastreio: null })), new Date('2026-11-12T10:00:00Z'));
+    const recente = devolucaoExternaTeste({ semEnvioFisico: true, statusCanal: 'closed', rastreio: null });
+    await aplicarReclamacao(db, dadosDevolucaoMLTeste(recente), new Date('2026-11-12T11:00:00Z'));
+    await aplicarReclamacao(db, dadosDevolucaoMLTeste(devolucaoExternaTeste()), AGORA);
+    const lista = await listarSemEnvioFisico(db);
+    expect(lista).toHaveLength(2);
+    expect(lista[0]).toMatchObject({ reclamacaoId: recente.reclamacaoId, returnId: recente.devolucaoExternaId, statusDevolucao: 'closed' });
   });
 });

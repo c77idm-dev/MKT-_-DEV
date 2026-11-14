@@ -10,7 +10,7 @@ const CARTOES: [string, string][] = [
   ['Falhas', '/configuracoes/falhas'],
 ];
 
-test('o Gestor vê os cartões das Configurações; as áreas das próximas fases avisam a fase', async ({ page }) => {
+test('o Gestor vê os cartões das Configurações; a área Mercado Livre é a tela real (Fase 3)', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto('/configuracoes');
   for (const [nome, href] of CARTOES) {
@@ -19,7 +19,8 @@ test('o Gestor vê os cartões das Configurações; as áreas das próximas fase
   await semRolagemLateral(page);
   await page.getByRole('link', { name: /^Mercado Livre/ }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Mercado Livre' })).toBeVisible();
-  await expect(page.getByText('Esta área chega na Fase 3 do projeto.')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Conta' })).toBeVisible();
+  await semRolagemLateral(page);
 });
 
 test('o Operador não abre as Configurações novas', async ({ page }) => {
