@@ -19,16 +19,37 @@ npm run usuario:criar -- --nome "Seu Nome" --email voce@empresa.com --perfil GES
 npm run dev                   # http://localhost:3000
 ```
 
-## O que existe hoje (Fases 0 e 1)
+## O que existe hoje (Fases 0, 1 e 2)
 Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, formulários em uma coluna, barra de abas embaixo, alvos de toque de 44 px, app instalável (PWA).
 - Login, três perfis (Operador, Fiscal, Gestor) e permissões por ação; barra de abas que muda conforme o perfil.
 - Quadro de Fluxo com as 5 etapas do PDF e Busca Avançada.
 - Devoluções: cadastro manual, importação por planilha agrupando por pedido (extra), histórico de eventos.
-- Recebimento com a câmera em tela cheia (leitor de código de barras) ou digitando o código.
+- Recebimento com a câmera em tela cheia (leitor de código de barras) ou digitando o código. Pacote não identificado com as Fotos 1 e 2.
+- Conferência no celular, unidade por unidade: Fotos 1 a 4, leitura do código (EAN), Serial Number, lote e validade, Vídeo de Prova comprimido, destino e unidade ausente. Trava da conferência, que o Gestor pode liberar. Funciona sem rede: as fotos e os vídeos esperam no aparelho e sobem sozinhos quando a conexão volta.
 - Cadastros de produtos e fornecedores, com importação por planilha (extra).
 - Usuários (só o Gestor): criar, mudar o perfil, desativar e reativar. Desativar encerra as sessões na hora, e o sistema nunca fica sem um Gestor ativo (extra).
 
-Ainda não existem: conferência, lotes e remessas, contestações, integração com o Mercado Livre e relatórios. Ficam para as próximas fases.
+Ainda não existem: lotes e remessas, contestações, integração com o Mercado Livre, NF de devolução e relatórios. Ficam para as próximas fases.
+
+## Conferência no celular (Fase 2)
+A conferência (Fotos 1 a 4, leitura do código, Vídeo de Prova e destino de cada unidade) precisa de duas coisas além do site:
+
+1. **ffmpeg** no PC, para comprimir o Vídeo de Prova em 720p: `winget install Gyan.FFmpeg`. Depois, abra um terminal novo e confira com `ffmpeg -version`. Sem o ffmpeg, os testes que o usam são pulados.
+2. **Worker** rodando junto do site, em outro terminal: `npm run worker`. Ele faz as tarefas da fila: `midia.processar-foto` (hash e carimbo com data, DEV e nome, que é extra) e `midia.transcodificar` (vídeo em 720p). Sem o worker, as fotos e o vídeo ficam em "Enviada · processando".
+
+**Onde ficam as mídias no PC:** com `ARMAZENAMENTO=disco`, em `.dados/midia/` (arquivos finais, por evidência) e `.dados/tmp/` (envios em andamento). A pasta `.dados/` não vai para o git. Os testes de navegador usam `.dados-e2e/`.
+
+**Variáveis novas do `.env`** (todas já estão no `.env.example`):
+
+| Variável | Para quê |
+|---|---|
+| `ARMAZENAMENTO` | `disco` (PC e testes na bancada) ou `s3` (Backblaze B2 ou Cloudflare R2) |
+| `MIDIA_DIR` / `MIDIA_TMP_DIR` | Pastas das mídias com `disco` (padrão `.dados/midia` e `.dados/tmp`) |
+| `SEGREDO_LINKS` | Assina os links temporários das mídias (10 min). Obrigatório em produção, com 32 caracteres ou mais: gere com `openssl rand -hex 32` |
+| `S3_ENDPOINT`, `S3_REGIAO`, `S3_BUCKET`, `S3_CHAVE_ID`, `S3_CHAVE_SECRETA` | Só com `ARMAZENAMENTO=s3` |
+| `FFMPEG_PATH` / `FFPROBE_PATH` | Caminho do ffmpeg e do ffprobe, se não estiverem no PATH (padrão `ffmpeg` e `ffprobe`) |
+
+As opções da conferência (vídeo obrigatório e prazo de guarda das mídias) ficam em Configurações › Conferência e mídias.
 
 ## Andamento
 No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi publicada em 12/11/2026.
@@ -37,9 +58,9 @@ No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi p
 |---|---|---|
 | 0. Fundação | Projeto, banco, login e perfis, visual, publicação na VPS com HTTPS | Pronta. Falta o teste real da API do ML, que vai para a etapa "Ligação das contas reais" |
 | 1. Cadastros e recebimento | Produtos e fornecedores, devolução manual e por planilha, etapas 1 e 2, Busca Avançada, Recebimento com câmera, usuários | Pronta e publicada |
-| 2. Conferência no celular | Fotos 1 a 4, Vídeo de Prova, leitura do código, destino, mídia (compressão, armazenamento e links) | Plano sendo escrito. Começa pela base comum (fila, armazenamento e tabelas novas) |
-| 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Plano sendo escrito. Roda em paralelo com as Fases 2 e 4 |
-| 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Plano sendo escrito. Roda em paralelo com as Fases 2 e 3 |
+| 2. Conferência no celular | Fotos 1 a 4, Vídeo de Prova, leitura do código, destino, mídia (compressão, armazenamento e links) | Pronta e no `main` (14/11/2026). Falta publicar na VPS e testar nos aparelhos reais da bancada |
+| 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Em construção (branch `fase-3-mercado-livre`): 14 das 16 tarefas prontas |
+| 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Pronta e revisada (branch `fase-4-fiscal`). Espera a junção das Fases 2 e 3 para entrar no `main` |
 | 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | Depois da Fase 4 |
 | Ligação das contas reais | ML real, Focus NFe em homologação, B2 para as mídias, domínio próprio | Depois da Fase 5 |
 | 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Por último |
