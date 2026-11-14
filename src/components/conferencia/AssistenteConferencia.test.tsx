@@ -19,7 +19,7 @@ const item: ItemConferencia = {
   id: 'i1',
   unidade: 1,
   sku: 'SKU1',
-  status: 'AGUARDANDO_CONFERENCIA',
+  status: 'PENDENTE',
   descricao: 'Produto',
   eanEsperado: '789',
   serial: null,
@@ -31,7 +31,7 @@ const item: ItemConferencia = {
   destino: null,
   motivo: null,
   observacao: null,
-} as ItemConferencia;
+};
 
 function envio(estado: RegistroEnvio['estado']): RegistroEnvio {
   return { idCliente: Math.random().toString(), estado, tipo: 'FOTO_1_ETIQUETA', itemId: null, arquivo: new Blob(['x']) } as RegistroEnvio;
@@ -49,7 +49,7 @@ function acoesDe(parcial: Partial<AcoesConferencia> = {}): AcoesConferencia {
 
 function montar(acoes: AcoesConferencia, passoInicial = 0) {
   return render(
-    <AssistenteConferencia devolucao={{ id: 'd1', codigo: 'DEV-1', rastreio: null }} itens={[item]} evidencias={[]} videoObrigatorio="NUNCA" passoInicial={passoInicial} acoes={acoes} />,
+    <AssistenteConferencia devolucao={{ id: 'd1', codigo: 'DEV-1', rastreio: null }} itens={[item]} evidencias={[]} videoObrigatorio="SO_PROBLEMA" passoInicial={passoInicial} acoes={acoes} />,
   );
 }
 
@@ -73,7 +73,7 @@ describe('AssistenteConferencia: desistir', () => {
 
   it('enquanto desiste mostra "Desistindo…" e trava "Continuar conferindo"', async () => {
     let liberar!: (r: RespostaAcao<{ destino: string }>) => void;
-    const acoes = acoesDe({ desistir: vi.fn(() => new Promise((ok) => (liberar = ok))) });
+    const acoes = acoesDe({ desistir: vi.fn(() => new Promise<RespostaAcao<{ destino: string }>>((ok) => (liberar = ok))) });
     montar(acoes);
     fireEvent.click(screen.getByRole('button', { name: 'Desistir da conferência' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar desistência' }));
@@ -104,7 +104,7 @@ describe('AssistenteConferencia: concluir com envios que não subiram', () => {
 describe('AssistenteConferencia: o que foi digitado durante a leitura do EAN não é sobrescrito', () => {
   it('EAN divergente chega depois de digitar o S/N: o S/N continua na tela', async () => {
     let liberar!: (r: RespostaAcao<{ resultado: ResultadoEan }>) => void;
-    const acoes = acoesDe({ registrarEan: vi.fn(() => new Promise((ok) => (liberar = ok))) });
+    const acoes = acoesDe({ registrarEan: vi.fn(() => new Promise<RespostaAcao<{ resultado: ResultadoEan }>>((ok) => (liberar = ok))) });
     montar(acoes, 1);
     fireEvent.change(screen.getByLabelText('EAN lido'), { target: { value: '111' } });
     fireEvent.click(screen.getByRole('button', { name: 'Conferir' }));
