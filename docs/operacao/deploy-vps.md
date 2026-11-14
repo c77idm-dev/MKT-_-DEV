@@ -8,7 +8,7 @@ Por isso, este sistema:
 - **não ocupa as portas 80 e 443**: escuta só em `127.0.0.1:3020`, e o nginx do servidor faz o HTTPS;
 - **não é compilado na VPS**: o GitHub Actions compila a imagem a cada envio para a `main` e a publica em `ghcr.io/c77idm-dev/devolucoes`, e a VPS só baixa;
 - usa nomes próprios no Docker: projeto `devolucoes`, containers `devolucoes-web-1` e `devolucoes-postgres-1`, volume `devolucoes_pgdata`;
-- tem limites de memória (web 512 MB, banco 256 MB), para não apertar os outros sistemas.
+- roda os serviços `web` (512 MB), `worker` (1 GB), `postgres` (256 MB) e `backup` (256 MB), todos com limite de memória, para não apertar os outros sistemas.
 
 Nos comandos abaixo, troque `SEU_DOMINIO` pelo domínio do sistema (ex.: `devolucoes.suaempresa.com.br`).
 
@@ -93,6 +93,17 @@ Para voltar ao normal, coloque `IMAGEM_TAG=main` de novo.
 ```sh
 docker compose --env-file .env.producao -f docker-compose.prod.yml logs -f web
 ```
+
+## Backup diário
+O serviço `backup` salva o banco (e as mídias, no modo disco) todo dia às 02h30, cifrado, num bucket separado. Passo a passo, restauração e teste mensal: [backup-restauracao.md](backup-restauracao.md).
+
+Risco que sobra: o container instala `rclone`, `openssl` e `tzdata` pelo `apk` a cada subida, sem versão fixa. Se a instalação falhar, o backup não roda, e o alerta "Backup diário atrasado" avisa o Gestor. A melhoria opcional é uma imagem própria compilada pelo GitHub Actions.
+
+## Saúde dos containers
+```sh
+docker compose --env-file .env.producao -f docker-compose.prod.yml ps
+```
+O `web` e o `worker` devem aparecer como `healthy`.
 
 ## Fase 1: planilhas de até 5 MB
 A importação de planilhas envia arquivos de até 5 MB. Na VPS, aumente o limite do nginx uma vez:
