@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { DetalheLote } from '@/modules/lotes/consultas';
 import { PainelLote } from './PainelLote';
@@ -44,5 +44,22 @@ describe('PainelLote (decisão 23)', () => {
     render(<PainelLote detalhe={detalhe()} podeGerir={false} links={null} acao={vi.fn()} />);
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+});
+
+describe('PainelLote (Tarefa 12: remessa)', () => {
+  it('FECHADO sem NF: "Emitir NF de Remessa" é a ação principal; "Reabrir lote" fica fora do rodapé', () => {
+    render(<PainelLote detalhe={detalhe({ status: 'FECHADO', rotuloStatus: 'Fechado', tipo: 'CONSERTO', rotuloTipo: 'Conserto' })} podeGerir links={null} acao={vi.fn()} />);
+    const nf = screen.getByRole('region', { name: 'NF de Remessa' });
+    expect(within(nf).getByRole('button', { name: 'Emitir NF de Remessa' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reabrir lote' })).toBeTruthy();
+  });
+
+  it('Registrar resultado: um seletor por unidade enviada com os resultados da spec', () => {
+    const enviada = { ...detalhe().unidades[0], status: 'ENVIADO' as const, rotuloStatus: 'Enviado ao fornecedor' };
+    render(<PainelLote detalhe={detalhe({ status: 'ENVIADO', rotuloStatus: 'Enviado', tipo: 'CONSERTO', rotuloTipo: 'Conserto', editavel: false, temLista: true, unidades: [enviada] })} podeGerir links={null} acao={vi.fn()} />);
+    const seletor = screen.getByLabelText('Resultado do fornecedor (unidade 2 da DEV-000123)');
+    expect([...seletor.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Escolha', 'Trocado', 'Consertado', 'Crédito', 'Descartado', 'Devolvido sem solução']);
+    expect(screen.getByRole('link', { name: 'Baixar Excel' }).getAttribute('href')).toBe('/api/lotes/LOT-000045/lista-consolidada?formato=xlsx');
   });
 });

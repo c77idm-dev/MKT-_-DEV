@@ -29,19 +29,19 @@ async function executar(loteId: string, pedido: PedidoLote, usuario: UsuarioSess
     }
     case 'emitir':
       await emitirNotaRemessa(db, loteId, usuario);
-      return 'NF de Remessa enviada para emissão.';
+      return 'NF de Remessa enviada à SEFAZ. A resposta chega em alguns segundos.';
     case 'reenviar':
       await reenviarNotaRemessa(db, loteId, usuario);
-      return 'NF de Remessa reenviada.';
+      return 'NF de Remessa reenviada à SEFAZ.';
     case 'cancelar':
       await cancelarNotaRemessa(db, loteId, pedido.justificativa, usuario);
-      return 'NF de Remessa cancelada.';
+      return 'NF de Remessa cancelada. O lote voltou para Fechado.';
     case 'envio':
       await registrarEnvio(db, loteId, pedido.rastreio, usuario);
       return 'Envio registrado.';
     case 'resultado': {
       const { finalizado } = await registrarResultados(db, loteId, pedido.resultados, usuario);
-      return finalizado ? 'Resultados registrados. Lote finalizado.' : 'Resultados registrados.';
+      return finalizado ? 'Resultado registrado. Lote finalizado.' : 'Resultado registrado.';
     }
   }
 }
