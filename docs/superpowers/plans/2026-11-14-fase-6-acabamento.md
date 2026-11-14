@@ -62,7 +62,7 @@ npm ci && npm run db:migrar && npx playwright install chromium
   - painel: `src/modules/devolucoes/busca.ts` (opção `ids`), `src/modules/devolucoes/selos.ts` (usa `prazoVencendo`), `src/app/(app)/fluxo/page.tsx` (bloco Alertas);
   - login e saúde: `src/app/login/acoes.ts` (limite por IP), `src/app/api/saude/route.ts`;
   - infraestrutura: `next.config.ts`, `docker-compose.prod.yml`, `docs/operacao/deploy-vps.md`.
-- Testes: `tests/helpers/fabricas-acabamento.ts`, `tests/e2e/apoio-acabamento.ts`, `tests/e2e/{falhas,alertas,seguranca}.spec.ts`, `scripts/infra.test.ts`, e `src/**/*.test.ts(x)` novos. Ajuste pequeno e permitido: `tests/e2e/configuracoes.spec.ts` (Tarefa 11, só a expectativa do "Em breve" de Falhas) e `tests/e2e/saude.spec.ts` (Tarefa 13, só testes novos).
+- Testes: `tests/helpers/fabricas-acabamento.ts`, `tests/e2e/apoio-acabamento.ts`, `tests/e2e/{falhas,alertas,seguranca,seguranca-camera}.spec.ts`, `scripts/infra.test.ts`, e `src/**/*.test.ts(x)` novos. Ajuste pequeno e permitido: `tests/e2e/configuracoes.spec.ts` (Tarefa 11, só a expectativa do "Em breve" de Falhas) e `tests/e2e/saude.spec.ts` (Tarefa 13, só testes novos).
 - **Nunca** mexa nestes arquivos:
   - ambiente e scripts: `src/lib/env.ts`, `.env.example` (a Fase 6 não cria variável lida pelo sistema), `package.json` (scripts e dependências), `src/modules/fila/tarefas.ts` (`midia.retencao` já existe; `falhas` não é uma `NomeTarefa`);
   - congelados que só mudam pela Tarefa 0, no `main`: `src/db/schema/index.ts`, `src/modules/historico/rotulos/*.ts`, `.env.producao.example` e o contrato;
@@ -153,7 +153,7 @@ npm ci && npm run db:migrar && npx playwright install chromium
 | (extra) Disco do servidor quase cheio (spec §16: "monitorar o uso") | | | ✓ | `/configuracoes/conferencia` |
 
 10. **Alertas que nascem de um evento** ("Status do ML mudou depois da chegada" e "NF cancelada com o lote já adiante") ficam no painel por **7 dias** e somem sozinhos, sem botão "ciente". O registro continua no histórico.
-    - A Fase 3 grava `ml_status_apos_chegada` em **qualquer** troca do `statusCanal` depois da leitura física (ex.: `shipped` → `delivered`, que é a vida normal de quase toda devolução do ML). O alerta conta **só** os eventos cujo `dados.statusCanal` é de encerramento no ML: os status de `STATUS_ML_CANCELAMENTO` ou `STATUS_ML_EXTRAVIO` (`src/modules/mercado-livre/status.ts`), os mesmos que antes da chegada levariam a CANCELADA ou EXTRAVIADA. É o caso que o Gestor precisa ver (spec §7.3).
+    - A Fase 3 grava `ml_status_apos_chegada` em **qualquer** troca do `statusCanal` depois da leitura física (ex.: `shipped/shipped` → `delivered/delivered`, que é a vida normal de quase toda devolução do ML). O alerta conta **só** os eventos cujo status da devolução (a parte antes da `/` em `dados.statusCanal`, o formato `"<return.status>/<status do envio>"` da Fase 3) é de encerramento no ML: os status de `STATUS_ML_CANCELAMENTO` ou `STATUS_ML_EXTRAVIO` (`src/modules/mercado-livre/status.ts`), os mesmos que antes da chegada levariam a CANCELADA ou EXTRAVIADA. É o caso que o Gestor precisa ver (spec §7.3).
 11. **"Prazo do ML vencendo"** usa a mesma regra do selo do cartão: prazo em até 24 h, ou já vencido. Valem as devoluções em PENDENTE_CHEGADA, AGUARDANDO_CONFERENCIA ou EM_CONFERENCIA e, para o Gestor, as contestações AGUARDANDO_GESTOR ou FALHOU. A regra vira uma função só, `prazoVencendo`, que o selo passa a usar.
 12. **"2 dias úteis"** (spec §5.2, extra): de segunda a sexta, no fuso de Brasília, sem feriados. Contam os dias úteis inteiros **depois** do dia da entrega. Ex.: entregue na sexta, o alerta aparece na terça.
 13. **Painel:** um bloco "Alertas" no topo do Fluxo, acima da Busca Avançada, com uma linha por alerta (título, contagem e link). Sem alertas, o bloco não aparece. O Gestor pode ter até 11 linhas: em 390×844 isso empurraria o quadro para fora da tela, então o painel mostra **as 3 primeiras** (na ordem de prioridade da decisão 9) e o link **"Ver todos os alertas (N)"**. **(extra)** A página `/fluxo/alertas` mostra a lista inteira no topo e, abaixo, os cartões das devoluções de cada alerta (no celular, cartões; nada de tabela).
@@ -759,7 +759,7 @@ describe('Falhas (spec §11): a tarefa que esgota as 5 tentativas vai para falha
   it('a tarefa que estoura o tempo também vai para Falhas, com "Tempo esgotado"', async () => {
     const worker = await iniciarWorker({
       ...opcoes,
-      // O pg-boss confere o tempo na supervisão (60 s por padrão); aqui, a cada 1 s.
+      // O pg-boss 12.38.0 confere o tempo na supervisão e no monitor (60 s por padrão); aqui, a cada 1 s (o mínimo).
       intervaloSupervisaoSegundos: 1,
       manipuladores: {
         'midia.retencao': () => new Promise<void>((ok) => setTimeout(ok, 10_000)),
@@ -790,7 +790,7 @@ Esperado: FAIL.
   - em `criarFilas`, primeiro `createQueue(FILA_FALHAS, OPCOES_FILA_FALHAS)` e `updateQueue(FILA_FALHAS, OPCOES_FILA_FALHAS)`, e depois o laço de hoje.
   - Confira em `node_modules/pg-boss/dist/types.d.ts` que `QueueOptions`/`UpdateQueueOptions` aceitam `deadLetter` e `retentionSeconds`.
   - Em `fila.test.ts`, o `toEqual` de `opcoesDaFila('midia.transcodificar')` ganha `deadLetter: 'falhas'`.
-  - `criarPgBoss` repassa `intervaloSupervisaoSegundos` ao pg-boss. Confira em `node_modules/pg-boss/dist/types.d.ts` qual intervalo roda a expiração dos jobs (`superviseIntervalSeconds`, `monitorIntervalSeconds` ou `maintenanceIntervalSeconds`, todos de 60 s por padrão) e passe o valor a quem fizer o teste do tempo esgotado passar. Sem a opção, nada muda em produção.
+  - `criarPgBoss`: com `intervaloSupervisaoSegundos` definido, passa ao construtor do pg-boss 12.38.0 **as duas** opções `superviseIntervalSeconds` e `monitorIntervalSeconds` com esse valor (mínimo 1 s; as duas valem 60 s por padrão). Sem a opção, nenhuma das duas é passada e nada muda em produção.
 - `src/lib/log.ts`, `mensagemDoErro`, nesta ordem:
   - `{ value: { message } }` (o formato do tempo esgotado do pg-boss): `'job timed out'` vira `'Tempo esgotado'`; outro texto, ele mesmo;
   - `message` (string) → o texto; `string` → ele mesmo;
@@ -1212,7 +1212,7 @@ git commit -m "feat(acabamento): midia.retencao apaga as mídias vencidas (nunca
     - `notasRejeitadas(db): Promise<{ devolucaoIds: string[]; lotes: { codigo: string }[] }>`;
     - `contarSemFornecedor(db): Promise<number>`;
     - `devolucoesEntreguesSemLeitura(db, agora): Promise<string[]>`;
-    - `devolucoesComMLEncerradoAposChegada(db, agora): Promise<string[]>`: eventos `ml_status_apos_chegada` dos últimos 7 dias cujo `dados->>'statusCanal'` está em `STATUS_ML_CANCELAMENTO` ou `STATUS_ML_EXTRAVIO` (decisão 10);
+    - `devolucoesComMLEncerradoAposChegada(db, agora): Promise<string[]>`: eventos `ml_status_apos_chegada` dos últimos 7 dias cujo status da devolução (a 1ª parte de `dados->>'statusCanal'`, que a Fase 3 grava como `"<return.status>/<status do envio>"`; veja `statusDaDevolucaoML`) está em `STATUS_ML_CANCELAMENTO` ou `STATUS_ML_EXTRAVIO` (decisão 10);
     - `devolucoesComAlertaLote(db, agora): Promise<string[]>` (eventos `lote_alerta_nf_cancelada` na devolução, últimos 7 dias) e `lotesComAlertaNfCancelada(db, agora): Promise<{ codigo: string }[]>`.
   - `busca.ts`: `OpcoesBusca.ids?: readonly string[]`. Com uma lista vazia, o resultado é vazio (`sql\`false\``).
 
@@ -1361,12 +1361,12 @@ describe('alertas das devoluções', () => {
     const entregue = await devolucao({ status: 'AGUARDANDO_CONFERENCIA' });
     const antiga = await devolucao({ status: 'AGUARDANDO_CONFERENCIA' });
     const evento = (entidadeId: string, statusCanal: string, em: Date) =>
-      registrarEvento(db, { entidade: 'devolucao', entidadeId, acao: 'ml_status_apos_chegada', usuarioId: null, em, dados: { statusCanalAnterior: 'shipped', statusCanal } });
-    await evento(cancelada.id, 'cancelled', horas(-24));
-    await evento(extraviada.id, 'not_delivered', horas(-24));
+      registrarEvento(db, { entidade: 'devolucao', entidadeId, acao: 'ml_status_apos_chegada', usuarioId: null, em, dados: { statusCanalAnterior: 'shipped/shipped', statusCanal } });
+    await evento(cancelada.id, 'cancelled/cancelled', horas(-24));
+    await evento(extraviada.id, 'not_delivered/not_delivered', horas(-24));
     // A vida normal de quase toda devolução do ML: "delivered" depois da leitura física NÃO alerta.
-    await evento(entregue.id, 'delivered', horas(-24));
-    await evento(antiga.id, 'cancelled', horas(-24 * 8));
+    await evento(entregue.id, 'delivered/delivered', horas(-24));
+    await evento(antiga.id, 'cancelled/cancelled', horas(-24 * 8));
     expect((await devolucoesComMLEncerradoAposChegada(db, AGORA)).sort()).toEqual([cancelada.id, extraviada.id].sort());
   });
 
@@ -1400,7 +1400,7 @@ Esperado: FAIL.
 - `alertas-devolucoes.ts`: uma consulta por função, como na decisão 9 e nas Interfaces.
   - "Antes da conferência" = `PENDENTE_CHEGADA`, `AGUARDANDO_CONFERENCIA` e `EM_CONFERENCIA`.
   - `devolucoesEntreguesSemLeitura` traz as candidatas (`status = 'PENDENTE_CHEGADA' and entregue_segundo_canal_em is not null`) e filtra com `diasUteisDepois(...) >= 2` no TypeScript.
-  - Os eventos usam `acao = ? and em > agora - JANELA_ALERTA_EVENTO_MS`, com `distinct entidade_id` (o índice da Tarefa 1 atende). Em `devolucoesComMLEncerradoAposChegada`, acrescente `dados->>'statusCanal' in (...)`, com a lista montada de `[...STATUS_ML_CANCELAMENTO, ...STATUS_ML_EXTRAVIO]` (import de `@/modules/mercado-livre/status`; nada de copiar os valores).
+  - Os eventos usam `acao = ? and em > agora - JANELA_ALERTA_EVENTO_MS`, com `distinct entidade_id` (o índice da Tarefa 1 atende). Em `devolucoesComMLEncerradoAposChegada`, acrescente `split_part(dados->>'statusCanal', '/', 1) in (...)` (o formato da Fase 3 é `"<return.status>/<status do envio>"`, ex.: `cancelled/cancelled`), com a lista montada de `[...STATUS_ML_CANCELAMENTO, ...STATUS_ML_EXTRAVIO]` (import de `@/modules/mercado-livre/status`; nada de copiar os valores).
 
 - [ ] **Passo 3: Rodar os testes**
 
@@ -2743,8 +2743,8 @@ git commit -m "feat(alertas): bloco Alertas no painel por perfil e a página dos
 ### Tarefa 13: E2E de segurança e saúde
 
 **Arquivos:**
-- Criar: `tests/e2e/seguranca.spec.ts`
-- Modificar: `tests/e2e/saude.spec.ts` (só acrescenta testes)
+- Criar: `tests/e2e/seguranca.spec.ts`, `tests/e2e/seguranca-camera.spec.ts`
+- Modificar: `tests/e2e/saude.spec.ts` (só acrescenta testes), `tests/e2e/apoio-acabamento.ts` (acrescenta `vigiarCsp`)
 
 **Interfaces:**
 - Consome: `MENSAGEM_LIMITE_IP` (Tarefa 7), `ARQUIVO_BATIMENTO` e `batimentoRecente` (Tarefa 9), `entrar`, `entrarComo` e `codigoUnico` (`apoio.ts`), `prepararConferencia` e `conferirDevolucao` (Fase 2, `apoio-conferencia.ts`; contrato E11).
@@ -2752,20 +2752,14 @@ git commit -m "feat(alertas): bloco Alertas no painel por perfil e a página dos
 
 - [ ] **Passo 1: Escrever os testes**
 
-`tests/e2e/seguranca.spec.ts`:
+`tests/e2e/apoio-acabamento.ts` (Tarefa 11): acrescente a função usada pelos dois arquivos de segurança (com `import type { Page } from '@playwright/test';`):
 
 ```ts
-import { expect, test, type Page } from '@playwright/test';
-import { MENSAGEM_LIMITE_IP } from '../../src/modules/auth/limite-login';
-import { codigoUnico, entrar, entrarComo } from './apoio';
-import { conferirDevolucao, prepararConferencia } from './apoio-conferencia';
-import { USUARIOS_E2E } from './dados';
-
 /**
  * Junta as violações da CSP (evento securitypolicyviolation do próprio navegador) numa lista do lado do teste.
  * A lista fica no Node, e não na janela: sobrevive às navegações (a conferência termina abrindo outra página).
  */
-async function vigiarCsp(page: Page): Promise<string[]> {
+export async function vigiarCsp(page: Page): Promise<string[]> {
   const lista: string[] = [];
   await page.exposeFunction('registrarViolacaoCsp', (texto: string) => lista.push(texto));
   await page.addInitScript(() => {
@@ -2777,6 +2771,16 @@ async function vigiarCsp(page: Page): Promise<string[]> {
   });
   return lista;
 }
+```
+
+`tests/e2e/seguranca.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { MENSAGEM_LIMITE_IP } from '../../src/modules/auth/limite-login';
+import { codigoUnico, entrar, entrarComo } from './apoio';
+import { vigiarCsp } from './apoio-acabamento';
+import { USUARIOS_E2E } from './dados';
 
 test('cabeçalhos de segurança e sem X-Powered-By (decisão 15)', async ({ request }) => {
   const h = (await request.get('/login')).headers();
@@ -2797,26 +2801,6 @@ test('as telas principais abrem sem violar a CSP', async ({ page }) => {
   expect(violacoes).toEqual([]);
 });
 
-test.describe('com a câmera falsa do navegador', () => {
-  test.use({ permissions: ['camera'], launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } });
-
-  test('o leitor do Recebimento e uma conferência inteira (fotos, vídeo, ZXing) não violam a CSP', async ({ page }) => {
-    test.setTimeout(240_000);
-    const violacoes = await vigiarCsp(page);
-    const { codigo } = await prepararConferencia();
-    await entrarComo(page, USUARIOS_E2E.operador);
-    // O leitor de código pela câmera (o mesmo caminho do camera.spec.ts da Fase 2): carrega o ZXing (wasm).
-    await page.goto('/fluxo/recebimento');
-    await page.getByRole('button', { name: 'Ler com a câmera' }).click();
-    await expect(page.getByLabel('Imagem da câmera')).toBeVisible();
-    await page.waitForTimeout(2000); // dá tempo de o leitor carregar o wasm e tentar ler
-    await page.getByRole('button', { name: 'Fechar câmera' }).click();
-    // A conferência pela tela (Fase 2, E11): Fotos 1 a 4, Vídeo de Prova, envio tus e as miniaturas.
-    await conferirDevolucao(page, codigo, ['BOM']);
-    expect(violacoes).toEqual([]);
-  });
-});
-
 test('limite de login por IP: 20 falhas bloqueiam o IP; outro IP entra (decisão 14)', async ({ page }) => {
   test.setTimeout(180_000);
   // O IP vem do X-Forwarded-For (no e2e não há nginx). Um valor único por execução: o servidor é o mesmo nos dois projetos.
@@ -2833,6 +2817,34 @@ test('limite de login por IP: 20 falhas bloqueiam o IP; outro IP entra (decisão
 
   await page.setExtraHTTPHeaders({ 'x-forwarded-for': `${ip}-outro` });
   await entrarComo(page, USUARIOS_E2E.operador);
+});
+```
+
+`tests/e2e/seguranca-camera.spec.ts`. É um arquivo próprio porque o Playwright recusa o arquivo inteiro com `test.use({ launchOptions })` dentro de um `describe` ("forces a new worker"). O `test.use` fica no topo, como no `camera.spec.ts` da Fase 2:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { entrarComo } from './apoio';
+import { vigiarCsp } from './apoio-acabamento';
+import { conferirDevolucao, prepararConferencia } from './apoio-conferencia';
+import { USUARIOS_E2E } from './dados';
+
+test.use({ permissions: ['camera'], launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } });
+
+test('o leitor do Recebimento e uma conferência inteira (fotos, vídeo, ZXing) não violam a CSP', async ({ page }) => {
+  test.setTimeout(240_000);
+  const violacoes = await vigiarCsp(page);
+  const { codigo } = await prepararConferencia();
+  await entrarComo(page, USUARIOS_E2E.operador);
+  // O leitor de código pela câmera (o mesmo caminho do camera.spec.ts da Fase 2): carrega o ZXing (wasm).
+  await page.goto('/fluxo/recebimento');
+  await page.getByRole('button', { name: 'Ler com a câmera' }).click();
+  await expect(page.getByLabel('Imagem da câmera')).toBeVisible();
+  await page.waitForTimeout(2000); // dá tempo de o leitor carregar o wasm e tentar ler
+  await page.getByRole('button', { name: 'Fechar câmera' }).click();
+  // A conferência pela tela (Fase 2, E11): Fotos 1 a 4, Vídeo de Prova, envio tus e as miniaturas.
+  await conferirDevolucao(page, codigo, ['BOM']);
+  expect(violacoes).toEqual([]);
 });
 ```
 
@@ -2858,13 +2870,13 @@ test('o worker do e2e grava o batimento do healthcheck (decisão 17)', async () 
 
 - [ ] **Passo 2: Rodar**
 
-Rode: `npm run test:e2e -- tests/e2e/seguranca.spec.ts tests/e2e/saude.spec.ts tests/e2e/login.spec.ts`
+Rode: `npm run test:e2e -- tests/e2e/seguranca.spec.ts tests/e2e/seguranca-camera.spec.ts tests/e2e/saude.spec.ts tests/e2e/login.spec.ts`
 Esperado: PASS nos projetos `computador` e `celular`. Se a CSP acusar uma violação, corrija a **política** da Tarefa 8, liberando só a origem que a tela realmente usa, e não o teste. Anote a origem no commit.
 
 - [ ] **Passo 3: Commit**
 
 ```bash
-git add tests/e2e/seguranca.spec.ts tests/e2e/saude.spec.ts
+git add tests/e2e/seguranca.spec.ts tests/e2e/seguranca-camera.spec.ts tests/e2e/apoio-acabamento.ts tests/e2e/saude.spec.ts
 git commit -m "test(seguranca): e2e dos cabeçalhos, da CSP nas telas principais, do limite de login por IP e da saúde" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
