@@ -37,10 +37,10 @@ Atualizado em 14/11/2026 (Fases 2, 3 e 4 juntadas no `main`; Fase 5 começando; 
 - **Atenção ao publicar na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500.
 - **Próximos passos, em ordem:**
   1. Fase 5 (time rodando desde 14/11), revisão final e Integração.
-  2. Fase 6: Tarefa 0 no `main` depois da junção da Fase 5; depois o time.
-  3. Fase 6.
+  2. Fase 6: Tarefa 0 no `main` depois da junção da Fase 5; depois o time, a revisão final e a Integração.
+  3. **Publicação na VPS de tudo de uma vez** (decisão do usuário em 14/11: esperar as Fases 5 e 6). Passos novos desde a Fase 1: `SEGREDO_LINKS` (E17), serviço `worker`, volume `/data`, `location /api/midia/` no nginx (só `nginx -t && systemctl reload nginx`), variáveis `BACKUP_*` e serviço de backup (Fase 6). Passe ao usuário o texto pronto para colar.
   4. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação (certificado A1), B2 e domínio. O usuário deve separar o certificado A1, a conta da Focus e o app do ML.
-  5. Publicação na VPS e a pergunta da Inscrição Estadual.
+  5. A pergunta da Inscrição Estadual.
 - O andamento resumido para o usuário fica no [README](../../README.md#andamento).
 
 ## Como trabalhamos
