@@ -37,7 +37,12 @@ Atualizado em 13/11/2026, 18h24 (Fase 4 pronta e revisada; Fases 2 e 3 trabalhan
   - Os `git stash` "parcial da T1" (Fases 3 e 4) e "parcial da T14" (Fase 3) são antigos e podem ser descartados: essas tarefas já foram refeitas.
 - **Decisões tomadas no caminho:**
   - Citar o ERP **Bitbrain** nas telas está certo (spec §8 e §8.7): a NF de venda é baixada dele, o ZIP de XMLs é importado nele, e a série não pode colidir com a dele. A regra é só não usar domínio nem marca bitbrain no sistema.
-- **Pergunta em aberto para o usuário:** a empresa tem Inscrição Estadual ou é isenta? Hoje a configuração fiscal só aceita o número. Se for isenta, é preciso aceitar "ISENTO".
+- **Pergunta em aberto para o usuário (fica para o fim do sistema, a pedido dele em 14/11):** a empresa tem Inscrição Estadual ou é isenta? Hoje a configuração fiscal só aceita o número. Se for isenta, é preciso aceitar "ISENTO".
+- **Segundo PC (usuário Windows "JEFFERSON LIMA"), preparado em 14/11:**
+  - Worktrees em `/c/Users/JEFFERSON LIMA/devolucoes-wt/fase-2`, `fase-3` e `fase-4`, cada uma com `.env` próprio.
+  - PostgreSQL 18 numa instância só do projeto, na **porta 5433**, com os dados em `C:\Users\JEFFERSON LIMA\pg-devolucoes\data`. A senha do `postgres` fica em `C:\Users\JEFFERSON LIMA\.postgres-superusuario.txt`. O PostgreSQL 18 da porta 5432 é de outra coisa: não mexa.
+  - A instância não é serviço: depois de reiniciar o PC, suba com `"/c/Program Files/PostgreSQL/18/bin/pg_ctl.exe" -D "/c/Users/JEFFERSON LIMA/pg-devolucoes/data" -l "/c/Users/JEFFERSON LIMA/pg-devolucoes/postgres.log" start`.
+  - Nos fluxos, passe também `"raiz":"/c/Users/JEFFERSON LIMA/MKT-_-DEV"` e a `pasta` deste PC.
 - **Para retomar os times:** use o fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js). Para cada tarefa, ele faz: implementar, revisar, até 2 rodadas de correção, enviar ao GitHub. Rode um fluxo por fase, os três em paralelo, com os argumentos:
   - Fase 2: `{"fase":2,"pasta":"/c/Users/idmpc/devolucoes-wt/fase-2","branch":"fase-2-conferencia","pref":"f2","tarefas":[9,…,22],"porta":3102,"bancoTeste":"devolucoes_test_f2"}`
   - Fase 3: `{"fase":3,"pasta":".../fase-3","branch":"fase-3-mercado-livre","pref":"f3","tarefas":[1,…,16],"porta":3103,"bancoTeste":"devolucoes_test_f3"}`

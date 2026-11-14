@@ -10,7 +10,7 @@ export const meta = {
 }
 
 const A = args
-const RAIZ = '/c/Users/idmpc/Dvoluções Markt'
+const RAIZ = A.raiz || '/c/Users/idmpc/Dvoluções Markt'
 const SDD = RAIZ + '/.superpowers/sdd/fases-2-6'
 const LEDGER = `${SDD}/progress-${A.pref}.md`
 
