@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ListaErros } from '@/components/ListaErros';
 import { ALERTA_ATENCAO, BOTAO_PERIGO, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, LINK_VOLTAR } from '@/components/estilos';
 import { comprimirFoto } from '@/components/midia/comprimirFoto';
@@ -57,6 +57,8 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
   const passos = useMemo(() => montarPassos(itens), [itens]);
   const [indice, setIndice] = useState(() => Math.min(Math.max(0, passoInicial), passos.length - 1));
   const [valores, setValores] = useState<Record<string, EntradaItem>>(() => Object.fromEntries(itens.map((i) => [i.id, entradaDoItem(i)])));
+  // Valor mais recente de cada unidade: respostas assíncronas (leitura do EAN) não podem partir de uma renderização velha.
+  const valoresRef = useRef(valores);
   const [leituras, setLeituras] = useState<Record<string, ResultadoEan | null>>(() => Object.fromEntries(itens.map((i) => [i.id, leituraInicial(i)])));
   const [naoSalvos, setNaoSalvos] = useState<string[]>([]);
   const [erros, setErros] = useState<string[]>([]);
@@ -140,8 +142,9 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
   }
 
   function mudar(itemId: string, parcial: Partial<EntradaItem>, salvarAgora = false) {
-    const novo = { ...valores[itemId], ...parcial };
-    setValores((v) => ({ ...v, [itemId]: novo }));
+    const novo = { ...valoresRef.current[itemId], ...parcial };
+    valoresRef.current = { ...valoresRef.current, [itemId]: novo };
+    setValores(valoresRef.current);
     if (!salvarAgora) return;
     void salvar(itemId, novo).then((r) => {
       if (r === 'sem_rede') setAviso(AVISO_SEM_REDE);
@@ -158,7 +161,7 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
       }
       setLeituras((l) => ({ ...l, [itemId]: r.resultado }));
       // Spec §6.3: EAN diferente do esperado sugere o motivo "divergente" (a pessoa pode trocar no destino).
-      if (r.resultado.sugerirMotivo && valores[itemId].decisao === null) mudar(itemId, { decisao: 'PROBLEMA', motivo: r.resultado.sugerirMotivo });
+      if (r.resultado.sugerirMotivo && valoresRef.current[itemId].decisao === null) mudar(itemId, { decisao: 'PROBLEMA', motivo: r.resultado.sugerirMotivo });
     } catch {
       setErros(['Sem conexão: a leitura do código precisa de internet. Tente de novo quando a conexão voltar.']);
     }
@@ -187,6 +190,12 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
 
   async function concluir() {
     setErros([]);
+    // Os que estão em erro não sobem sozinhos: a pessoa precisa agir. Os outros (em espera ou enviando) é só aguardar.
+    const comErro = envios.filter((e) => e.estado === 'erro').length;
+    if (comErro > 0) {
+      setErros([`${comErro} arquivo(s) não foram enviados: toque em Tentar de novo ou tire de novo.`]);
+      return;
+    }
     if (envios.length > 0) {
       setErros([envios.length === 1 ? 'Aguarde: 1 arquivo ainda não subiu.' : `Aguarde: ${envios.length} arquivos ainda não subiram.`]);
       return;
@@ -216,6 +225,13 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
   }
 
   async function desistir() {
+    // Arquivo ainda na fila receberia 409 depois da desistência e ficaria preso no aparelho.
+    const subindo = envios.filter((e) => e.estado !== 'erro').length;
+    if (subindo > 0) {
+      setErros([`Aguarde: ${subindo} arquivo(s) ainda subindo. Desista depois que terminarem.`]);
+      return;
+    }
+    setErros([]);
     setOcupado(true);
     try {
       const r = await acoes.desistir(devolucao.id, devolucao.codigo);
@@ -327,9 +343,9 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
           <div className={`${ALERTA_ATENCAO} flex flex-col gap-2`}>
             <p className="text-[15px]">A devolução volta para &quot;Aguardando conferência&quot;. O que já foi feito fica guardado.</p>
             <button type="button" onClick={() => void desistir()} disabled={ocupado} className={BOTAO_PERIGO}>
-              Confirmar desistência
+              {ocupado ? 'Desistindo…' : 'Confirmar desistência'}
             </button>
-            <button type="button" onClick={() => setConfirmarDesistencia(false)} className={BOTAO_SECUNDARIO}>
+            <button type="button" onClick={() => setConfirmarDesistencia(false)} disabled={ocupado} className={BOTAO_SECUNDARIO}>
               Continuar conferindo
             </button>
           </div>
