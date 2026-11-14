@@ -50,6 +50,10 @@ export type EnvioConcluido = { idCliente: string; devolucaoId: string; itemId: s
 
 const SEM_CONEXAO = 'Sem conexão com o servidor. Tentando de novo…';
 
+function mesmaVaga(a: RegistroEnvio, b: RegistroEnvio): boolean {
+  return a.devolucaoId === b.devolucaoId && a.tipo === b.tipo && a.itemId === b.itemId;
+}
+
 /** 2 s, 4 s, 8 s... até 5 min, com ±20% de sorteio para os celulares não tentarem todos juntos (pesquisa §4). */
 export function proximaEspera(tentativas: number, sorteio: number = Math.random()): number {
   const base = Math.min(5 * 60_000, 2000 * 2 ** Math.max(0, tentativas - 1));
@@ -104,7 +108,7 @@ export class FilaEnvios {
 
   /** Grava no aparelho primeiro; depois tenta enviar. */
   async adicionar(novo: NovoEnvio): Promise<void> {
-    await this.armazem.gravar({
+    const registro: RegistroEnvio = {
       ...novo,
       tamanho: novo.arquivo.size,
       criadoEm: this.relogio(),
@@ -114,7 +118,19 @@ export class FilaEnvios {
       uploadUrl: null,
       mensagem: null,
       progresso: 0,
-    });
+    };
+    await this.armazem.gravar(registro);
+    // Refazer a mesma vaga: o envio antigo (pendente ou com erro) não pode subir depois nem ficar preso. O que está
+    // enviando agora é tratado no fim do envio (ver `enviar`).
+    if (novo.tipo !== 'EXTRA') {
+      for (const antigo of await this.armazem.listar()) {
+        if (antigo.idCliente !== novo.idCliente && mesmaVaga(antigo, registro) && antigo.estado !== 'enviando') {
+          await this.armazem.apagar(antigo.idCliente);
+          this.arquivos.delete(antigo.idCliente);
+          this.progresso.delete(antigo.idCliente);
+        }
+      }
+    }
     this.avisar();
     void this.processar();
   }
@@ -183,6 +199,13 @@ export class FilaEnvios {
       this.avisar();
       const concluido = { idCliente: r.idCliente, devolucaoId: r.devolucaoId, itemId: r.itemId, tipo: r.tipo, evidenciaId: resultado.evidenciaId };
       for (const f of this.ouvintesConcluidos) f(concluido);
+      return true;
+    }
+    // Refeito durante o envio: o registro mais novo da mesma vaga vale; este não volta para a fila.
+    if (r.tipo !== 'EXTRA' && (await this.armazem.listar()).some((x) => x.idCliente !== r.idCliente && mesmaVaga(x, r) && x.criadoEm >= r.criadoEm)) {
+      await this.armazem.apagar(r.idCliente);
+      this.arquivos.delete(r.idCliente);
+      this.avisar();
       return true;
     }
     if (resultado.definitivo) {

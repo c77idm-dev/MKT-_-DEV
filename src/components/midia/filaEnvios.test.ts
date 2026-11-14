@@ -97,6 +97,67 @@ describe('FilaEnvios (spec §9: os arquivos pendentes ficam no aparelho)', () =>
   });
 });
 
+describe('FilaEnvios: refazer a mesma vaga descarta o envio antigo', () => {
+  it('o antigo em erro some quando o operador refaz; fica só o novo', async () => {
+    const armazem = new ArmazemMemoria();
+    const { transporte, chamadas } = transporteDe([{ ok: false, definitivo: true, mensagem: 'Conferência de outra pessoa.' }]);
+    const fila = new FilaEnvios(armazem, transporte);
+    await fila.adicionar(novo('velho'));
+    await fila.processar();
+    expect((await armazem.listar()).map((r) => [r.idCliente, r.estado])).toEqual([['velho', 'erro']]);
+    await fila.adicionar(novo('novo'));
+    await fila.processar();
+    expect(chamadas.map((c) => c.idCliente)).toEqual(['velho', 'novo']);
+    expect(await armazem.listar()).toEqual([]);
+    expect((await fila.listar()).length).toBe(0);
+  });
+
+  it('o antigo em espera nunca sobe depois do novo', async () => {
+    let agora = 1_000_000;
+    const armazem = new ArmazemMemoria();
+    const { transporte, chamadas } = transporteDe([{ ok: false, definitivo: false, mensagem: 'Sem conexão' }]);
+    const fila = new FilaEnvios(armazem, transporte, () => agora, () => 0.5);
+    await fila.adicionar(novo('velho'));
+    await fila.processar();
+    expect((await armazem.listar())[0]).toMatchObject({ idCliente: 'velho', estado: 'pendente' });
+    agora += 10;
+    await fila.adicionar(novo('novo'));
+    await fila.processar();
+    agora += 60_000;
+    await fila.processar(true);
+    expect(chamadas.map((c) => c.idCliente)).toEqual(['velho', 'novo']);
+    expect(await armazem.listar()).toEqual([]);
+  });
+
+  it('vagas diferentes e fotos EXTRA não se descartam', async () => {
+    const armazem = new ArmazemMemoria();
+    const { transporte } = transporteDe([
+      { ok: false, definitivo: true, mensagem: 'x' },
+      { ok: false, definitivo: true, mensagem: 'x' },
+    ]);
+    const fila = new FilaEnvios(armazem, transporte);
+    await fila.adicionar({ ...novo('e1'), tipo: 'EXTRA' });
+    await fila.processar();
+    await fila.adicionar({ ...novo('e2'), tipo: 'EXTRA' });
+    await fila.processar();
+    await fila.adicionar({ ...novo('f2'), tipo: 'FOTO_2_EMBALAGEM' });
+    expect((await armazem.listar()).map((r) => r.idCliente).sort()).toEqual(['e1', 'e2', 'f2']);
+  });
+
+  it('o antigo que estava enviando e falha não é regravado quando já há um mais novo', async () => {
+    let liberar!: (r: ResultadoTransporte) => void;
+    const armazem = new ArmazemMemoria();
+    let n = 0;
+    const fila = new FilaEnvios(armazem, async () => (++n === 1 ? new Promise<ResultadoTransporte>((ok) => (liberar = ok)) : { ok: false, definitivo: true, mensagem: 'x' }));
+    await fila.adicionar(novo('velho'));
+    await expect.poll(async () => (await armazem.listar()).map((r) => r.estado)).toEqual(['enviando']);
+    await fila.adicionar(novo('novo'));
+    liberar({ ok: false, definitivo: false, mensagem: 'Sem conexão' });
+    await fila.processar();
+    expect((await armazem.listar()).map((r) => r.idCliente)).toEqual(['novo']);
+  });
+});
+
 describe('proximaEspera (espera crescente com sorteio, até 5 min)', () => {
   it('2 s, 4 s, 8 s... com ±20%', () => {
     expect(proximaEspera(1, 0.5)).toBe(2000);
