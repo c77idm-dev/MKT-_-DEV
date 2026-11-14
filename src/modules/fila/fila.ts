@@ -14,10 +14,14 @@ export interface Fila {
 /** Schema do pg-boss no banco da aplicação (cada worktree tem o seu banco e, portanto, o seu schema). */
 export const SCHEMA_FILA = 'pgboss';
 
+/** Fila onde o pg-boss põe os jobs que esgotaram as tentativas (deadLetter); o worker grava em falhas_tarefas. */
+export const FILA_FALHAS = 'falhas';
+export const OPCOES_FILA_FALHAS = { retryLimit: 4, retryDelay: 30, retryBackoff: true, retryDelayMax: 900, expireInSeconds: 60, retentionSeconds: 30 * 24 * 60 * 60 };
+
 /** Opções da fila no pg-boss: `retryLimit` conta só as novas tentativas, então 5 tentativas = 4 (teste na Tarefa 5). */
 export function opcoesDaFila(nome: NomeTarefa) {
   const c = CONFIG_TAREFAS[nome];
-  return { retryLimit: c.tentativas - 1, retryDelay: 30, retryBackoff: true, retryDelayMax: 900, expireInSeconds: c.expiraEmSegundos };
+  return { retryLimit: c.tentativas - 1, retryDelay: 30, retryBackoff: true, retryDelayMax: 900, expireInSeconds: c.expiraEmSegundos, deadLetter: FILA_FALHAS };
 }
 
 /**
@@ -29,7 +33,7 @@ export function idDoJob(nome: NomeTarefa, chave: string): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-export function criarPgBoss(url: string, opcoes: { max: number; supervisionar: boolean; schema?: string }): PgBoss {
+export function criarPgBoss(url: string, opcoes: { max: number; supervisionar: boolean; schema?: string; intervaloSupervisaoSegundos?: number }): PgBoss {
   const boss = new PgBoss({
     connectionString: url,
     schema: opcoes.schema ?? SCHEMA_FILA,
@@ -37,6 +41,10 @@ export function criarPgBoss(url: string, opcoes: { max: number; supervisionar: b
     // Só o worker faz a manutenção e as agendas; o web só envia.
     supervise: opcoes.supervisionar,
     schedule: opcoes.supervisionar,
+    // Só os testes: confere o tempo esgotado a cada poucos segundos (padrão 60 s).
+    ...(opcoes.intervaloSupervisaoSegundos !== undefined
+      ? { superviseIntervalSeconds: opcoes.intervaloSupervisaoSegundos, monitorIntervalSeconds: opcoes.intervaloSupervisaoSegundos }
+      : {}),
   });
   boss.on('error', (erro) => {
     console.error(JSON.stringify({ nivel: 'erro', origem: 'pg-boss', mensagem: erro.message }));
@@ -46,6 +54,9 @@ export function criarPgBoss(url: string, opcoes: { max: number; supervisionar: b
 
 /** Cria (ou atualiza) as filas de todas as tarefas. Pode rodar quantas vezes quiser. */
 export async function criarFilas(boss: PgBoss): Promise<void> {
+  // A fila `falhas` primeiro: a FK dead_letter das outras exige que ela exista.
+  await boss.createQueue(FILA_FALHAS, OPCOES_FILA_FALHAS);
+  await boss.updateQueue(FILA_FALHAS, OPCOES_FILA_FALHAS);
   for (const nome of NOMES_TAREFAS) {
     await boss.createQueue(nome, opcoesDaFila(nome));
     await boss.updateQueue(nome, opcoesDaFila(nome));

@@ -1,6 +1,7 @@
 import type { PgBoss } from 'pg-boss';
 import { criarDb, type Db } from '@/db/client';
-import { criarFilas, criarPgBoss, enviarPorPgBoss, type Fila } from '@/modules/fila/fila';
+import { entradaDoJobMorto, registrarFalha } from '@/modules/acabamento/falhas';
+import { criarFilas, criarPgBoss, enviarPorPgBoss, FILA_FALHAS, type Fila } from '@/modules/fila/fila';
 import { CONFIG_TAREFAS, FUSO_AGENDAS, NOMES_TAREFAS, TAREFAS_NA_SUBIDA, type DadosTarefa, type NomeTarefa } from '@/modules/fila/tarefas';
 import { manipuladoresAcabamento } from './manipuladores/acabamento';
 import { manipuladoresFiscal } from './manipuladores/fiscal';
@@ -44,6 +45,8 @@ export type OpcoesWorker = {
   /** Só nos testes: um schema do pg-boss separado. */
   schema?: string;
   intervaloSegundos?: number;
+  /** Só nos testes: confere o tempo esgotado a cada N segundos (mínimo 1). */
+  intervaloSupervisaoSegundos?: number;
   registrar?: Registro;
 };
 
@@ -51,7 +54,7 @@ export type OpcoesWorker = {
 export async function iniciarWorker(o: OpcoesWorker): Promise<{ boss: PgBoss; parar(): Promise<void> }> {
   const manipuladores = o.manipuladores ?? MANIPULADORES;
   const registrar = o.registrar ?? registrarNoConsole;
-  const boss = criarPgBoss(o.url, { max: 5, supervisionar: true, schema: o.schema });
+  const boss = criarPgBoss(o.url, { max: 5, supervisionar: true, schema: o.schema, intervaloSupervisaoSegundos: o.intervaloSupervisaoSegundos });
   await boss.start();
   await criarFilas(boss);
   const { db, sql } = criarDb(o.url);
@@ -74,6 +77,17 @@ export async function iniciarWorker(o: OpcoesWorker): Promise<{ boss: PgBoss; pa
     const agenda = CONFIG_TAREFAS[nome].agenda;
     if (agenda) await boss.schedule(nome, agenda, {}, { tz: FUSO_AGENDAS });
   }
+  // Tarefas que esgotaram as tentativas caem na fila `falhas`; aqui viram linhas de falhas_tarefas. Erro lança: o job tenta de novo.
+  await boss.work(
+    FILA_FALHAS,
+    { batchSize: 1, localConcurrency: 1, includeMetadata: true, pollingIntervalSeconds: o.intervaloSegundos ?? 2 },
+    async ([job]) => {
+      const entrada = entradaDoJobMorto(job);
+      if (!entrada) return;
+      const r = await registrarFalha(db, entrada);
+      registrar({ nivel: 'erro', mensagem: 'tarefa foi para Falhas', tarefa: entrada.tarefa, falhaId: r?.falhaId ?? null });
+    },
+  );
   for (const nome of TAREFAS_NA_SUBIDA) {
     if (manipuladores[nome]) await fila.enviar(nome, {});
   }
