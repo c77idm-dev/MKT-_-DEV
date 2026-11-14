@@ -22,6 +22,9 @@ case "$DESTINO" in
 esac
 [ -n "${BACKUP_SENHA:-}" ] || { echo "BACKUP_SENHA não definida." >&2; exit 1; }
 
+# Valida o arquivo de ponta a ponta (existe, a senha decifra, o dump é legível) ANTES de apagar qualquer banco.
+rclone cat "$REMOTO/$ARQUIVO" | decifrar | { pg_restore --list >/dev/null && cat >/dev/null; } || { echo "Arquivo inválido ou senha errada. Nada foi apagado." >&2; exit 1; }
+
 # Banco limpo: dropdb e createdb conectados ao banco "postgres" (nunca ao que vai ser apagado).
 dropdb --maintenance-db=postgres --if-exists "$DESTINO"
 createdb --maintenance-db=postgres "$DESTINO"

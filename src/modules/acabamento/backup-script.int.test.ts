@@ -101,6 +101,25 @@ describe.skipIf(!temFerramentas)('docker/backup (spec §10)', () => {
     expect(script('restaurar.sh', [`banco/${banco}`, BANCO_RESTAURADO], env).status).toBe(0);
   }, 120_000);
 
+  it('restaurar.sh com senha errada ou arquivo inexistente sai com 1 e não apaga o banco de destino', () => {
+    const { base, env } = ambiente();
+    expect(script('backup.sh', [], env).status).toBe(0);
+    const [banco] = readdirSync(join(base, 'bucket', 'bucket-teste', 'banco'));
+    const destino = `${BANCO_RESTAURADO}_intacto`;
+    sh(`dropdb --if-exists ${destino}`, env);
+    expect(sh(`createdb ${destino} && psql -X -q -d ${destino} -c "create table prova(id int); insert into prova values (1),(2)"`, env).status).toBe(0);
+    try {
+      const senhaErrada = script('restaurar.sh', [`banco/${banco}`, destino], { ...env, BACKUP_SENHA: 'outra-senha' });
+      expect(senhaErrada.status).toBe(1);
+      expect(senhaErrada.stderr).toContain('Nada foi apagado');
+      const inexistente = script('restaurar.sh', ['banco/nao-existe.dump.enc', destino], env);
+      expect(inexistente.status).toBe(1);
+      expect(sh(`psql -X -At -d ${destino} -c "select count(*) from prova"`, env).stdout.trim()).toBe('2');
+    } finally {
+      sh(`dropdb --if-exists ${destino}`, env);
+    }
+  }, 120_000);
+
   it('restaurar.sh recusa um destino fora de devolucoes_restauracao* sem CONFIRMAR, antes de apagar qualquer coisa', () => {
     const { env } = ambiente();
     const r = script('restaurar.sh', ['banco/qualquer.dump.enc', 'postgres'], env);
