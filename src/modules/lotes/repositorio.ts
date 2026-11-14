@@ -4,6 +4,7 @@ import { itensDevolucao, lotes, notasFiscais } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { pode } from '@/modules/auth/permissoes';
 import type { NotaFiscalLinha } from '@/modules/fiscal/notas';
+import type { StatusLote } from './dominio';
 import { ErroLotes } from './erros';
 
 export type LoteLinha = typeof lotes.$inferSelect;
@@ -34,6 +35,11 @@ export async function notaAtivaDoLote(db: DbOuTx, loteId: string): Promise<NotaF
     .orderBy(desc(notasFiscais.criadaEm))
     .limit(1);
   return nota ?? null;
+}
+
+/** Spec §5.4: as unidades só entram e saem do lote ABERTO, ou FECHADO que ainda não tem NF de Remessa ativa. */
+export function loteEditavel(status: StatusLote, notaAtiva: NotaFiscalLinha | null): boolean {
+  return status === 'ABERTO' || (status === 'FECHADO' && notaAtiva === null);
 }
 
 /** Vale para toda ação dos lotes (spec §3): só o Fiscal e o Gestor, que têm `gerir_fiscal`. */
