@@ -7,11 +7,15 @@ import type { VistaNota } from '@/modules/fiscal/situacao';
 import { ROTULO_RESULTADO, ROTULO_TIPO_LOTE, RESULTADOS_FORNECEDOR, TIPOS_LOTE } from '@/modules/lotes/dominio';
 import { AtualizarEnquantoProcessa } from '../fiscal/AtualizarEnquantoProcessa';
 import { Selo } from '../Selo';
+import { BotaoConfirmar } from '../mercado-livre/BotaoConfirmar';
 import { RodapeFormulario } from '../RodapeFormulario';
 import { ALERTA_ATENCAO, BOTAO_PERIGO, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, CARTAO, ROTULO, VAZIO } from '../estilos';
 
-/** Blocos da tela do lote. Sem estado próprio (decisão 23): o `PainelLote` dá `aoEnviar` e `pendente`. */
-type Envio = { aoEnviar: (evento: FormEvent<HTMLFormElement>) => void; pendente: boolean };
+/**
+ * Blocos da tela do lote. Sem estado próprio (decisão 23): o `PainelLote` dá `aoEnviar`, `pendente` (desabilita tudo,
+ * pois há um só envio por página) e `ocupado` (esta é a ação que roda: só ela mostra o texto de andamento).
+ */
+type Envio = { aoEnviar: (evento: FormEvent<HTMLFormElement>) => void; pendente: boolean; ocupado: boolean };
 
 const ID_FORM_MOVER = 'form-mover';
 
@@ -21,6 +25,7 @@ export function BlocoUnidades({
   destinos,
   aoEnviar,
   pendente,
+  ocupado,
 }: Envio & { unidades: UnidadeLoteVista[]; editavel: boolean; destinos: { valor: string; rotulo: string }[] }) {
   return (
     <section aria-labelledby="titulo-unidades" className="flex flex-col gap-3">
@@ -91,7 +96,7 @@ export function BlocoUnidades({
             </select>
           </div>
           <button type="submit" disabled={pendente} className={`${BOTAO_SECUNDARIO} w-full sm:w-auto sm:self-start`}>
-            Mover unidades
+            {ocupado ? 'Movendo…' : 'Mover unidades'}
           </button>
         </form>
       )}
@@ -99,7 +104,7 @@ export function BlocoUnidades({
   );
 }
 
-export function BlocoFechar({ aoEnviar, pendente }: Envio) {
+export function BlocoFechar({ aoEnviar, pendente, ocupado }: Envio) {
   return (
     <section aria-labelledby="titulo-fechar" className={CARTAO}>
       <form onSubmit={aoEnviar} className="flex flex-col gap-3">
@@ -118,7 +123,7 @@ export function BlocoFechar({ aoEnviar, pendente }: Envio) {
         </fieldset>
         <RodapeFormulario>
           <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} w-full md:w-auto`}>
-            Fechar lote
+            {ocupado ? 'Fechando…' : 'Fechar lote'}
           </button>
         </RodapeFormulario>
       </form>
@@ -126,21 +131,26 @@ export function BlocoFechar({ aoEnviar, pendente }: Envio) {
   );
 }
 
-export function BlocoReabrir({ outroAberto, aoEnviar, pendente }: Envio & { outroAberto: string | null }) {
+export function BlocoReabrir({ outroAberto, vazio, aoEnviar, pendente, ocupado }: Envio & { outroAberto: string | null; vazio: boolean }) {
   if (outroAberto) {
-    return <p className="text-sm text-texto-2">{`O fornecedor já tem o lote ${outroAberto} aberto: mova as unidades deste lote para ele.`}</p>;
+    const texto = vazio
+      ? `O fornecedor já tem o lote ${outroAberto} aberto, e este lote está vazio.`
+      : `O fornecedor já tem o lote ${outroAberto} aberto: mova as unidades deste lote para ele.`;
+    return <p className="text-sm text-texto-2">{texto}</p>;
   }
   return (
     <form onSubmit={aoEnviar}>
       <input type="hidden" name="operacao" value="reabrir" />
       <button type="submit" disabled={pendente} className={`${BOTAO_SECUNDARIO} w-full sm:w-auto`}>
-        Reabrir lote
+        {ocupado ? 'Reabrindo…' : 'Reabrir lote'}
       </button>
     </form>
   );
 }
 
-type PropsNotaRemessa = Envio & {
+type PropsNotaRemessa = Omit<Envio, 'ocupado'> & {
+  /** Operação em andamento ('emitir', 'reenviar', 'cancelar') ou null. */
+  operacaoAtual: string | null;
   nota: VistaNota | null;
   anteriores: VistaNota[];
   links: { xml: string; danfe: string } | null;
@@ -162,7 +172,7 @@ function Dado({ rotulo, children, largo = false, testId }: { rotulo: string; chi
 }
 
 /** Spec §6.4 e §8.6: a NF de Remessa do lote. Emitir é a ação principal do status FECHADO (rodapé fixo). */
-export function BlocoNotaRemessa({ nota, anteriores, links, podeEmitir, podeReenviar, podeCancelar, aoEnviar, pendente }: PropsNotaRemessa) {
+export function BlocoNotaRemessa({ nota, anteriores, links, podeEmitir, podeReenviar, podeCancelar, aoEnviar, pendente, operacaoAtual }: PropsNotaRemessa) {
   return (
     <section aria-labelledby="titulo-nf-remessa" className={`${CARTAO} flex flex-col gap-3`}>
       <h2 id="titulo-nf-remessa" className="text-base font-bold">
@@ -215,7 +225,7 @@ export function BlocoNotaRemessa({ nota, anteriores, links, podeEmitir, podeReen
           <input type="hidden" name="operacao" value="emitir" />
           <RodapeFormulario>
             <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} w-full md:w-auto`}>
-              {pendente ? 'Enviando…' : 'Emitir NF de Remessa'}
+              {operacaoAtual === 'emitir' ? 'Enviando…' : 'Emitir NF de Remessa'}
             </button>
           </RodapeFormulario>
         </form>
@@ -224,7 +234,7 @@ export function BlocoNotaRemessa({ nota, anteriores, links, podeEmitir, podeReen
         <form onSubmit={aoEnviar}>
           <input type="hidden" name="operacao" value="reenviar" />
           <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} w-full sm:w-auto`}>
-            {pendente ? 'Reenviando…' : 'Corrigir e reenviar'}
+            {operacaoAtual === 'reenviar' ? 'Reenviando…' : 'Corrigir e reenviar'}
           </button>
         </form>
       )}
@@ -241,7 +251,7 @@ export function BlocoNotaRemessa({ nota, anteriores, links, podeEmitir, podeReen
               <textarea id="justificativa-remessa" name="justificativa" required minLength={15} maxLength={255} rows={3} className={`${CAMPO} min-h-24 py-2`} />
             </div>
             <button type="submit" disabled={pendente} className={BOTAO_PERIGO}>
-              {pendente ? 'Cancelando…' : 'Cancelar NF'}
+              {operacaoAtual === 'cancelar' ? 'Cancelando…' : 'Cancelar NF'}
             </button>
           </form>
         </details>
@@ -281,7 +291,7 @@ export function BlocoListaConsolidada({ codigo }: { codigo: string }) {
   );
 }
 
-export function BlocoEnvio({ aoEnviar, pendente }: Envio) {
+export function BlocoEnvio({ aoEnviar, pendente, ocupado }: Envio) {
   return (
     <section aria-labelledby="titulo-envio" className={CARTAO}>
       <form onSubmit={aoEnviar} className="flex flex-col gap-3">
@@ -297,7 +307,7 @@ export function BlocoEnvio({ aoEnviar, pendente }: Envio) {
         </div>
         <RodapeFormulario>
           <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} w-full md:w-auto`}>
-            Registrar envio
+            {ocupado ? 'Registrando…' : 'Registrar envio'}
           </button>
         </RodapeFormulario>
       </form>
@@ -305,7 +315,7 @@ export function BlocoEnvio({ aoEnviar, pendente }: Envio) {
   );
 }
 
-export function BlocoResultado({ unidades, aoEnviar, pendente }: Envio & { unidades: UnidadeLoteVista[] }) {
+export function BlocoResultado({ unidades, aoEnviar, pendente, ocupado }: Envio & { unidades: UnidadeLoteVista[] }) {
   const enviadas = unidades.filter((u) => u.status === 'ENVIADO');
   return (
     <section aria-labelledby="titulo-resultado" className={CARTAO}>
@@ -331,9 +341,14 @@ export function BlocoResultado({ unidades, aoEnviar, pendente }: Envio & { unida
         ))}
         <p className="text-sm text-texto-2">O resultado é definitivo.</p>
         <RodapeFormulario>
-          <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} w-full md:w-auto`}>
-            Registrar resultado
-          </button>
+          <BotaoConfirmar
+            rotulo="Registrar resultado"
+            rotuloConfirmar="Toque de novo: o resultado é definitivo"
+            pendente={ocupado}
+            rotuloPendente="Registrando…"
+            desabilitado={pendente}
+            className={`${BOTAO_PRIMARIO} w-full md:w-auto`}
+          />
         </RodapeFormulario>
       </form>
     </section>

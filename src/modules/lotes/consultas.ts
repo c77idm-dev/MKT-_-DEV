@@ -96,7 +96,8 @@ function condicoes(filtros: FiltrosLotes, soAtivos: boolean): SQL {
       or exists (
         select 1 from "itens_devolucao" "i" inner join "devolucoes" "d" on "d"."id" = "i"."devolucao_id"
         where "i"."lote_id" = ${lotes.id}
-          and ("d"."codigo" ilike ${like} or "i"."serial" ilike ${like} or "i"."sku" ilike ${like} or "i"."ean_lido" ilike ${like})
+          and ("d"."codigo" ilike ${like} or "i"."serial" ilike ${like} or "i"."sku" ilike ${like} or "i"."ean_lido" ilike ${like}
+            or exists (select 1 from "produtos" "p" where "p"."id" = "i"."produto_recebido_id" and "p"."sku" ilike ${like}))
       )
     )`);
   }
@@ -248,7 +249,7 @@ export async function obterDetalheLote(db: DbOuTx, codigo: string, agora: Date =
   const recebido = alias(produtos, 'produto_recebido');
   const esperado = alias(produtos, 'produto_esperado');
   const linhasUnidades = await db
-    .select({ item: itensDevolucao, devolucaoCodigo: devolucoes.codigo, descricaoRecebido: recebido.descricao, descricaoEsperado: esperado.descricao })
+    .select({ item: itensDevolucao, devolucaoCodigo: devolucoes.codigo, skuRecebido: recebido.sku, descricaoRecebido: recebido.descricao, descricaoEsperado: esperado.descricao })
     .from(itensDevolucao)
     .innerJoin(devolucoes, eq(devolucoes.id, itensDevolucao.devolucaoId))
     .leftJoin(recebido, eq(recebido.id, itensDevolucao.produtoRecebidoId))
@@ -310,7 +311,7 @@ export async function obterDetalheLote(db: DbOuTx, codigo: string, agora: Date =
       itemId: l.item.id,
       devolucaoCodigo: l.devolucaoCodigo,
       unidade: l.item.unidade,
-      sku: l.item.sku,
+      sku: l.skuRecebido ?? l.item.sku,
       descricao: l.descricaoRecebido ?? l.descricaoEsperado ?? VAZIO,
       serial: l.item.serial ?? VAZIO,
       motivo: l.item.motivo ? ROTULO_MOTIVO[l.item.motivo] : VAZIO,

@@ -69,6 +69,16 @@ describe('consultas dos lotes', () => {
     expect(d?.historico.map((h) => h.texto)).toContain('NF-e rejeitada');
   });
 
+  it('tela e busca usam o SKU do produto recebido, nao o da venda', async () => {
+    const f = await criarFornecedorCompletoTeste(db);
+    const p = await criarProdutoDoFornecedorTeste(db, { cnpjFornecedor: f.cnpj, sku: 'RECEBIDO-77' });
+    const dev = await criarDevolucaoComProblemasTeste(db, gestor, { unidades: [{ destino: 'PROBLEMA', serial: 'SN-5', sku: 'VENDIDO-1', produtoId: p.id }] });
+    const l = await criarLoteTeste(db, { fornecedorId: f.id, status: 'FECHADO', itemIds: dev.itens.map((i) => i.id) });
+    const d = await obterDetalheLote(db, l.codigo, AGORA);
+    expect(d?.unidades[0].sku).toBe('RECEBIDO-77');
+    expect((await listarLotes(db, { busca: 'RECEBIDO-77' })).lotes.map((x) => x.id)).toEqual([l.id]);
+  });
+
   it('detalhe: unidades, editável, destinos para mover e o outro lote aberto do fornecedor', async () => {
     const aberto = await loteCom('ABERTO', 2);
     const fechado = await loteCom('FECHADO', 1, aberto.fornecedorId);

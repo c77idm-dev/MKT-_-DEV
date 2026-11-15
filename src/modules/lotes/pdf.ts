@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
-import { COLUNAS_LISTA, cabecalhoDaLista, type ListaConsolidada } from './lista-consolidada';
+import { COLUNAS_LISTA, cabecalhoDaLista, celulasDaLinha, type ListaConsolidada } from './lista-consolidada';
 
 const WIN_ANSI_EXTRA = new Set(Array.from('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ'));
 
@@ -83,7 +83,7 @@ export async function gerarPdfLista(l: ListaConsolidada): Promise<Uint8Array> {
   cabecalhoTabela();
 
   for (const linha of l.linhas) {
-    const celulas = [linha.sku, linha.descricao, linha.serial, linha.motivo, linha.devolucao, String(linha.unidade), linha.observacao];
+    const celulas = celulasDaLinha(linha).map(String);
     const quebradas = celulas.map((c, i) => quebrar(c, fonte, LARGURAS[i] - 2 * PAD));
     const altura = Math.max(...quebradas.map((q) => q.length)) * ENTRELINHA + PAD;
     if (y - altura < MARGEM + 14) {

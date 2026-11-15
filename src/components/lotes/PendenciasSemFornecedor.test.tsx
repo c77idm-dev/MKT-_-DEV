@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PendenciasSemFornecedor } from './PendenciasSemFornecedor';
 
@@ -11,6 +11,7 @@ describe('PendenciasSemFornecedor (decisões 11 e 23)', () => {
     const { rerender, container } = render(<PendenciasSemFornecedor unidades={[unidade]} total={1} verTodas={null} acao={acao} />);
     fireEvent.click(screen.getByRole('button', { name: 'Associar produto' }));
     expect(await screen.findByText('Unidade 1 da DEV-000123 incluída no lote LOT-000045.')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Unidade 1 da DEV-000123 incluída no lote LOT-000045.');
     rerender(<PendenciasSemFornecedor unidades={[]} total={0} verTodas={null} acao={acao} />);
     expect(screen.queryByRole('button', { name: 'Associar produto' })).toBeNull();
     expect(screen.getByText('Unidade 1 da DEV-000123 incluída no lote LOT-000045.')).toBeTruthy();
@@ -26,5 +27,13 @@ describe('PendenciasSemFornecedor (decisões 11 e 23)', () => {
   it('sem unidades e sem mensagem, não mostra nada', () => {
     const { container } = render(<PendenciasSemFornecedor unidades={[]} total={0} verTodas={null} acao={vi.fn()} />);
     expect(container.innerHTML).toBe('');
+  });
+
+  it('enquanto associa, o botão do cartão mostra "Associando…"', async () => {
+    render(<PendenciasSemFornecedor unidades={[unidade]} total={1} verTodas={null} acao={vi.fn(() => new Promise<never>(() => {}))} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Associar produto' }));
+    });
+    expect(screen.getByRole('button', { name: 'Associando…' })).toBeTruthy();
   });
 });

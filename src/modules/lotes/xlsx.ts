@@ -1,5 +1,5 @@
 import { strToU8, zipSync } from 'fflate';
-import { COLUNAS_LISTA, cabecalhoDaLista, type ListaConsolidada } from './lista-consolidada';
+import { COLUNAS_LISTA, cabecalhoDaLista, celulasDaLinha, type ListaConsolidada } from './lista-consolidada';
 
 type Celula = string | number | null;
 
@@ -52,6 +52,6 @@ export function planilhaDaLista(l: ListaConsolidada): Celula[][] {
     ...cabecalhoDaLista(l).map(([rotulo, valor]): Celula[] => [rotulo, valor]),
     [],
     [...COLUNAS_LISTA],
-    ...l.linhas.map((x): Celula[] => [x.sku, x.descricao, x.serial, x.motivo, x.devolucao, x.unidade, x.observacao]),
+    ...l.linhas.map((x): Celula[] => celulasDaLinha(x)),
   ];
 }

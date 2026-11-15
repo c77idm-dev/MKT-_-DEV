@@ -53,6 +53,7 @@ test('Emitir NF de Remessa → autorizada → lista consolidada (PDF e Excel) �
   await resultado.getByLabel(`Resultado do fornecedor (unidade 1 da ${lote.devolucaoCodigo})`).selectOption({ label: 'Consertado' });
   await resultado.getByLabel(`Resultado do fornecedor (unidade 2 da ${lote.devolucaoCodigo})`).selectOption({ label: 'Crédito' });
   await resultado.getByRole('button', { name: 'Registrar resultado' }).click();
+  await resultado.getByRole('button', { name: 'Toque de novo: o resultado é definitivo' }).click();
   await expect(retorno).toContainText('Resultado registrado. Lote finalizado.');
   await expect(page.getByText('Finalizado', { exact: true }).first()).toBeVisible();
   await semRolagemLateral(page);

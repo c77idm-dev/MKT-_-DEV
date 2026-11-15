@@ -80,6 +80,7 @@ test('spec §12: recebimento → conferência → NF de devolução → lote →
   await expect(page.getByText('Envio registrado.')).toBeVisible();
   await page.getByLabel(`Resultado do fornecedor (unidade 2 da ${dev.codigo})`).selectOption({ label: 'Consertado' });
   await page.getByRole('button', { name: 'Registrar resultado' }).click();
+  await page.getByRole('button', { name: 'Toque de novo: o resultado é definitivo' }).click();
   await expect(page.getByText('Resultado registrado. Lote finalizado.')).toBeVisible();
 
   // A devolução mostra o resultado; o lote finalizado sai da coluna 5.

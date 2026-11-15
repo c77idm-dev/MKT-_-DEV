@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 14/11/2026 (Fases 2, 3 e 4 juntadas no `main`; Fase 5 começando; plano da Fase 6 em revisão). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 14/11/2026 (Fases 2, 3, 4 e 5 juntadas no `main`; time da Fase 6 rodando). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Fases 0 e 1:** prontas, no `main` e publicadas na VPS (https://devolucoes.179-199-128-100.sslip.io).
@@ -9,13 +9,17 @@ Atualizado em 14/11/2026 (Fases 2, 3 e 4 juntadas no `main`; Fase 5 começando; 
   - Migrações: `0006_fundacao`, `0007_fase3_mercado_livre`, `0008_fase4_fiscal`.
   - Testes entre fases criados: `tests/e2e/integracao-ml.spec.ts` (Fase 3) e `tests/e2e/integracao-fiscal.spec.ts` (Fase 4).
   - **Ainda não publicadas na VPS.** A publicação fica para depois da "Ligação das contas reais" (com `ML_CONECTOR=api` e `EMISSOR_NFE=focus` o sistema sobe, mas sem as contas essas partes não funcionam).
+- **Fase 5 (Remessas):** pronta, com revisão final aprovada e **juntada no `main`** em 14/11 (merge `6f19451`).
+  - Suíte do `main` depois da junção: 610 de unidade, 369 de integração, 163 e2e (7 pulados de propósito), nos projetos `computador` e `celular`. O `conferencia.spec.ts:96` falhou e passou ao repetir.
+  - Migração: `0009_fase5_remessas` (sem SQL escrito à mão). Dependência nova: `pdf-lib@1.17.1`.
+  - Teste entre fases criado: `tests/e2e/integracao-remessas.spec.ts`.
+  - A NF de remessa real em homologação fica para a "Ligação das contas reais". Ainda não publicada na VPS.
 - **Planos e contrato:**
-  - Contrato (obrigatório para as Fases 2 a 6): [plans/2026-11-12-contrato-fases-2-6.md](plans/2026-11-12-contrato-fases-2-6.md). A §10 tem as emendas E1–E18.
-  - Fases 2, 3 e 4: planos de 12/11 (já executados).
-  - **Fase 5:** [plans/2026-11-14-fase-5-remessas.md](plans/2026-11-14-fase-5-remessas.md), 16 tarefas (0 a 15). Revisado e aprovado. A Tarefa 0 (emenda E18) já está no `main`. A 15 é a Integração.
-  - **Fase 6:** [plans/2026-11-14-fase-6-acabamento.md](plans/2026-11-14-fase-6-acabamento.md), 15 tarefas (0 a 14). Revisado e aprovado. A Tarefa 0 (emenda E19 no `main`) roda só depois que a Fase 5 for juntada, porque mexe em arquivo congelado.
+  - Contrato (obrigatório para as Fases 2 a 6): [plans/2026-11-12-contrato-fases-2-6.md](plans/2026-11-12-contrato-fases-2-6.md). A §10 tem as emendas E1–E19.
+  - Fases 2, 3, 4 e 5: planos de 12/11 e 14/11 (já executados).
+  - **Fase 6:** [plans/2026-11-14-fase-6-acabamento.md](plans/2026-11-14-fase-6-acabamento.md), 15 tarefas (0 a 14). Revisado e aprovado. A Tarefa 0 (emenda E19) já está no `main`. O time roda na worktree `fase-6` (branch `fase-6-acabamento`), que partiu da branch da Fase 5; a Integração da Fase 6 traz o `main` com a Fase 5 juntada.
 - **Pendências deixadas pela junção (14/11):**
-  - Teste instável da Fase 2: `tests/e2e/conferencia.spec.ts:96` ("desistir"), cerca de 1 falha em 50, só no projeto `computador`. A correção sugerida está em `.superpowers/sdd/fases-2-6/f4-task-11-report.md`.
+  - Teste instável da Fase 2: `tests/e2e/conferencia.spec.ts:96` ("desistir"), cerca de 1 falha em 50, só no projeto `computador` (na junção da Fase 5 falhou também na 1ª execução logo depois de o servidor subir; passou ao repetir). A correção sugerida está em `.superpowers/sdd/fases-2-6/f4-task-11-report.md`.
   - O npm 11.6.1 deste PC tira os campos `libc` e as entradas `@emnapi` do `package-lock.json` ao rodar `npm install`. Revise o diff do lockfile antes de commitar.
   - UX (extra possível): se o Gestor envia a contestação enquanto as fotos ainda estão sendo processadas, ela fica em "Enviando ao ML" até a próxima tentativa (30 s ou mais). É o desenho do contrato §5.4.
   - A pasta vazia `C:\Users\JEFFERSON LIMA\devolucoes-wt\fase-4` ficou presa por outro processo. Apague-a à mão depois de fechar o VS Code.
@@ -36,11 +40,10 @@ Atualizado em 14/11/2026 (Fases 2, 3 e 4 juntadas no `main`; Fase 5 começando; 
   - Quando o time termina as tarefas, rode o fluxo [workflows/fase-final.js](workflows/fase-final.js) na fase. Ele faz a revisão final (servidor e telas), as correções, a re-revisão e o push. Argumentos: os mesmos do outro fluxo, mais `"base":"<commit do main de onde a fase partiu>"`, `"plano":"docs/superpowers/plans/<plano da fase>.md"` e, se precisar, `"decisoes"`.
 - **Atenção ao publicar na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500.
 - **Próximos passos, em ordem:**
-  1. Fase 5 (time rodando desde 14/11), revisão final e Integração.
-  2. Fase 6: Tarefa 0 no `main` depois da junção da Fase 5; depois o time, a revisão final e a Integração.
-  3. **Publicação na VPS de tudo de uma vez** (decisão do usuário em 14/11: esperar as Fases 5 e 6). Passos novos desde a Fase 1: `SEGREDO_LINKS` (E17), serviço `worker`, volume `/data`, `location /api/midia/` no nginx (só `nginx -t && systemctl reload nginx`), variáveis `BACKUP_*` e serviço de backup (Fase 6). Passe ao usuário o texto pronto para colar.
-  4. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação (certificado A1), B2 e domínio. O usuário deve separar o certificado A1, a conta da Focus e o app do ML.
-  5. A pergunta da Inscrição Estadual.
+  1. Fase 6 (time rodando desde 14/11): terminar as tarefas, a revisão final e a Integração (que traz o `main` com a Fase 5).
+  2. **Publicação na VPS de tudo de uma vez** (decisão do usuário em 14/11: esperar as Fases 5 e 6). Passos novos desde a Fase 1: `SEGREDO_LINKS` (E17), serviço `worker`, volume `/data`, `location /api/midia/` no nginx (só `nginx -t && systemctl reload nginx`), variáveis `BACKUP_*` e serviço de backup (Fase 6). Passe ao usuário o texto pronto para colar.
+  3. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação (certificado A1), B2 e domínio. O usuário deve separar o certificado A1, a conta da Focus e o app do ML.
+  4. A pergunta da Inscrição Estadual.
 - O andamento resumido para o usuário fica no [README](../../README.md#andamento).
 
 ## Como trabalhamos
