@@ -1,9 +1,14 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 15/11/2026 (Fases 0 a 6 prontas e no `main`; próximo passo: publicar tudo na VPS). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 15/11/2026 (Fases 0 a 6 prontas, no `main` e **publicadas na VPS** em 15/11; próximo passo: "Ligação das contas reais"). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
-- **Fases 0 e 1:** prontas, no `main` e publicadas na VPS (https://devolucoes.179-199-128-100.sslip.io).
+- **Fases 0 a 6:** prontas, no `main` e **publicadas na VPS em 15/11/2026** (https://devolucoes.179-199-128-100.sslip.io), imagem do commit `0fd1dc3`/`37f25e7`.
+  - Publicação feita passo a passo com o usuário (ele prefere receber um passo de cada vez e devolver a saída, em vez de um texto inteiro para a Claude web). Roteiro: [../operacao/publicar-fases-2-6.md](../operacao/publicar-fases-2-6.md).
+  - Cópias de antes, na VPS em `~/backups-devolucoes/`: dump do banco (`banco-antes-fases2-6_2026-11-15_1139.dump`), commit anterior, nginx e `.env`. A imagem da Fase 1 ficou com a tag local `ghcr.io/c77idm-dev/devolucoes:fase1-antes`.
+  - No ar: `web` e `worker` (healthy), 11 migrações, `/api/midia` no nginx, cabeçalhos de segurança, mídias no disco (`ARMAZENAMENTO=disco`, volume `/data`). O serviço `backup` **não** foi ligado (falta o bucket do B2); use sempre `dc up -d web worker`, nunca `dc up -d` sem nomes.
+  - Na VPS, o `.env.producao` tem `ML_*`/`FOCUS_*`/`S3_*` vazias e o `.env.backup` está criado e vazio, à espera da "Ligação das contas reais". A `CHAVE_CRIPTOGRAFIA` foi gerada na VPS; o usuário guarda a cópia.
+  - Observação: o nginx da VPS (configuração global, compartilhada) também manda `X-Frame-Options: SAMEORIGIN` e outros cabeçalhos, que saem duplicados com os do sistema (`DENY`). A CSP `frame-ancestors 'none'` vale por cima; não mexa no nginx global por causa disso.
 - **Fases 2, 3 e 4:** prontas, com revisão final aprovada e **juntadas no `main`** em 14/11, na ordem 2 → 3 → 4 (`6abdf46`).
   - Suíte do `main` depois da junção: 566 de unidade, 314 de integração, 145 e2e (7 pulados de propósito), nos projetos `computador` e `celular`.
   - Migrações: `0006_fundacao`, `0007_fase3_mercado_livre`, `0008_fase4_fiscal`.
@@ -45,7 +50,7 @@ Atualizado em 15/11/2026 (Fases 0 a 6 prontas e no `main`; próximo passo: publi
   - Quando o time termina as tarefas, rode o fluxo [workflows/fase-final.js](workflows/fase-final.js) na fase. Ele faz a revisão final (servidor e telas), as correções, a re-revisão e o push. Argumentos: os mesmos do outro fluxo, mais `"base":"<commit do main de onde a fase partiu>"`, `"plano":"docs/superpowers/plans/<plano da fase>.md"` e, se precisar, `"decisoes"`.
 - **Atenção ao publicar na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500. As variáveis do backup vão num arquivo **separado**, o `.env.backup` (contrato E20), nunca no `.env.producao`.
 - **Próximos passos, em ordem:**
-  1. **Publicação na VPS de tudo de uma vez** (Fases 2 a 6; decisão do usuário em 14/11). Passe ao usuário o texto pronto para colar, que está no plano da Fase 6, seção "Depois da fase", item 1. Passos novos desde a Fase 1: `SEGREDO_LINKS` (E17), serviço `worker`, volume `/data`, `location /api/midia/` no nginx (só `nginx -t && systemctl reload nginx`), o `.env.backup` com as variáveis `BACKUP_*` (E20) e o serviço `backup`, mais um backup e uma restauração de teste (critério de pronto da spec §14). Antes, o usuário cria no B2 o bucket só de backup e a chave restrita a ele.
+  1. ~~Publicação na VPS~~ **feita em 15/11.** Falta o usuário testar no celular (câmera real no Android e no iPhone, Foto 1, Falhas, Alertas). Texto antigo: **Publicação na VPS de tudo de uma vez** (Fases 2 a 6; decisão do usuário em 14/11). Passe ao usuário o texto pronto para colar, que está no plano da Fase 6, seção "Depois da fase", item 1. Passos novos desde a Fase 1: `SEGREDO_LINKS` (E17), serviço `worker`, volume `/data`, `location /api/midia/` no nginx (só `nginx -t && systemctl reload nginx`), o `.env.backup` com as variáveis `BACKUP_*` (E20) e o serviço `backup`, mais um backup e uma restauração de teste (critério de pronto da spec §14). Antes, o usuário cria no B2 o bucket só de backup e a chave restrita a ele.
   2. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação (certificado A1), B2 e domínio. O usuário deve separar o certificado A1, a conta da Focus e o app do ML. Depois, a passagem da NF-e para produção com a aprovação do contador (plano da Fase 6, "Depois da fase", item 2) e as conferências manuais que sobraram (item 3).
   3. A pergunta da Inscrição Estadual.
 - O andamento resumido para o usuário fica no [README](../../README.md#andamento).
