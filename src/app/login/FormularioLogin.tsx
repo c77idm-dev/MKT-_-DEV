@@ -73,7 +73,7 @@ export function FormularioLogin() {
             autoComplete="current-password"
             enterKeyHint="go"
             required
-            className="h-11 w-full rounded-lg border border-borda-campo bg-superficie pr-16 pl-3 text-[15px]"
+            className="h-11 w-full rounded-lg border border-borda-campo bg-superficie pr-20 pl-3 text-[15px]"
           />
           {/* Mostrar a senha (extra). O nome acessível ("Ver"/"Ocultar") não contém "senha": o e2e usa getByLabel('Senha'). */}
           <button
