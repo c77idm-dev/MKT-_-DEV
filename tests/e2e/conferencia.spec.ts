@@ -98,7 +98,11 @@ test('desistir volta para Aguardando conferência e mantém o que foi feito', as
   await entrarComo(page, USUARIOS_E2E.operador);
   await page.goto(`/fluxo/devolucoes/${d.codigo}/conferencia?passo=1`);
   await page.getByLabel('Nº de série (S/N)').fill('SN-DESISTE');
+  const passo = page.getByText(/^Passo \d+ de \d+:/);
+  const antes = (await passo.textContent()) ?? '';
   await page.getByRole('button', { name: 'Continuar' }).click();
+  // Espera o "Continuar" salvar e trocar de passo antes de desistir (com o PC carregado, os dois toques corriam).
+  await expect(passo).not.toHaveText(antes);
   await page.getByRole('button', { name: 'Desistir da conferência' }).click();
   await page.getByRole('button', { name: 'Confirmar desistência' }).click();
   await expect(page).toHaveURL(new RegExp(`/fluxo/devolucoes/${d.codigo}$`));
