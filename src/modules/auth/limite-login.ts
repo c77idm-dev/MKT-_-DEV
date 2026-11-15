@@ -13,6 +13,9 @@ export type LimiteLogin = {
 
 /** IPv4 e textos que não são IP ficam como estão; IPv6 vira o prefixo /64, em minúsculas. */
 export function chaveDoIp(ip: string): string {
+  // IPv4 mapeado em IPv6 (proxy ou socket dual-stack): sem isto, todos cairiam no mesmo /64 "0:0:0:0".
+  const mapeado = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip.trim());
+  if (mapeado) return mapeado[1];
   if (!ip.includes(':')) return ip;
   const texto = ip.toLowerCase().split('%')[0];
   const partes = texto.split('::');

@@ -42,4 +42,10 @@ describe('limite de login por IP (spec §10; decisão 14)', () => {
     for (let i = 0; i < 20; i++) l.registrarFalha(`2001:db8:1:2::${i.toString(16)}`, 0);
     expect(l.bloqueado('2001:db8:1:2::ffff', 0)).toBe(true);
   });
+
+  it('IPv4 mapeado em IPv6 vira o próprio IPv4 e não junta clientes diferentes', () => {
+    expect(chaveDoIp('::ffff:1.2.3.4')).toBe('1.2.3.4');
+    expect(chaveDoIp('::FFFF:1.2.3.4')).toBe('1.2.3.4');
+    expect(chaveDoIp('::ffff:1.2.3.4')).not.toBe(chaveDoIp('::ffff:5.6.7.8'));
+  });
 });
