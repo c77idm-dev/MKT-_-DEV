@@ -24,6 +24,7 @@ test('/api/saude nunca fica em cache (decisão 16)', async ({ request }) => {
 });
 
 test('o worker do e2e grava o batimento do healthcheck (decisão 17)', async () => {
+  test.setTimeout(90_000);
   // A pasta temporária é a mesma para todas as worktrees deste PC: um arquivo velho de outro worker não vale.
   // Exige uma gravação feita DEPOIS do início do teste (o worker grava a cada 30 s).
   const inicio = Date.now();
