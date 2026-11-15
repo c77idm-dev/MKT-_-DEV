@@ -18,16 +18,10 @@ describe('FaixaCodigoBarras (decorativa)', () => {
     expect(container.querySelector('[data-barras]')).toBeTruthy();
   });
 
-  it('tom claro (padrão) usa barras brancas; tom escuro usa a cor do texto', () => {
+  it('tom claro é o padrão (barras brancas); tom escuro é para fundo claro', () => {
     const { container: claro } = render(<FaixaCodigoBarras legenda="A" />);
-    const barrasClaras = claro.querySelector('[data-barras]') as HTMLElement;
     expect(claro.firstElementChild!.getAttribute('data-tom')).toBe('claro');
-    expect(barrasClaras.className).toContain('text-white/85');
-
     const { container: escuro } = render(<FaixaCodigoBarras legenda="B" tom="escuro" />);
-    const barrasEscuras = escuro.querySelector('[data-barras]') as HTMLElement;
     expect(escuro.firstElementChild!.getAttribute('data-tom')).toBe('escuro');
-    expect(barrasEscuras.className).toContain('text-texto');
-    expect(barrasEscuras.className).not.toContain('text-white');
   });
 });

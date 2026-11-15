@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { hydrateRoot, type Root } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { entrar } from './acoes';
 import { FormularioLogin } from './FormularioLogin';
 
@@ -10,6 +12,12 @@ const CHAVE = 'devolucoes:email-lembrado';
 
 beforeEach(() => {
   localStorage.clear();
+});
+
+/** Raízes montadas à mão com hydrateRoot: desmontadas mesmo quando o teste falha. */
+const desmontar: Array<() => void> = [];
+afterEach(() => {
+  while (desmontar.length) desmontar.pop()!();
 });
 
 describe('FormularioLogin: ver a senha e lembrar o e-mail (extra)', () => {
@@ -38,6 +46,42 @@ describe('FormularioLogin: ver a senha e lembrar o e-mail (extra)', () => {
       expect(email.value).toBe('ana@empresa.com.br');
       expect(document.activeElement).toBe(senha);
     });
+  });
+
+  /** Monta como no navegador: HTML do servidor, a pessoa mexe no campo, e só depois o React hidrata. */
+  async function hidratarDepoisDe(mexer: (email: HTMLInputElement) => void) {
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(<FormularioLogin />);
+    document.body.appendChild(container);
+    const email = container.querySelector<HTMLInputElement>('#email')!;
+    const senha = container.querySelector<HTMLInputElement>('#senha')!;
+    mexer(email);
+    let raiz: Root | undefined;
+    await act(async () => {
+      raiz = hydrateRoot(container, <FormularioLogin />);
+    });
+    desmontar.push(() => {
+      act(() => raiz!.unmount());
+      container.remove();
+    });
+    return { email, senha };
+  }
+
+  it('não troca o e-mail que a pessoa digitou (ou o navegador preencheu) antes da hidratação, nem tira o foco', async () => {
+    localStorage.setItem(CHAVE, 'ana@empresa.com.br');
+    const { email } = await hidratarDepoisDe((campo) => {
+      campo.value = 'bia@empresa.com.br';
+      campo.focus();
+    });
+    expect(email.value).toBe('bia@empresa.com.br');
+    expect(document.activeElement).toBe(email);
+  });
+
+  it('com o campo do e-mail vazio mas focado, preenche o lembrado e deixa o foco onde está', async () => {
+    localStorage.setItem(CHAVE, 'ana@empresa.com.br');
+    const { email } = await hidratarDepoisDe((campo) => campo.focus());
+    expect(email.value).toBe('ana@empresa.com.br');
+    expect(document.activeElement).toBe(email);
   });
 
   it('ao enviar com Lembrar de mim marcado, guarda o e-mail; desmarcado, apaga', () => {

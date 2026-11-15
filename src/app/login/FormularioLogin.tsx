@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useRef, useState } from 'react';
+import { useActionState, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { entrar, type EstadoLogin } from './acoes';
 import { guardarEmailLembrado, lerEmailLembrado } from './lembrar';
 
@@ -14,18 +14,19 @@ export function FormularioLogin() {
   const lembrarRef = useRef<HTMLInputElement>(null);
 
   // Lembrar de mim (extra): o e-mail guardado só é lido depois da montagem (nada de localStorage na renderização).
+  // Só preenche o campo vazio e só move o foco se nada estiver focado: com a rede lenta a pessoa pode ter digitado
+  // antes da hidratação, ou o navegador pode ter preenchido as credenciais de outra pessoa do mesmo aparelho.
   useEffect(() => {
     const lembrado = lerEmailLembrado();
-    if (lembrado && emailRef.current && senhaRef.current) {
-      emailRef.current.value = lembrado;
-      senhaRef.current.focus();
-    }
+    if (!lembrado || !emailRef.current || !senhaRef.current || emailRef.current.value) return;
+    emailRef.current.value = lembrado;
+    if (document.activeElement === null || document.activeElement === document.body) senhaRef.current.focus();
   }, []);
 
   // O React 19 limpa o formulário depois da `action`. Com senha errada, devolve o e-mail e a caixa como estavam
-  // e põe o foco na senha, para a pessoa só digitar de novo (extra).
+  // e põe o foco na senha, para a pessoa só digitar de novo (extra). Layout effect: sem um quadro com o campo vazio.
   const enviado = useRef<{ email: string; lembrar: boolean } | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const ultimo = enviado.current;
     if (!estado.erro || !ultimo || !emailRef.current || !senhaRef.current || !lembrarRef.current) return;
     emailRef.current.value = ultimo.email;

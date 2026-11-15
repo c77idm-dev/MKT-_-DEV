@@ -10,11 +10,13 @@ export const metadata: Metadata = { title: 'Entrar · Gestão de Devoluções' }
 /**
  * Celular: faixa verde da marca no topo e o formulário numa folha branca que sobe por cima dela, com o
  * "Entrar" no pé, ao alcance do polegar. Computador (md): duas metades, a faixa à esquerda e o formulário à direita.
+ * Altura: 100vh de reserva e 100dvh onde houver (no Tailwind v4 o `min-h-screen` sai depois do `min-h-dvh` no CSS e
+ * ganharia dos dois juntos; o `supports-` garante que o dvh vence).
  */
 export default async function PaginaLogin() {
   if (await usuarioAtual()) redirect('/fluxo');
   return (
-    <main className="flex min-h-dvh flex-col bg-superficie md:grid md:grid-cols-2">
+    <main className="flex min-h-screen flex-col supports-[min-height:100dvh]:min-h-dvh bg-superficie md:grid md:grid-cols-2">
       <section
         aria-label="Gestão de Devoluções"
         className="flex flex-col overflow-hidden bg-destaque pt-[env(safe-area-inset-top)] text-white"
