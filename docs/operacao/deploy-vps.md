@@ -8,7 +8,7 @@ Por isso, este sistema:
 - **não ocupa as portas 80 e 443**: escuta só em `127.0.0.1:3020`, e o nginx do servidor faz o HTTPS;
 - **não é compilado na VPS**: o GitHub Actions compila a imagem a cada envio para a `main` e a publica em `ghcr.io/c77idm-dev/devolucoes`, e a VPS só baixa;
 - usa nomes próprios no Docker: projeto `devolucoes`, containers `devolucoes-web-1` e `devolucoes-postgres-1`, volume `devolucoes_pgdata`;
-- tem limites de memória (web 512 MB, banco 256 MB), para não apertar os outros sistemas.
+- roda os serviços `web` (512 MB), `worker` (1 GB), `postgres` (256 MB) e `backup` (256 MB), todos com limite de memória, para não apertar os outros sistemas.
 
 Nos comandos abaixo, troque `SEU_DOMINIO` pelo domínio do sistema (ex.: `devolucoes.suaempresa.com.br`).
 
@@ -41,6 +41,7 @@ Nos comandos abaixo, troque `SEU_DOMINIO` pelo domínio do sistema (ex.: `devolu
    ```
    - Use só a senha hexadecimal: caracteres especiais quebram a `DATABASE_URL`, e `$` quebra o compose.
    - `POSTGRES_PASSWORD` só vale quando o volume do banco é criado pela primeira vez.
+   - Crie também o `.env.backup`, o arquivo só das variáveis do backup (contrato E20): `cp .env.backup.example .env.backup && chmod 600 .env.backup`. Os valores entram no passo 2 de [backup-restauracao.md](backup-restauracao.md). Sem esse arquivo o sistema sobe do mesmo jeito; só o backup registra FALHOU.
 
 4. **Suba o sistema e confira:**
    ```sh
@@ -93,6 +94,21 @@ Para voltar ao normal, coloque `IMAGEM_TAG=main` de novo.
 ```sh
 docker compose --env-file .env.producao -f docker-compose.prod.yml logs -f web
 ```
+
+## Backup diário
+O serviço `backup` salva o banco (e as mídias, no modo disco) todo dia às 02h30, cifrado, num bucket separado. Passo a passo, restauração e teste mensal: [backup-restauracao.md](backup-restauracao.md).
+
+As variáveis do backup (`BACKUP_S3_*` e `BACKUP_SENHA`) ficam no `.env.backup`, nunca no `.env.producao` (contrato E20):
+- o `web` e o `worker` leem o `.env.producao` inteiro e não precisam da chave do bucket de backup nem da senha da cifra;
+- o serviço `backup` lê só o `.env.backup`. Do `.env.producao` ele recebe apenas a senha do banco, o modo de armazenamento, a pasta das mídias e o nome do bucket das mídias. Nunca vê os tokens do ML e da Focus, as chaves S3 das mídias, a `CHAVE_CRIPTOGRAFIA` nem o `SEGREDO_LINKS`.
+
+Risco que sobra: o container instala `rclone`, `openssl` e `tzdata` pelo `apk` a cada subida, sem versão fixa. Se a instalação falhar, o backup não roda, e o alerta "Backup diário atrasado" avisa o Gestor. A melhoria opcional é uma imagem própria compilada pelo GitHub Actions.
+
+## Saúde dos containers
+```sh
+docker compose --env-file .env.producao -f docker-compose.prod.yml ps
+```
+O `web` e o `worker` devem aparecer como `healthy`.
 
 ## Fase 1: planilhas de até 5 MB
 A importação de planilhas envia arquivos de até 5 MB. Na VPS, aumente o limite do nginx uma vez:

@@ -1,9 +1,11 @@
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { obterDb } from '@/db';
+import { ipDaRequisicao } from '@/lib/limite-taxa';
 import { autenticar } from '@/modules/auth/autenticar';
+import { limiteLoginPadrao, MENSAGEM_LIMITE_IP } from '@/modules/auth/limite-login';
 import { COOKIE_SESSAO } from '@/modules/auth/servidor';
 import { criarSessao, encerrarSessao } from '@/modules/auth/sessoes';
 
@@ -14,9 +16,13 @@ export async function entrar(_anterior: EstadoLogin, formulario: FormData): Prom
   const senha = String(formulario.get('senha') ?? '');
   if (!email || !senha) return { erro: 'Informe e-mail e senha.' };
 
+  const ip = ipDaRequisicao(await headers());
+  if (limiteLoginPadrao().bloqueado(ip)) return { erro: MENSAGEM_LIMITE_IP };
+
   const db = obterDb();
   const resultado = await autenticar(db, email, senha);
   if (!resultado.ok) {
+    limiteLoginPadrao().registrarFalha(ip);
     return {
       erro:
         resultado.motivo === 'bloqueado'

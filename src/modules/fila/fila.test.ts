@@ -19,6 +19,7 @@ describe('opcoesDaFila', () => {
       retryBackoff: true,
       retryDelayMax: 900,
       expireInSeconds: 3600,
+      deadLetter: 'falhas',
     });
     expect(opcoesDaFila('nfe.emitir').expireInSeconds).toBe(300);
   });

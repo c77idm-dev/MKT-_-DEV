@@ -1,4 +1,5 @@
 import { formatarDiaMes } from '@/lib/formatar';
+import { prazoVencendo } from '@/modules/acabamento/alertas-regras';
 import { SELO_SITUACAO_NOTA, type SituacaoNotaFiscal } from '@/modules/fiscal/dominio';
 import type { Canal, StatusDevolucao } from './dominio';
 
@@ -15,7 +16,6 @@ type Entrada = {
   situacaoNota?: SituacaoNotaFiscal | null;
 };
 
-const UM_DIA_MS = 24 * 60 * 60 * 1000;
 const ANTES_DA_CONFERENCIA: StatusDevolucao[] = ['PENDENTE_CHEGADA', 'AGUARDANDO_CONFERENCIA', 'EM_CONFERENCIA'];
 const TOM_DA_NOTA: Partial<Record<SituacaoNotaFiscal, TomSelo>> = { PROCESSANDO: 'destaque', REJEITADA: 'erro', AUTORIZADA: 'bom' };
 
@@ -27,7 +27,7 @@ export function selosDaDevolucao(d: Entrada, agora: Date): DadosSelo[] {
     selos.push({ texto: d.canal === 'MERCADO_LIVRE' ? 'Entregue (ML)' : 'Entregue pelo canal', tom: 'atencao' });
   }
   if (d.prazoConferenciaCanal && ANTES_DA_CONFERENCIA.includes(d.status)) {
-    const vencendo = d.prazoConferenciaCanal.getTime() - agora.getTime() <= UM_DIA_MS;
+    const vencendo = prazoVencendo(d.prazoConferenciaCanal, agora);
     selos.push({ texto: `Prazo ${formatarDiaMes(d.prazoConferenciaCanal)}`, tom: vencendo ? 'erro' : 'neutro' });
   }
   const tomNota = d.situacaoNota ? TOM_DA_NOTA[d.situacaoNota] : undefined;

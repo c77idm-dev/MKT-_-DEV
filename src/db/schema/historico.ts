@@ -16,5 +16,8 @@ export const eventosHistorico = pgTable(
     em: timestamp('em', { withTimezone: true }).notNull().defaultNow(),
     dados: jsonb('dados').$type<Record<string, unknown>>(),
   },
-  (t) => [index('eventos_historico_entidade_idx').on(t.entidade, t.entidadeId)],
+  (t) => [
+    index('eventos_historico_entidade_idx').on(t.entidade, t.entidadeId),
+    index('eventos_historico_acao_em_idx').on(t.acao, t.em),
+  ],
 );

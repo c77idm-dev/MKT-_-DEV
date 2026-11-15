@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { AlertasPainel, ALERTAS_NO_PAINEL } from '@/components/acabamento/AlertasPainel';
 import { BuscaAvancada } from '@/components/BuscaAvancada';
 import { EtapasCelular } from '@/components/EtapasCelular';
 import { QuadroFluxo } from '@/components/QuadroFluxo';
@@ -8,6 +9,7 @@ import { DivisaoEstoque } from '@/components/fiscal/DivisaoEstoque';
 import { CartaoLote } from '@/components/lotes/CartaoLote';
 import { obterDb } from '@/db';
 import { primeiroValor, type ParametrosBusca } from '@/lib/parametros';
+import { carregarAlertas } from '@/modules/acabamento/alertas';
 import { pode } from '@/modules/auth/permissoes';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
@@ -19,7 +21,7 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
   const usuario = await exigirPermissao('ver_listas');
   const textoEtapa = primeiroValor((await searchParams).etapa);
   const pedida = /^\d+$/.test(textoEtapa) ? Number(textoEtapa) : 0;
-  const quadro = await montarQuadro(obterDb());
+  const [quadro, alertas] = await Promise.all([montarQuadro(obterDb()), carregarAlertas(obterDb(), usuario.perfil)]);
   // Coluna 4: os links Estoque Bom e Estoque Problema substituem o "Ver lista" (spec §6.4, D16).
   // Coluna 5: os lotes por fornecedor (decisão 15), contados em "lotes".
   const colunas = quadro.map((c) => {
@@ -64,6 +66,7 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
           </div>
         )}
       </div>
+      <AlertasPainel alertas={alertas} limite={ALERTAS_NO_PAINEL} />
       <BuscaAvancada acao="/fluxo/busca" filtros={{}} />
       <div className="md:hidden">
         {/* Mobile-first: Estoque Bom / Estoque Problema no TOPO da etapa 4, acima dos cartões, pelo ponto de extensão

@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
+import { cabecalhosDeSeguranca } from "./src/lib/cabecalhos-seguranca";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  poweredByHeader: false,
   // O e2e faz o build de produção em outra pasta (NEXT_DIST_DIR=.next-e2e), sem sobrescrever o .next do dev.
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   // Pacotes que o Next não deve empacotar: usam recursos do Node e rodam do node_modules (o standalone os inclui).
@@ -9,6 +11,8 @@ const nextConfig: NextConfig = {
   // O service worker nunca fica em cache (cada deploy entrega o novo) e é servido como JavaScript.
   async headers() {
     return [
+      // Fora de /api/: o DANFE em PDF abre no visualizador e as mídias mantêm os cabeçalhos próprios (Fase 2).
+      { source: "/((?!api/).*)", headers: cabecalhosDeSeguranca({ desenvolvimento: process.env.NODE_ENV === "development" }) },
       {
         source: "/sw.js",
         headers: [

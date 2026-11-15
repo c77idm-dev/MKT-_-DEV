@@ -16,6 +16,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Decisão 17: o Docker marca "unhealthy" (docker ps); quem reinicia o processo caído é o restart.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/saude').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -35,6 +42,12 @@ services:
         condition: service_healthy
     # Dá tempo à tarefa em andamento de terminar (o worker para com graceful).
     stop_grace_period: 40s
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s = require('fs').statSync(require('os').tmpdir() + '/devolucoes-worker-vivo'); process.exit(Date.now() - s.mtimeMs < 120000 ? 0 : 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -54,6 +67,38 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  backup:
+    # Backup diário (spec §10; decisão 19): pg_dump cifrado e, com ARMAZENAMENTO=disco, as mídias.
+    # A imagem é a do banco, para o pg_dump ser da mesma versão. rclone, openssl e tzdata entram na subida.
+    # Este container roda "apk add" como root: não lê o arquivo de variáveis do sistema, só o .env.backup
+    # (BACKUP_S3_* e BACKUP_SENHA; contrato E20). O resto vem abaixo, um a um. "required: false": sem o arquivo,
+    # o web e o worker sobem do mesmo jeito; o backup registra FALHOU ("BACKUP_SENHA não definida.").
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - path: .env.backup
+        required: false
+    environment:
+      TZ: America/Sao_Paulo
+      PGHOST: postgres
+      PGUSER: devolucoes
+      PGDATABASE: devolucoes
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      ARMAZENAMENTO: ${ARMAZENAMENTO:-disco}
+      MIDIA_DIR: ${MIDIA_DIR:-/data/midia}
+      S3_BUCKET: ${S3_BUCKET:-}
+    volumes:
+      - ./docker/backup:/backup:ro
+      - midia:/data:ro
+    entrypoint: ["sh", "/backup/agendar.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
     deploy:
       resources:
         limits:

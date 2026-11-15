@@ -39,6 +39,8 @@ export type OpcoesBusca = {
   agora?: Date;
   /** Etapa 4: só as devoluções com unidade AGUARDANDO_NF neste destino (abas Estoque Bom e Estoque Problema). */
   destino?: DestinoEstoque;
+  /** Só estas devoluções (a página dos alertas). Lista vazia = nenhuma. */
+  ids?: readonly string[];
 };
 
 function condicoes(db: DbOuTx, f: FiltrosBusca): SQL[] {
@@ -104,6 +106,7 @@ export async function buscarDevolucoes(
   const pagina = Math.max(1, opcoes.pagina ?? 1);
   const lista = condicoes(db, filtros);
   if (opcoes.status) lista.push(opcoes.status.length > 0 ? inArray(devolucoes.status, [...opcoes.status]) : sql`false`);
+  if (opcoes.ids) lista.push(opcoes.ids.length > 0 ? inArray(devolucoes.id, [...opcoes.ids]) : sql`false`);
   if (opcoes.destino) {
     lista.push(
       sql`exists (select 1 from "itens_devolucao" where "itens_devolucao"."devolucao_id" = "devolucoes"."id" and "itens_devolucao"."status" = 'AGUARDANDO_NF' and "itens_devolucao"."destino" = ${opcoes.destino}::destino_item)`,

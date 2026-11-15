@@ -1,4 +1,5 @@
 import { iniciarWorker } from '@/worker';
+import { iniciarBatimento } from '@/worker/batimento';
 
 /** Processo das tarefas de fundo (spec §4.1). Em produção: `node dist/worker.mjs`; no PC: `npm run worker`. */
 async function main() {
@@ -8,11 +9,13 @@ async function main() {
     process.exit(1);
   }
   const worker = await iniciarWorker({ url });
+  const pararBatimento = iniciarBatimento();
   let parando = false;
   const parar = async () => {
     if (parando) return;
     parando = true;
     try {
+      pararBatimento();
       await worker.parar();
     } finally {
       process.exit(0);

@@ -2963,10 +2963,10 @@ Push e deploy ficam com o usuário.
 >
 > 1. `cd /opt/devolucoes && git pull --ff-only`
 > 2. Confira se o `.env.producao` já tem `SEGREDO_LINKS` com 64 caracteres hexadecimais (contrato E17). Se não tiver, gere com `openssl rand -hex 32` e acrescente `SEGREDO_LINKS=<valor>`. **Sem ele o sistema dá erro 500.**
-> 3. Acrescente ao `.env.producao` o bloco do backup, copiado do fim do `.env.producao.example`, com os valores que **eu** vou colar direto no arquivo (não me peça para mandá-los no chat):
+> 3. Crie o arquivo do backup, **separado** do `.env.producao` (contrato E20: o `web` e o `worker` não enxergam as variáveis do backup): `cp .env.backup.example .env.backup && chmod 600 .env.backup`. Os valores **eu** vou colar direto nesse arquivo (não me peça para mandá-los no chat):
 >    - endpoint, região, bucket e chave do bucket de backup no B2. Esse bucket é **novo e só de backup**, diferente do bucket das mídias, com uma chave que só enxerga ele e não pode apagar arquivos;
->    - `BACKUP_SENHA`: eu a gero no meu gerenciador de senhas e colo só no `.env.producao`. **Não mostre, não copie e não registre essa senha em lugar nenhum.**
->    - Depois, `chmod 600 .env.producao`.
+>    - `BACKUP_SENHA`: eu a gero no meu gerenciador de senhas e colo só no `.env.backup`. **Não mostre, não copie e não registre essa senha em lugar nenhum.**
+>    - Não coloque nenhuma variável `BACKUP_*` no `.env.producao`. Depois, `chmod 600 .env.producao .env.backup`.
 > 4. `docker compose --env-file .env.producao -f docker-compose.prod.yml pull && docker compose --env-file .env.producao -f docker-compose.prod.yml up -d`
 > 5. Espere 1 minuto e rode `docker compose --env-file .env.producao -f docker-compose.prod.yml ps`. O `web` e o `worker` devem aparecer `healthy`, e o `backup`, `running`.
 > 6. Rode um backup agora: `docker compose --env-file .env.producao -f docker-compose.prod.yml exec backup sh /backup/backup.sh`. Deve terminar com `backup concluído`.
