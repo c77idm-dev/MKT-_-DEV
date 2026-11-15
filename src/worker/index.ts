@@ -1,5 +1,6 @@
 import type { PgBoss } from 'pg-boss';
 import { criarDb, type Db } from '@/db/client';
+import { mensagemDoErro } from '@/lib/log';
 import { entradaDoJobMorto, registrarFalha } from '@/modules/acabamento/falhas';
 import { criarFilas, criarPgBoss, enviarPorPgBoss, FILA_FALHAS, type Fila } from '@/modules/fila/fila';
 import { CONFIG_TAREFAS, FUSO_AGENDAS, NOMES_TAREFAS, TAREFAS_NA_SUBIDA, type DadosTarefa, type NomeTarefa } from '@/modules/fila/tarefas';
@@ -70,7 +71,7 @@ export async function iniciarWorker(o: OpcoesWorker): Promise<{ boss: PgBoss; pa
         await executarTarefa(manipuladores, nome, job as { data: DadosTarefa[typeof nome]; retryCount: number }, { db, fila });
         registrar({ nivel: 'info', tarefa: nome, id: job.id, tentativa, ms: Date.now() - inicio });
       } catch (erro) {
-        registrar({ nivel: 'erro', tarefa: nome, id: job.id, tentativa, mensagem: erro instanceof Error ? erro.message : String(erro) });
+        registrar({ nivel: 'erro', tarefa: nome, id: job.id, tentativa, mensagem: mensagemDoErro(erro) });
         throw erro;
       }
     });

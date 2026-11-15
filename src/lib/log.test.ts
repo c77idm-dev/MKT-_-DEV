@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { mensagemDoErro } from './log';
 
 describe('mensagemDoErro (decisão 6)', () => {
@@ -43,5 +44,26 @@ describe('linhaErroRequisicao (spec §11; decisão 18)', () => {
     expect(linha).not.toContain('at ');
     expect(JSON.parse(linha).mensagem).toHaveLength(500);
     expect(linha).not.toMatch(/\n/);
+  });
+});
+
+describe('mensagemDoErro: consulta do Drizzle sem parâmetros (LGPD)', () => {
+  it('erro vivo: não vaza os parâmetros, mantém a causa', () => {
+    const erro = new DrizzleQueryError('update x set nome = $1', ['Maria da Silva'], new Error('deadlock detected'));
+    const m = mensagemDoErro(erro);
+    expect(m).not.toContain('Maria');
+    expect(m).not.toContain('update x');
+    expect(m).toContain('Falha numa consulta ao banco de dados.');
+    expect(m).toContain('deadlock detected');
+  });
+  it('forma serializada pelo pg-boss', () => {
+    const m = mensagemDoErro({ message: 'Failed query: update x set nome = $1\nparams: Maria', cause: { message: 'deadlock detected' } });
+    expect(m).not.toContain('Maria');
+    expect(m).toBe('Falha numa consulta ao banco de dados. deadlock detected');
+  });
+  it('causa que também é Failed query é descartada', () => {
+    expect(mensagemDoErro({ message: 'Failed query: a\nparams: Maria', cause: { message: 'Failed query: b\nparams: Joao' } })).toBe(
+      'Falha numa consulta ao banco de dados.',
+    );
   });
 });
