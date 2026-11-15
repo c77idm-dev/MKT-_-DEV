@@ -61,4 +61,15 @@ describe('QuadroFluxo: coluna 4 (D16)', () => {
     expect(screen.getByRole('link', { name: 'Estoque Bom: 2 devoluções' }).getAttribute('href')).toBe('/fluxo/etapa/4');
     expect(screen.getByRole('link', { name: 'Estoque Problema: 1 devolução' }).getAttribute('href')).toBe('/fluxo/etapa/4/problema');
   });
+
+  it('coluna com conteúdo próprio e outra unidade de contagem (coluna 5: lotes)', () => {
+    render(
+      <QuadroFluxo
+        colunas={[{ numero: 5, titulo: 'Agrupamento por Fornecedor (Remessas)', total: 2, unidade: { singular: 'lote', plural: 'lotes' }, conteudo: <p>cartões dos lotes</p>, href: '/fluxo/etapa/5' }]}
+      />,
+    );
+    expect(screen.getByText('cartões dos lotes')).toBeTruthy();
+    expect(screen.getByText('2 lotes')).toBeTruthy();
+    expect(screen.queryByText('Nenhuma devolução nesta etapa.')).toBeNull();
+  });
 });

@@ -2,13 +2,14 @@ import { eq, sql } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes } from '@/db/schema';
 import type { DestinoEstoque } from '@/modules/fiscal/dominio';
+import { resumoLotesQuadro, type CartaoLoteVista } from '@/modules/lotes/consultas';
 import { buscarDevolucoes, type ResumoDevolucao } from './busca';
 import { statusDaEtapa } from './dominio';
 import { ETAPAS } from './etapas';
 
 export const CARTOES_POR_COLUNA = 5;
 
-/** Nota da etapa 5 (mesmo texto da página /fluxo/etapa/5): os lotes por fornecedor chegam numa fase posterior. */
+/** Nota da etapa 5 que a página /fluxo/etapa/[numero] (congelada) ainda importa. */
 export const NOTA_ETAPA_LOTES = 'Os lotes por fornecedor aparecem aqui quando a conferência estiver pronta.';
 
 /** Devoluções em AGUARDANDO_NF com alguma unidade em cada destino (spec §6.4, D16). A mesma pode contar nas duas. */
@@ -22,6 +23,8 @@ export type ColunaQuadro = {
   href: string;
   /** Só na coluna 4: a divisão Estoque Bom / Estoque Problema. */
   estoque?: ContagemEstoque;
+  /** Só na coluna 5: os lotes por fornecedor ainda não finalizados (decisão 15). */
+  lotes?: CartaoLoteVista[];
 };
 
 function temNoDestino(destino: DestinoEstoque) {
@@ -44,6 +47,10 @@ export async function montarQuadro(db: DbOuTx, agora: Date = new Date()): Promis
   return Promise.all(
     ETAPAS.map(async (etapa): Promise<ColunaQuadro> => {
       const href = `/fluxo/etapa/${etapa.numero}`;
+      if (etapa.numero === 5) {
+        const resumo = await resumoLotesQuadro(db);
+        return { numero: etapa.numero, titulo: etapa.titulo, total: resumo.total, cartoes: [], href, lotes: resumo.cartoes };
+      }
       const status = statusDaEtapa(etapa.numero);
       if (status.length === 0) return { numero: etapa.numero, titulo: etapa.titulo, total: 0, cartoes: [], href };
       const { devolucoes: cartoes, total } = await buscarDevolucoes(

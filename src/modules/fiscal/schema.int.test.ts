@@ -5,6 +5,7 @@ import { notasFiscais, notasVenda, regrasFiscais } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
+import { criarFornecedorCompletoTeste, criarLoteTeste } from '../../../tests/helpers/fabricas-lotes';
 import { referenciaDaNota } from './dominio';
 
 const { db, sql } = criarDbTeste();
@@ -57,9 +58,11 @@ describe('tabelas fiscais (contrato §4.3)', () => {
 
   it('a nota é de uma devolução ou de um lote, nunca dos dois nem de nenhum', async () => {
     const dev = await criarDevolucaoTeste(db, gestor);
+    const fornecedor = await criarFornecedorCompletoTeste(db);
+    const lote = await criarLoteTeste(db, { fornecedorId: fornecedor.id, status: 'FECHADO' });
     await expect(db.insert(notasFiscais).values(novaNota(null, null))).rejects.toThrow();
-    await expect(db.insert(notasFiscais).values(novaNota(dev.id, randomUUID()))).rejects.toThrow();
-    await expect(db.insert(notasFiscais).values({ ...novaNota(null, randomUUID()), tipo: 'REMESSA_CONSERTO' })).resolves.toBeDefined();
+    await expect(db.insert(notasFiscais).values(novaNota(dev.id, lote.id))).rejects.toThrow();
+    await expect(db.insert(notasFiscais).values({ ...novaNota(null, lote.id), tipo: 'REMESSA_CONSERTO' })).resolves.toBeDefined();
   });
 
   it('a referência do emissor é única e nasce em PROCESSANDO', async () => {

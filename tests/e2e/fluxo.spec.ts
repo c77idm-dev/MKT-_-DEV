@@ -38,7 +38,7 @@ test('o quadro mostra a devolução nova na etapa 1 e a Busca Avançada do quadr
     // Etapa 5: nota curta, sem aviso alarmante.
     await etapas.getByRole('link', { name: /^Agrupamento por Fornecedor/ }).click();
     await expect(page).toHaveURL(/\/fluxo\?etapa=5$/);
-    await expect(page.getByText('Os lotes por fornecedor aparecem aqui quando a conferência estiver pronta.').locator('visible=true')).toHaveCount(1);
+    await expect(page.getByRole('region', { name: /Agrupamento por Fornecedor/ })).toContainText(/LOT-\d{6}|Nenhum lote em andamento\./);
     await semRolagemLateral(page);
 
     // Etapa inválida na URL: não quebra e cai numa etapa válida.
@@ -54,7 +54,7 @@ test('o quadro mostra a devolução nova na etapa 1 e a Busca Avançada do quadr
     const coluna = page.getByRole('region', { name: 'Pedidos Pendentes de Chegada' });
     await expect(coluna.getByRole('link', { name: new RegExp(codigo) })).toBeVisible();
     await expect(coluna).toContainText(/\d+ devoluç(ão|ões)/);
-    await expect(page.getByRole('region', { name: 'Agrupamento por Fornecedor' })).toContainText('Os lotes por fornecedor aparecem aqui');
+    await expect(page.getByRole('region', { name: 'Agrupamento por Fornecedor' })).toContainText(/LOT-\d{6}|Nenhum lote em andamento\./);
   }
 
   await abrirBusca(page);

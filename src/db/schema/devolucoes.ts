@@ -12,10 +12,13 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { CANAIS, DESTINOS_ITEM, MOTIVOS_ITEM, ORIGENS, STATUS_DEVOLUCAO, STATUS_ITEM, TIPOS_DEVOLUCAO } from '../../modules/devolucoes/dominio';
+import { RESULTADOS_FORNECEDOR } from '../../modules/lotes/dominio';
 import { usuarios } from './auth';
 import { produtos } from './catalogo';
+import { lotes } from './lotes';
 
 export const canalEnum = pgEnum('canal', CANAIS);
 export const origemDevolucaoEnum = pgEnum('origem_devolucao', ORIGENS);
@@ -24,6 +27,8 @@ export const statusDevolucaoEnum = pgEnum('status_devolucao', STATUS_DEVOLUCAO);
 export const statusItemEnum = pgEnum('status_item', STATUS_ITEM);
 export const destinoItemEnum = pgEnum('destino_item', DESTINOS_ITEM);
 export const motivoItemEnum = pgEnum('motivo_item', MOTIVOS_ITEM);
+/** Fica aqui (e não em lotes.ts) por causa do ciclo de imports: só referências preguiçosas cruzam o ciclo. */
+export const resultadoFornecedorEnum = pgEnum('resultado_fornecedor', RESULTADOS_FORNECEDOR);
 
 /** Spec §5.1 (Devolucao): o pacote. A trava e as datas da conferência entram na Fase 2. */
 export const devolucoes = pgTable(
@@ -101,6 +106,9 @@ export const itensDevolucao = pgTable(
     motivo: motivoItemEnum('motivo'),
     observacao: text('observacao'),
     status: statusItemEnum('status').notNull().default('PENDENTE'),
+    /** Fase 5: o lote de remessa em que a unidade está (CHECK itens_lote_status). */
+    loteId: uuid('lote_id').references((): AnyPgColumn => lotes.id, { onDelete: 'set null' }),
+    resultadoFornecedor: resultadoFornecedorEnum('resultado_fornecedor'),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -108,6 +116,9 @@ export const itensDevolucao = pgTable(
     index('itens_devolucao_produto_esperado_idx').on(t.produtoEsperadoId),
     uniqueIndex('itens_devolucao_unidade_uq').on(t.devolucaoId, t.unidade),
     index('itens_devolucao_produto_recebido_idx').on(t.produtoRecebidoId),
+    index('itens_devolucao_lote_idx').on(t.loteId),
+    check('itens_lote_status', sql`("lote_id" is not null) = ("status" in ('EM_LOTE', 'ENVIADO', 'RESOLVIDO'))`),
+    check('itens_resultado_resolvido', sql`("resultado_fornecedor" is not null) = ("status" = 'RESOLVIDO')`),
     check(
       'itens_destino_motivo',
       sql`("destino" is not null and "destino" = 'BOM' and "motivo" is null)
