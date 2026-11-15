@@ -27,13 +27,13 @@ export function AlertasPainel({ alertas, limite }: { alertas: AlertaPainel[]; li
           <li key={a.id}>
             <Link
               href={a.href}
-              className={`flex min-h-11 items-center justify-between gap-2 rounded-lg px-3 text-sm font-semibold ${COR_DO_TOM[a.tom]}`}
+              className={`flex min-h-11 items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-semibold ${COR_DO_TOM[a.tom]}`}
             >
-              <span>{a.titulo}</span>
+              <span className="min-w-0">{a.titulo}</span>
               {a.quantidade !== null ? (
-                <span className="font-mono">{a.quantidade}</span>
+                <span className="shrink-0 font-mono">{a.quantidade}</span>
               ) : a.detalhe ? (
-                <span className="text-xs font-medium">{a.detalhe}</span>
+                <span className="shrink-0 text-xs font-medium">{a.detalhe}</span>
               ) : null}
             </Link>
           </li>

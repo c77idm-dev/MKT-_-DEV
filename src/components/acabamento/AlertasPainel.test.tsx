@@ -21,6 +21,18 @@ describe('AlertasPainel (spec §6.0.1)', () => {
     expect(screen.queryByRole('link', { name: /^Ver todos os alertas/ })).toBeNull();
   });
 
+  it('a linha tem respiro vertical e o título longo quebra sem empurrar a contagem', () => {
+    render(
+      <AlertasPainel
+        alertas={[{ id: 'ml', titulo: 'Conta do Mercado Livre precisa ser reconectada', quantidade: 2, detalhe: null, tom: 'erro', href: '/x' }]}
+      />,
+    );
+    const link = screen.getByRole('link', { name: /^Conta do Mercado Livre/ });
+    expect(link.className).toContain('py-2');
+    expect(link.querySelectorAll('span')[0].className).toContain('min-w-0');
+    expect(link.querySelectorAll('span')[1].className).toContain('shrink-0');
+  });
+
   it('no painel, só os 3 primeiros e "Ver todos os alertas (N)" (celular, decisão 13)', () => {
     const alertas = (['falhas', 'backup', 'disco', 'prazo_ml', 'nf_rejeitada'] as const).map((id) => ({
       id, titulo: `Alerta ${id}`, quantidade: 1, detalhe: null, tom: 'erro' as const, href: `/x#${id}`,
