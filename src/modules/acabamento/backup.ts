@@ -1,7 +1,8 @@
-import { desc } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { execucoesBackup } from '@/db/schema';
 import { formatarDataHora } from '@/lib/formatar';
+import { backupAtrasado } from './alertas-regras';
 import type { SituacaoBackup } from './dominio';
 
 export type ResumoBackup = {
@@ -26,6 +27,18 @@ export async function ultimoBackup(db: DbOuTx): Promise<ResumoBackup | null> {
     .orderBy(desc(execucoesBackup.iniciadoEm))
     .limit(1);
   return linha ?? null;
+}
+
+/** (extra, decisão 21) Sem backup OK em 26 h, só depois do primeiro registro de execução. */
+export async function backupEstaAtrasado(db: DbOuTx, agora: Date): Promise<boolean> {
+  const [ok] = await db
+    .select({ iniciadoEm: execucoesBackup.iniciadoEm })
+    .from(execucoesBackup)
+    .where(eq(execucoesBackup.situacao, 'OK'))
+    .orderBy(desc(execucoesBackup.iniciadoEm))
+    .limit(1);
+  const [alguma] = await db.select({ id: execucoesBackup.id }).from(execucoesBackup).limit(1);
+  return backupAtrasado(ok?.iniciadoEm ?? null, alguma !== undefined, agora);
 }
 
 /** Uma execução "em andamento" há mais que isto foi interrompida (decisão 21). */
