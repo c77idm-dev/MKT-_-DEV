@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState, type FormEvent } from 'react';
 import type { FalhaVista } from '@/modules/acabamento/falhas';
 import { ALERTA_OK, BOTAO_PERIGO, BOTAO_PRIMARIO, CARTAO, VAZIO } from '../estilos';
 import { ListaErros } from '../ListaErros';
@@ -16,7 +17,14 @@ export function ListaFalhas({
   falhas: FalhaVista[];
   acao: (anterior: EstadoFalhas, dados: FormData) => Promise<EstadoFalhas>;
 }) {
-  const [estado, aoEnviar, pendente] = useEnvioFormulario(acao, ESTADO_INICIAL_FALHAS, 'erros-falhas');
+  const [estado, enviar, pendente] = useEnvioFormulario(acao, ESTADO_INICIAL_FALHAS, 'erros-falhas');
+  // Qual cartão e qual operação estão em andamento, para o rótulo "Reenviando…"/"Dispensando…" só no botão certo.
+  const [enviando, setEnviando] = useState<{ id: string; operacao: string } | null>(null);
+  function aoEnviar(evento: FormEvent<HTMLFormElement>) {
+    const dados = new FormData(evento.currentTarget);
+    setEnviando({ id: String(dados.get('falha')), operacao: String(dados.get('operacao')) });
+    enviar(evento);
+  }
   return (
     <div className="flex flex-col gap-3">
       <div id="retorno-falhas" aria-live="polite" className="flex flex-col gap-3">
@@ -57,7 +65,7 @@ export function ListaFalhas({
                     <input type="hidden" name="falha" value={f.id} />
                     <input type="hidden" name="operacao" value="reenviar" />
                     <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} w-full sm:w-auto`}>
-                      Tentar de novo
+                      {pendente && enviando?.id === f.id && enviando.operacao === 'reenviar' ? 'Reenviando…' : 'Tentar de novo'}
                     </button>
                   </form>
                   <form onSubmit={aoEnviar} className="sm:w-auto">
@@ -67,6 +75,8 @@ export function ListaFalhas({
                       rotulo="Dispensar"
                       rotuloConfirmar="Toque de novo para dispensar"
                       desabilitado={pendente}
+                      pendente={pendente && enviando?.id === f.id && enviando.operacao === 'dispensar'}
+                      rotuloPendente="Dispensando…"
                       className={`${BOTAO_PERIGO} sm:w-auto`}
                     />
                   </form>

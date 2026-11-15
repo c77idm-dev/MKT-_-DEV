@@ -42,6 +42,22 @@ describe('ListaFalhas (spec §6.8)', () => {
     expect((acao.mock.calls[0] as unknown as [unknown, FormData])[1].get('operacao')).toBe('dispensar');
   });
 
+  it('mostra "Reenviando…" no botão do cartão enviado enquanto a ação roda', async () => {
+    const acao = vi.fn(() => new Promise<never>(() => {}));
+    render(<ListaFalhas falhas={[falha, { ...falha, id: '1c0a2d3f-4e5b-4c6d-9e7f-8091a2b3c4d5' }]} acao={acao} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tentar de novo' })[0]);
+    expect(await screen.findByRole('button', { name: 'Reenviando…' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Tentar de novo' })).toHaveLength(1);
+  });
+
+  it('mostra "Dispensando…" no botão Dispensar enquanto a ação roda', async () => {
+    const acao = vi.fn(() => new Promise<never>(() => {}));
+    render(<ListaFalhas falhas={[falha]} acao={acao} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dispensar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Toque de novo para dispensar' }));
+    expect(await screen.findByRole('button', { name: 'Dispensando…' })).toBeTruthy();
+  });
+
   it('sem falhas', () => {
     render(<ListaFalhas falhas={[]} acao={vi.fn()} />);
     expect(screen.getByText('Nenhuma tarefa em Falhas.')).toBeTruthy();
