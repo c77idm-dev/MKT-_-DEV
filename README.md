@@ -19,7 +19,7 @@ npm run usuario:criar -- --nome "Seu Nome" --email voce@empresa.com --perfil GES
 npm run dev                   # http://localhost:3000
 ```
 
-## O que existe hoje (Fases 0, 1, 2, 3 e 4)
+## O que existe hoje (Fases 0 a 5)
 Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, formulários em uma coluna, barra de abas embaixo, alvos de toque de 44 px, app instalável (PWA).
 - Login, três perfis (Operador, Fiscal, Gestor) e permissões por ação; barra de abas que muda conforme o perfil.
 - Quadro de Fluxo com as 5 etapas do PDF e Busca Avançada.
@@ -28,10 +28,11 @@ Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, f
 - Conferência no celular, unidade por unidade: Fotos 1 a 4, leitura do código (EAN), Serial Number, lote e validade, Vídeo de Prova comprimido, destino e unidade ausente. Trava da conferência, que o Gestor pode liberar. Funciona sem rede: as fotos e os vídeos esperam no aparelho e sobem sozinhos quando a conexão volta.
 - Mercado Livre (com o ML simulado até a "Ligação das contas reais"): conexão da conta administradora em Configurações › Mercado Livre, devoluções que entram sozinhas pelos avisos e pela varredura de 15 min, status do ML no detalhe da devolução, "OK" automático quando todas as unidades vão para o Estoque Bom e a tela Contestações ML, onde o Gestor revisa o motivo, a mensagem e as fotos e toca em "Enviar ao ML".
 - Fiscal (com o emissor de NF-e simulado até a "Ligação das contas reais"): Configurações fiscais (dados da empresa, ambiente da NF-e e regras fiscais), etapa 4 "Destinação Fiscal e Estoque" com as abas Estoque Bom e Estoque Problema, NF de venda buscada no Mercado Livre ou anexada pelo XML, NF de devolução emitida, corrigida e reenviada depois de uma rejeição, cancelada em até 24 h, DANFE e XML de cada nota e o ZIP dos XMLs do período.
+- Lotes e Remessas (com o emissor simulado): as unidades do Estoque Problema entram sozinhas no lote do fornecedor, lote fechado com o tipo (conserto, troca ou garantia), NF de remessa, Lista consolidada em PDF e Excel, Registrar envio e Registrar resultado de cada unidade, e a etapa 5 do quadro.
 - Cadastros de produtos e fornecedores, com importação por planilha (extra).
 - Usuários (só o Gestor): criar, mudar o perfil, desativar e reativar. Desativar encerra as sessões na hora, e o sistema nunca fica sem um Gestor ativo (extra).
 
-Ainda não existem: lotes e remessas (com a NF de remessa) e relatórios. Ficam para as próximas fases.
+Ainda não existem: o painel de alertas, a tela Falhas, o prazo de guarda das mídias e o backup. Ficam para a Fase 6.
 
 ## Conferência no celular (Fase 2)
 A conferência (Fotos 1 a 4, leitura do código, Vídeo de Prova e destino de cada unidade) precisa de duas coisas além do site:
@@ -91,6 +92,19 @@ No PC e nos testes o sistema usa o **emissor simulado** (`EMISSOR_NFE=falso`): e
 
 Antes da produção, o contador valida os CFOP, os CST/CSOSN e os valores da NF de devolução, e a primeira NF real sai em homologação (checklist no fim do [plano da Fase 4](docs/superpowers/plans/2026-11-12-fase-4-fiscal.md)).
 
+## Remessas e lotes (Fase 5)
+Aba **Lotes e Remessas** (Fiscal e Gestor; o Operador vê a etapa 5 do quadro só para consulta).
+
+1. **Lote automático:** quando a NF de devolução é autorizada, cada unidade do Estoque Problema entra no lote ABERTO do fornecedor do produto (um por fornecedor). Produto sem fornecedor vai para a pendência **Sem fornecedor**, em Lotes e Remessas, onde se escolhe o fornecedor.
+2. **Fechar o lote** com o tipo (conserto, troca ou garantia). Antes da NF dá para mover unidades entre lotes e reabrir o lote.
+3. **NF de remessa:** sai pelo mesmo ciclo da NF de devolução (fila `nfe.*`, rejeição com "Corrigir e reenviar", cancelamento em até 24 h, DANFE e XML).
+4. **Lista consolidada** em PDF e Excel, para o SAC do fabricante.
+5. **Registrar envio** (rastreio) e **Registrar resultado** de cada unidade (trocado, consertado, crédito, descartado ou devolvido sem solução). Com todas resolvidas, o lote é finalizado.
+
+**Worker:** além das tarefas da Fase 4, roda `lotes.alocar-pendentes` uma vez na subida, para pôr nos lotes as unidades que ficaram de fora. A migração desta fase é `0009_fase5_remessas`. Dependência nova: `pdf-lib` (PDF da lista). Nenhuma variável nova no `.env`.
+
+O critério de pronto da spec ("NF de remessa autorizada em homologação") fica para a "Ligação das contas reais"; até lá a nota sai pelo emissor simulado.
+
 ## Andamento
 No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi publicada em 12/11/2026.
 
@@ -101,9 +115,10 @@ No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi p
 | 2. Conferência no celular | Fotos 1 a 4, Vídeo de Prova, leitura do código, destino, mídia (compressão, armazenamento e links) | Pronta e no `main` (14/11/2026). Falta publicar na VPS e testar nos aparelhos reais da bancada |
 | 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Pronta e no `main` (14/11/2026), com o ML simulado. Falta publicar na VPS e ligar a conta real ("Ligação das contas reais") |
 | 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Pronta e no `main` (14/11/2026), com o emissor simulado. Falta publicar na VPS, a validação do contador e a NF real em homologação ("Ligação das contas reais") |
-| 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | É a próxima |
-| Ligação das contas reais | ML real, Focus NFe em homologação, B2 para as mídias, domínio próprio | Depois da Fase 5 |
-| 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Por último |
+| 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | Pronta e no `main` (14/11/2026), com o emissor simulado. Falta publicar na VPS e a NF de remessa real em homologação ("Ligação das contas reais") |
+| 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Em andamento (time rodando desde 14/11) |
+| Publicação na VPS | Fases 2 a 6 de uma vez | Depois da Fase 6 |
+| Ligação das contas reais | ML real, Focus NFe em homologação, B2 para as mídias, domínio próprio | Depois da publicação |
 
 A ordem e as regras do trabalho em paralelo estão no [contrato entre as fases](docs/superpowers/plans/2026-11-12-contrato-fases-2-6.md).
 
@@ -132,14 +147,16 @@ O `npm run dev` e o `npm run build` copiam antes o leitor de código de barras (
 ## Worktrees das fases
 Cada fase trabalha em sua própria worktree, com banco e porta próprios, definidos no `.env` da worktree (o `.env` não vai para o git). `urlBancoTeste()` recusa um `DATABASE_URL_TEST` cujo banco não seja `devolucoes_test` ou `devolucoes_test_f<N>`.
 
-| | `main` | Fase 2 | Fase 3 | Fase 4 |
-|---|---|---|---|---|
-| Worktree | a pasta do projeto | `C:/Users/idmpc/devolucoes-wt/fase-2` | `.../fase-3` | `.../fase-4` |
-| Branch | `main` | `fase-2-conferencia` | `fase-3-mercado-livre` | `fase-4-fiscal` |
-| `DATABASE_URL` (dev) | `devolucoes` | `devolucoes_f2` | `devolucoes_f3` | `devolucoes_f4` |
-| `DATABASE_URL_TEST` | `devolucoes_test` | `devolucoes_test_f2` | `devolucoes_test_f3` | `devolucoes_test_f4` |
-| `PORTA_E2E` | 3100 | 3102 | 3103 | 3104 |
-| `next dev` | 3000 | `npm run dev -- --port 3002` | 3003 | 3004 |
+| | `main` | Fase 6 |
+|---|---|---|
+| Worktree | a pasta do projeto | `.../devolucoes-wt/fase-6` |
+| Branch | `main` | `fase-6-acabamento` |
+| `DATABASE_URL` (dev) | `devolucoes` | `devolucoes_f6` |
+| `DATABASE_URL_TEST` | `devolucoes_test` | `devolucoes_test_f6` |
+| `PORTA_E2E` | 3100 | 3106 |
+| `next dev` | 3000 | `npm run dev -- --port 3006` |
+
+As Fases 2 a 5 já foram juntadas no `main`, e as worktrees delas foram apagadas.
 
 ## Publicar na VPS
 Siga [docs/operacao/deploy-vps.md](docs/operacao/deploy-vps.md). A importação de planilhas aceita arquivos de até 5 MB, então o nginx da VPS precisa de `client_max_body_size 6m;` (o padrão, 1 MB, recusa a planilha antes de chegar ao sistema).
