@@ -41,6 +41,7 @@ Nos comandos abaixo, troque `SEU_DOMINIO` pelo domínio do sistema (ex.: `devolu
    ```
    - Use só a senha hexadecimal: caracteres especiais quebram a `DATABASE_URL`, e `$` quebra o compose.
    - `POSTGRES_PASSWORD` só vale quando o volume do banco é criado pela primeira vez.
+   - Crie também o `.env.backup`, o arquivo só das variáveis do backup (contrato E20): `cp .env.backup.example .env.backup && chmod 600 .env.backup`. Os valores entram no passo 2 de [backup-restauracao.md](backup-restauracao.md). Sem esse arquivo o sistema sobe do mesmo jeito; só o backup registra FALHOU.
 
 4. **Suba o sistema e confira:**
    ```sh
@@ -96,6 +97,10 @@ docker compose --env-file .env.producao -f docker-compose.prod.yml logs -f web
 
 ## Backup diário
 O serviço `backup` salva o banco (e as mídias, no modo disco) todo dia às 02h30, cifrado, num bucket separado. Passo a passo, restauração e teste mensal: [backup-restauracao.md](backup-restauracao.md).
+
+As variáveis do backup (`BACKUP_S3_*` e `BACKUP_SENHA`) ficam no `.env.backup`, nunca no `.env.producao` (contrato E20):
+- o `web` e o `worker` leem o `.env.producao` inteiro e não precisam da chave do bucket de backup nem da senha da cifra;
+- o serviço `backup` lê só o `.env.backup`. Do `.env.producao` ele recebe apenas a senha do banco, o modo de armazenamento, a pasta das mídias e o nome do bucket das mídias. Nunca vê os tokens do ML e da Focus, as chaves S3 das mídias, a `CHAVE_CRIPTOGRAFIA` nem o `SEGREDO_LINKS`.
 
 Risco que sobra: o container instala `rclone`, `openssl` e `tzdata` pelo `apk` a cada subida, sem versão fixa. Se a instalação falhar, o backup não roda, e o alerta "Backup diário atrasado" avisa o Gestor. A melhoria opcional é uma imagem própria compilada pelo GitHub Actions.
 

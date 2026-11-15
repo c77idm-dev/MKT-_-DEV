@@ -1,8 +1,12 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { LIMITE_BATIMENTO_MS, NOME_ARQUIVO_BATIMENTO } from '../src/worker/batimento';
 
-const compose = readFileSync('docker-compose.prod.yml', 'utf8').replaceAll('\r\n', '\n');
+const ler = (caminho: string) => (existsSync(caminho) ? readFileSync(caminho, 'utf8').replaceAll('\r\n', '\n') : '');
+const compose = ler('docker-compose.prod.yml');
+const producaoExemplo = ler('.env.producao.example');
+const backupExemplo = ler('.env.backup.example');
+const gitignore = ler('.gitignore');
 
 /** O bloco de um serviço: de "  nome:" até o próximo serviço (2 espaços) ou até "volumes:" no começo da linha. */
 export function servico(nome: string): string {
@@ -36,11 +40,55 @@ describe('docker-compose.prod.yml (VPS compartilhada, spec §13)', () => {
     expect(b).not.toMatch(/ports:/);
   });
 
-  it('backup: sem env_file e sem os segredos do sistema (decisão 19)', () => {
+  it('backup: lê só o .env.backup e não recebe os segredos do sistema (decisão 19, E20)', () => {
     const b = servico('backup');
-    expect(b).not.toMatch(/^\s+env_file:/m); // o comentário do serviço cita a palavra; a chave não pode existir
-    for (const segredo of ['ML_CLIENT_SECRET', 'CHAVE_CRIPTOGRAFIA', 'FOCUS_TOKEN', 'S3_CHAVE_ID', 'S3_CHAVE_SECRETA', 'SEGREDO_LINKS', 'DATABASE_URL']) {
-      expect(b.replaceAll('BACKUP_S3_CHAVE', 'BACKUP_X')).not.toContain(segredo);
+    expect(b).toMatch(/^\s+env_file:\n\s+- path: \.env\.backup\n/m);
+    // O único arquivo de variáveis citado no serviço (chave e comentários) é o .env.backup, nunca o .env.producao.
+    expect(new Set([...b.matchAll(/\.env[\w.]*/g)].map((m) => m[0]))).toEqual(new Set(['.env.backup']));
+    const semBackup = b.replaceAll('BACKUP_S3_CHAVE', 'BACKUP_X');
+    for (const segredo of ['ML_', 'CHAVE_CRIPTOGRAFIA', 'FOCUS_', 'S3_CHAVE_', 'SEGREDO_LINKS', 'DATABASE_URL']) {
+      expect(semBackup).not.toContain(segredo);
     }
+  });
+
+  it('web e worker nunca recebem as variáveis BACKUP_* (E20)', () => {
+    for (const nome of ['web', 'worker']) {
+      const s = servico(nome);
+      expect(s).not.toContain('BACKUP_');
+      expect(s).not.toContain('.env.backup');
+    }
+    // web e worker leem o .env.producao inteiro: as BACKUP_* não podem morar nele.
+    expect(producaoExemplo).not.toMatch(/BACKUP_/);
+  });
+});
+
+describe('.env.backup.example (E20)', () => {
+  const chaves = backupExemplo
+    .split('\n')
+    .filter((l) => /^[A-Z0-9_]+=/.test(l))
+    .map((l) => l.split('=')[0]);
+
+  it('só tem as variáveis do backup', () => {
+    expect(chaves).toEqual([
+      'BACKUP_S3_ENDPOINT',
+      'BACKUP_S3_REGIAO',
+      'BACKUP_S3_BUCKET',
+      'BACKUP_S3_CHAVE_ID',
+      'BACKUP_S3_CHAVE_SECRETA',
+      'BACKUP_SENHA',
+    ]);
+  });
+
+  it('não traz nenhum segredo do sistema', () => {
+    const semBackup = backupExemplo.replaceAll('BACKUP_S3_CHAVE', 'BACKUP_X');
+    for (const segredo of ['ML_', 'CHAVE_CRIPTOGRAFIA', 'FOCUS_', 'S3_CHAVE_', 'SEGREDO_LINKS', 'DATABASE_URL', 'POSTGRES_PASSWORD']) {
+      expect(semBackup).not.toContain(segredo);
+    }
+  });
+
+  it('o .env.backup fica fora do git, como o .env.producao', () => {
+    expect(gitignore).toMatch(/^\.env\*$/m);
+    expect(gitignore).toMatch(/^!\.env\.backup\.example$/m);
+    expect(gitignore).not.toMatch(/^!\.env\.backup$/m);
   });
 });

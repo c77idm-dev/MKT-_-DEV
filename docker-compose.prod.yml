@@ -75,9 +75,14 @@ services:
   backup:
     # Backup diário (spec §10; decisão 19): pg_dump cifrado e, com ARMAZENAMENTO=disco, as mídias.
     # A imagem é a do banco, para o pg_dump ser da mesma versão. rclone, openssl e tzdata entram na subida.
-    # Sem env_file: este container roda "apk add" como root e não deve ver os outros segredos do sistema.
+    # Este container roda "apk add" como root: não lê o arquivo de variáveis do sistema, só o .env.backup
+    # (BACKUP_S3_* e BACKUP_SENHA; contrato E20). O resto vem abaixo, um a um. "required: false": sem o arquivo,
+    # o web e o worker sobem do mesmo jeito; o backup registra FALHOU ("BACKUP_SENHA não definida.").
     image: postgres:17-alpine
     restart: unless-stopped
+    env_file:
+      - path: .env.backup
+        required: false
     environment:
       TZ: America/Sao_Paulo
       PGHOST: postgres
@@ -87,12 +92,6 @@ services:
       ARMAZENAMENTO: ${ARMAZENAMENTO:-disco}
       MIDIA_DIR: ${MIDIA_DIR:-/data/midia}
       S3_BUCKET: ${S3_BUCKET:-}
-      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
-      BACKUP_S3_REGIAO: ${BACKUP_S3_REGIAO:-}
-      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
-      BACKUP_S3_CHAVE_ID: ${BACKUP_S3_CHAVE_ID:-}
-      BACKUP_S3_CHAVE_SECRETA: ${BACKUP_S3_CHAVE_SECRETA:-}
-      BACKUP_SENHA: ${BACKUP_SENHA:-}
     volumes:
       - ./docker/backup:/backup:ro
       - midia:/data:ro

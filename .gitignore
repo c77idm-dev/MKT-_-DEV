@@ -44,6 +44,7 @@ next-env.d.ts
 # Projeto
 !.env.example
 !.env.producao.example
+!.env.backup.example
 .ml-tokens.json
 .ml-pkce.json
 /dist

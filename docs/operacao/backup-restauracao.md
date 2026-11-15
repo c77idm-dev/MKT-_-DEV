@@ -15,11 +15,11 @@ Nos comandos abaixo, `docker compose ...` quer dizer `docker compose --env-file 
 1. Crie um bucket **só de backup**, diferente do bucket das mídias. O sistema recusa o mesmo bucket.
 2. Ligue nele a regra de ciclo de vida **"Keep only the last version of the file"**, com exclusão das versões antigas depois de 1 dia, e a exclusão dos arquivos com mais de 30 dias. O `rclone delete` do B2 só esconde o arquivo, e a chave recomendada nem apaga.
 3. Crie uma *application key* **restrita a esse bucket**, com leitura e escrita e **sem `deleteFiles`** (proteção contra ransomware).
-4. Preencha no `.env.producao`: `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGIAO`, `BACKUP_S3_BUCKET`, `BACKUP_S3_CHAVE_ID`, `BACKUP_S3_CHAVE_SECRETA` e `BACKUP_SENHA`.
+4. Preencha no `.env.backup` (**não** no `.env.producao`): `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGIAO`, `BACKUP_S3_BUCKET`, `BACKUP_S3_CHAVE_ID`, `BACKUP_S3_CHAVE_SECRETA` e `BACKUP_SENHA`. Se o arquivo ainda não existe: `cp .env.backup.example .env.backup && chmod 600 .env.backup`. Só o serviço `backup` lê esse arquivo; o `web` e o `worker` não enxergam essas variáveis (contrato E20).
 5. Suba o serviço: `docker compose ... up -d backup`.
 
 ## 3. A senha
-- A `BACKUP_SENHA` é gerada no seu gerenciador de senhas e colada **só** no `.env.producao` da VPS.
+- A `BACKUP_SENHA` é gerada no seu gerenciador de senhas e colada **só** no `.env.backup` da VPS.
 - Nunca vai para o chat, o git ou um e-mail.
 - **Guarde uma cópia no gerenciador de senhas.** Sem ela, o backup não abre.
 
@@ -55,7 +55,7 @@ docker compose ... exec backup dropdb --maintenance-db=postgres devolucoes_resta
 4. Confira `https://SEU_DOMINIO/api/saude`.
 
 ## 8. Mídias, à mão
-- **Modo `disco`:** num container temporário com o volume `midia:/data` **sem** `:ro` e com as variáveis `BACKUP_*`:
+- **Modo `disco`:** num container temporário com o volume `midia:/data` **sem** `:ro` e com as variáveis `BACKUP_*` (`--env-file .env.backup`):
   ```sh
   rclone cat "$REMOTO/midia/<arquivo>" | openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_SENHA | tar -xf - -C /data
   ```
