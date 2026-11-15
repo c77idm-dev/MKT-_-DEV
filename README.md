@@ -19,7 +19,7 @@ npm run usuario:criar -- --nome "Seu Nome" --email voce@empresa.com --perfil GES
 npm run dev                   # http://localhost:3000
 ```
 
-## O que existe hoje (Fases 0 a 5)
+## O que existe hoje (Fases 0 a 6)
 Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, formulários em uma coluna, barra de abas embaixo, alvos de toque de 44 px, app instalável (PWA).
 - Login, três perfis (Operador, Fiscal, Gestor) e permissões por ação; barra de abas que muda conforme o perfil.
 - Quadro de Fluxo com as 5 etapas do PDF e Busca Avançada.
@@ -32,7 +32,7 @@ Tudo pensado primeiro para o celular (390×844): cartões no lugar de tabelas, f
 - Cadastros de produtos e fornecedores, com importação por planilha (extra).
 - Usuários (só o Gestor): criar, mudar o perfil, desativar e reativar. Desativar encerra as sessões na hora, e o sistema nunca fica sem um Gestor ativo (extra).
 
-Ainda não existem: o painel de alertas, a tela Falhas, o prazo de guarda das mídias e o backup. Ficam para a Fase 6.
+- Acabamento (Fase 6): alertas no topo do Fluxo, tela Falhas com "Tentar de novo", prazo de guarda das mídias, limite de login por IP, cabeçalhos de segurança, `/api/saude` com 503, healthcheck dos containers e backup diário cifrado com a restauração documentada.
 
 ## Conferência no celular (Fase 2)
 A conferência (Fotos 1 a 4, leitura do código, Vídeo de Prova e destino de cada unidade) precisa de duas coisas além do site:
@@ -105,6 +105,16 @@ Aba **Lotes e Remessas** (Fiscal e Gestor; o Operador vê a etapa 5 do quadro s�
 
 O critério de pronto da spec ("NF de remessa autorizada em homologação") fica para a "Ligação das contas reais"; até lá a nota sai pelo emissor simulado.
 
+## Acabamento (Fase 6)
+- **Alertas:** bloco "Alertas" no topo do Fluxo, com uma linha por alerta (título, contagem e link), só os do perfil de quem entrou: prazo do ML vencendo, NF rejeitada, conta do ML para reconectar, sincronização com o ML parada, itens sem fornecedor, status do ML mudou depois da chegada e, como extras, Entregue (ML) sem leitura física, NF cancelada com o lote já adiante, tarefas em Falhas, backup atrasado e disco quase cheio. No celular aparecem os 3 primeiros e o link "Ver todos os alertas"; a página `/fluxo/alertas` (extra) lista as devoluções de cada alerta.
+- **Falhas** (Configurações › Falhas, Gestor): toda tarefa de fundo que esgota as 5 tentativas vira um cartão, agrupado por tarefa e dados ("falhou 12 vezes"). "Tentar de novo" envia a tarefa outra vez; "Dispensar" (extra) encerra a falha que não tem mais conserto. Os dois ficam no histórico.
+- **Prazo de guarda:** a tarefa diária `midia.retencao` (03h00) apaga as fotos e os vídeos das devoluções concluídas há mais de `meses_retencao_midia` (padrão 12). Nunca apaga com unidade em lote não finalizado, unidade do Estoque Problema não resolvida ou contestação pendente. XML e DANFE nunca saem (guarda fiscal). As planilhas importadas há mais de 30 dias perdem as linhas cruas (LGPD); o resumo fica.
+- **Segurança:** limite de login por IP (20 falhas em 15 minutos, somado ao bloqueio por usuário), cabeçalhos de segurança com CSP em todas as páginas e sem `X-Powered-By`.
+- **Saúde:** `/api/saude` responde 503 em qualquer falha, sem cache. O `web` grava logs em JSON. No Docker, o `web` tem healthcheck no `/api/saude` e o `worker`, num batimento gravado a cada 30 s.
+- **Backup diário** (serviço `backup` do `docker-compose.prod.yml`): às 02h30, o banco (e as mídias, no modo disco) é cifrado e enviado a um bucket só de backup, guardado por 30 dias. As variáveis `BACKUP_*` ficam num arquivo próprio, o `.env.backup` (modelo: `.env.backup.example`), que só o serviço `backup` lê (contrato E20). Passo a passo e restauração: [docs/operacao/backup-restauracao.md](docs/operacao/backup-restauracao.md).
+
+A migração desta fase é `0010_fase6_acabamento`. Nenhuma dependência npm nova e nenhuma variável nova no `.env` do sistema. O critério de pronto da spec ("restauração de backup testada; NF em produção aprovada pelo contador") acontece na VPS e com o contador: o roteiro está no fim do [plano da Fase 6](docs/superpowers/plans/2026-11-14-fase-6-acabamento.md) ("Depois da fase").
+
 ## Andamento
 No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi publicada em 12/11/2026.
 
@@ -116,8 +126,8 @@ No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi p
 | 3. Mercado Livre | OAuth, avisos e varredura, resposta OK automática, Contestações | Pronta e no `main` (14/11/2026), com o ML simulado. Falta publicar na VPS e ligar a conta real ("Ligação das contas reais") |
 | 4. Fiscal | Configurações fiscais, Focus NFe, NF de devolução, etapa 4, ZIP de XMLs | Pronta e no `main` (14/11/2026), com o emissor simulado. Falta publicar na VPS, a validação do contador e a NF real em homologação ("Ligação das contas reais") |
 | 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | Pronta e no `main` (14/11/2026), com o emissor simulado. Falta publicar na VPS e a NF de remessa real em homologação ("Ligação das contas reais") |
-| 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Em andamento (time rodando desde 14/11) |
-| Publicação na VPS | Fases 2 a 6 de uma vez | Depois da Fase 6 |
+| 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Pronta e no `main` (15/11/2026). Falta publicar na VPS, testar a restauração do backup lá e a NF em produção aprovada pelo contador |
+| Publicação na VPS | Fases 2 a 6 de uma vez | **Próximo passo** (roteiro pronto no fim do plano da Fase 6) |
 | Ligação das contas reais | ML real, Focus NFe em homologação, B2 para as mídias, domínio próprio | Depois da publicação |
 
 A ordem e as regras do trabalho em paralelo estão no [contrato entre as fases](docs/superpowers/plans/2026-11-12-contrato-fases-2-6.md).
@@ -147,19 +157,21 @@ O `npm run dev` e o `npm run build` copiam antes o leitor de código de barras (
 ## Worktrees das fases
 Cada fase trabalha em sua própria worktree, com banco e porta próprios, definidos no `.env` da worktree (o `.env` não vai para o git). `urlBancoTeste()` recusa um `DATABASE_URL_TEST` cujo banco não seja `devolucoes_test` ou `devolucoes_test_f<N>`.
 
-| | `main` | Fase 6 |
-|---|---|---|
-| Worktree | a pasta do projeto | `.../devolucoes-wt/fase-6` |
-| Branch | `main` | `fase-6-acabamento` |
-| `DATABASE_URL` (dev) | `devolucoes` | `devolucoes_f6` |
-| `DATABASE_URL_TEST` | `devolucoes_test` | `devolucoes_test_f6` |
-| `PORTA_E2E` | 3100 | 3106 |
-| `next dev` | 3000 | `npm run dev -- --port 3006` |
+| | `main` |
+|---|---|
+| Worktree | a pasta do projeto |
+| Branch | `main` |
+| `DATABASE_URL` (dev) | `devolucoes` |
+| `DATABASE_URL_TEST` | `devolucoes_test` |
+| `PORTA_E2E` | 3100 |
+| `next dev` | 3000 |
 
-As Fases 2 a 5 já foram juntadas no `main`, e as worktrees delas foram apagadas.
+As Fases 2 a 6 já foram juntadas no `main` (a 6 em 15/11/2026), e as worktrees delas foram apagadas. Um trabalho novo em paralelo segue o mesmo modelo: worktree própria, `devolucoes_f<N>`, `devolucoes_test_f<N>` e `PORTA_E2E` 310N.
 
 ## Publicar na VPS
 Siga [docs/operacao/deploy-vps.md](docs/operacao/deploy-vps.md). A importação de planilhas aceita arquivos de até 5 MB, então o nginx da VPS precisa de `client_max_body_size 6m;` (o padrão, 1 MB, recusa a planilha antes de chegar ao sistema).
+
+Na VPS ficam dois arquivos de variáveis, fora do git: o `.env.producao` (lido pelo `web` e pelo `worker`) e o `.env.backup` (só as `BACKUP_*`, lido só pelo serviço `backup`). O texto pronto para a publicação das Fases 2 a 6 está no fim do [plano da Fase 6](docs/superpowers/plans/2026-11-14-fase-6-acabamento.md) ("Depois da fase").
 
 ## Teste real do Mercado Livre
 1. Preencha `ML_CLIENT_ID`, `ML_CLIENT_SECRET` e `ML_REDIRECT_URI` no `.env`.
