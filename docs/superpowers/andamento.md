@@ -4,6 +4,7 @@ Atualizado em 15/11/2026 (Fases 0 a 6 prontas, no `main` e **publicadas na VPS**
 
 ## Onde paramos
 - **Fases 0 a 6:** prontas, no `main` e **publicadas na VPS em 15/11/2026** (https://devolucoes.179-199-128-100.sslip.io), imagem do commit `0fd1dc3`/`37f25e7`.
+  - **Login novo (15/11):** faixa verde da marca com código de barras "DEV · CONFERÊNCIA · NF", mostrar a senha e "Lembrar de mim" (extras). Spec [specs/2026-11-15-login-design.md](specs/2026-11-15-login-design.md), plano [plans/2026-11-15-login-faixa-verde.md](plans/2026-11-15-login-faixa-verde.md). No `main` (`da56cee`) e publicado na VPS no mesmo dia. A imagem anterior ficou com a tag local `antes-login`. O componente `src/components/FaixaCodigoBarras.tsx` (tom claro ou escuro) pode ser usado em outras telas; o usuário ainda vai dizer onde.
   - Publicação feita passo a passo com o usuário (ele prefere receber um passo de cada vez e devolver a saída, em vez de um texto inteiro para a Claude web). Roteiro: [../operacao/publicar-fases-2-6.md](../operacao/publicar-fases-2-6.md).
   - Cópias de antes, na VPS em `~/backups-devolucoes/`: dump do banco (`banco-antes-fases2-6_2026-11-15_1139.dump`), commit anterior, nginx e `.env`. A imagem da Fase 1 ficou com a tag local `ghcr.io/c77idm-dev/devolucoes:fase1-antes`.
   - No ar: `web` e `worker` (healthy), 11 migrações, `/api/midia` no nginx, cabeçalhos de segurança, mídias no disco (`ARMAZENAMENTO=disco`, volume `/data`). O serviço `backup` **não** foi ligado (falta o bucket do B2); use sempre `dc up -d web worker`, nunca `dc up -d` sem nomes.
