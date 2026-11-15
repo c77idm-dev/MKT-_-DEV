@@ -24,7 +24,7 @@ describe('AlertasPainel (spec §6.0.1)', () => {
   it('a linha tem respiro vertical e o título longo quebra sem empurrar a contagem', () => {
     render(
       <AlertasPainel
-        alertas={[{ id: 'ml', titulo: 'Conta do Mercado Livre precisa ser reconectada', quantidade: 2, detalhe: null, tom: 'erro', href: '/x' }]}
+        alertas={[{ id: 'conta_ml_reconectar', titulo: 'Conta do Mercado Livre precisa ser reconectada', quantidade: 2, detalhe: null, tom: 'erro', href: '/x' }]}
       />,
     );
     const link = screen.getByRole('link', { name: /^Conta do Mercado Livre/ });
