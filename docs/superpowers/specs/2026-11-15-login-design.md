@@ -19,6 +19,7 @@ O usuário quer as três coisas: a cara da empresa, entrar rápido no celular da
   - Ao entrar, guarda só o e-mail no `localStorage`, nunca a senha.
   - Na próxima visita, o e-mail vem preenchido e o foco vai para a senha.
   - Desmarcar e entrar apaga o e-mail guardado.
+  - Grava no envio, antes do resultado (decisão nossa, aceita na revisão): uma tentativa errada também atualiza o e-mail lembrado.
   - Todo acesso ao `localStorage` fica em `try/catch`, porque ele pode não existir em navegação privada.
   - O texto da caixa não contém "e-mail", pelo mesmo motivo do e2e.
 - **Teclado:** e-mail com `inputMode="email"`, `autoCapitalize="none"` e `enterKeyHint="next"`; senha com `enterKeyHint="go"`.
