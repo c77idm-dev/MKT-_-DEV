@@ -19,7 +19,7 @@ export default async function PaginaAlertas() {
     detalhes.map(async (d) => ({
       ...d,
       ...(d.devolucaoIds.length > 0
-        ? await buscarDevolucoes(db, {}, { ids: d.devolucaoIds, porPagina: 50 })
+        ? await buscarDevolucoes(db, {}, { ids: d.devolucaoIds, porPagina: 100 })
         : { devolucoes: [], total: 0 }),
     })),
   );
@@ -42,6 +42,11 @@ export default async function PaginaAlertas() {
                 <CartaoDevolucao key={d.id} devolucao={d} />
               ))}
             </div>
+          )}
+          {s.total > s.devolucoes.length && (
+            <p className="text-[13px] text-texto-2">
+              Mostrando {s.devolucoes.length} de {s.total}
+            </p>
           )}
           {s.links.length > 0 && (
             <ul className="flex flex-col gap-2">

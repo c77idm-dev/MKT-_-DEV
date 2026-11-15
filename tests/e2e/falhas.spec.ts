@@ -44,4 +44,7 @@ test('Gestor dispensa uma falha com dois toques', async ({ page }) => {
 test('Fiscal e Operador não abrem Falhas', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.fiscal);
   await paginaNaoEncontrada(page, '/configuracoes/falhas');
+  await page.context().clearCookies();
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await paginaNaoEncontrada(page, '/configuracoes/falhas');
 });
