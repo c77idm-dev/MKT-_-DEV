@@ -29,17 +29,58 @@ export function estadoDoSlot(
   p: { envios: RegistroEnvio[]; concluidos: EnvioConcluido[]; evidencias: EvidenciaServidor[] },
 ): EstadoSlot {
   const local = p.envios.filter(naVaga(vaga)).sort((a, b) => b.criadoEm - a.criadoEm)[0];
-  if (local) {
-    if (local.estado === 'erro') return { tipo: 'nao_enviada', mensagem: local.mensagem ?? 'O arquivo não foi enviado.', registro: local };
-    if (local.estado === 'pendente' && local.tentativas > 0) return { tipo: 'aguardando', mensagem: local.mensagem ?? 'Aguardando conexão.', registro: local };
-    return { tipo: 'enviando', progresso: local.progresso, registro: local };
-  }
+  if (local) return estadoLocal(local);
   const servidor = p.evidencias.find(naVaga(vaga));
   const concluido = p.concluidos.find(naVaga(vaga));
   if (concluido && servidor?.id !== concluido.evidenciaId) return { tipo: 'enviada', pronta: false, url: null };
   if (!servidor || servidor.situacao === 'APAGADA') return { tipo: 'vazio' };
+  return estadoServidor(servidor);
+}
+
+function estadoLocal(local: RegistroEnvio): EstadoSlot {
+  if (local.estado === 'erro') return { tipo: 'nao_enviada', mensagem: local.mensagem ?? 'O arquivo não foi enviado.', registro: local };
+  if (local.estado === 'pendente' && local.tentativas > 0) return { tipo: 'aguardando', mensagem: local.mensagem ?? 'Aguardando conexão.', registro: local };
+  return { tipo: 'enviando', progresso: local.progresso, registro: local };
+}
+
+function estadoServidor(servidor: EvidenciaServidor): EstadoSlot {
   if (servidor.situacao === 'FALHOU') return { tipo: 'falhou', mensagem: servidor.erro ?? 'O servidor não conseguiu processar o arquivo.' };
   return { tipo: 'enviada', pronta: servidor.situacao === 'PRONTA', url: servidor.url };
+}
+
+/** Uma foto da avaria (EXTRA) da unidade. `alvo` diz como remover: da fila do aparelho ou do servidor. */
+export type FotoExtra = {
+  chave: string;
+  estado: EstadoSlot;
+  alvo: { tipo: 'local'; idCliente: string } | { tipo: 'servidor'; evidenciaId: string };
+};
+
+/**
+ * Melhoria 2: as fotos da avaria de uma unidade, na ordem em que foram tiradas: as que o servidor tem, as confirmadas
+ * nesta tela que o servidor ainda não mostra e as que estão no aparelho. `removidas`: ids já removidos nesta tela
+ * (somem antes de a página recarregar).
+ */
+export function fotosExtras(
+  itemId: string,
+  p: { envios: RegistroEnvio[]; concluidos: EnvioConcluido[]; evidencias: EvidenciaServidor[] },
+  removidas: ReadonlySet<string>,
+): FotoExtra[] {
+  const daUnidade = (x: Vaga) => x.tipo === 'EXTRA' && x.itemId === itemId;
+  const noServidor = new Set(p.evidencias.map((e) => e.id));
+  const concluidos = p.concluidos.filter(daUnidade);
+  const jaConcluidos = new Set(concluidos.map((c) => c.idCliente));
+  return [
+    ...p.evidencias
+      .filter((e) => daUnidade(e) && e.situacao !== 'APAGADA' && !removidas.has(e.id))
+      .map((e): FotoExtra => ({ chave: e.id, estado: estadoServidor(e), alvo: { tipo: 'servidor', evidenciaId: e.id } })),
+    ...concluidos
+      .filter((c) => !noServidor.has(c.evidenciaId) && !removidas.has(c.evidenciaId))
+      .map((c): FotoExtra => ({ chave: c.evidenciaId, estado: { tipo: 'enviada', pronta: false, url: null }, alvo: { tipo: 'servidor', evidenciaId: c.evidenciaId } })),
+    ...p.envios
+      .filter((r) => daUnidade(r) && !jaConcluidos.has(r.idCliente))
+      .sort((a, b) => a.criadoEm - b.criadoEm)
+      .map((r): FotoExtra => ({ chave: r.idCliente, estado: estadoLocal(r), alvo: { tipo: 'local', idCliente: r.idCliente } })),
+  ];
 }
 
 export function textoDoSlot(e: EstadoSlot): string {

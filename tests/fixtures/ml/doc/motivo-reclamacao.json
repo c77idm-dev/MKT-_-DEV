@@ -1,0 +1,9 @@
+{
+  "id": "PDD9949",
+  "flow": "mediations",
+  "name": "repentant_buyer",
+  "detail": "Comprador se arrependeu",
+  "position": 1,
+  "filter": { "group": ["mediations"] },
+  "settings": { "expected_resolutions": ["return_product", "refund"], "rules_engine_triage": ["repentant"] }
+}

@@ -20,6 +20,8 @@ export type ResumoDevolucao = {
   produto: string | null;
   unidades: number;
   naoIdentificada: boolean;
+  /** "Motivo do cliente" (do ML, manual ou da planilha); o cartão mostra em uma linha (melhoria 1). */
+  motivoCliente?: string | null;
   criadaEm: Date;
   recebidaEm: Date | null;
   selos: DadosSelo[];
@@ -129,6 +131,7 @@ export async function buscarDevolucoes(
       rastreio: devolucoes.rastreio,
       pedidos: devolucoes.pedidosExternos,
       naoIdentificada: devolucoes.naoIdentificada,
+      motivoCliente: devolucoes.motivoCliente,
       criadaEm: devolucoes.criadaEm,
       recebidaEm: devolucoes.recebidaEm,
       entregueSegundoCanalEm: devolucoes.entregueSegundoCanalEm,

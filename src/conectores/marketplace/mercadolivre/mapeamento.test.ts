@@ -7,9 +7,10 @@ import anuncio from '../../../../tests/fixtures/ml/doc/anuncio.json';
 import devolucao from '../../../../tests/fixtures/ml/doc/devolucao.json';
 import envio from '../../../../tests/fixtures/ml/doc/envio.json';
 import pedido from '../../../../tests/fixtures/ml/doc/pedido.json';
+import motivoReclamacao from '../../../../tests/fixtures/ml/doc/motivo-reclamacao.json';
 import reclamacao from '../../../../tests/fixtures/ml/doc/reclamacao.json';
 import { esquemaAnuncio, esquemaReclamacao } from './esquemas';
-import { ErroFormatoML, gtinDoAnuncio, mapearReclamacao, prazoDaReclamacao, quantidadeML, temDevolucao } from './mapeamento';
+import { ErroFormatoML, gtinDoAnuncio, mapearReclamacao, prazoDaReclamacao, quantidadeML, temDevolucao, textoMotivoReclamacao } from './mapeamento';
 
 const COMPLETA = { reclamacao, devolucao, pedidos: [pedido], anuncios: [anuncio], envio };
 
@@ -18,6 +19,7 @@ describe('mapearReclamacao (spec §7.2 e §7.3)', () => {
     expect(mapearReclamacao(COMPLETA)).toEqual({
       reclamacaoId: '5292183123',
       statusReclamacao: 'opened',
+      motivoId: 'PDD9949',
       subtipo: 'return_total',
       statusDevolucao: 'shipped',
       atualizadaEm: new Date('2026-11-09T14:20:00.000-03:00'),
@@ -44,6 +46,19 @@ describe('mapearReclamacao (spec §7.2 e §7.3)', () => {
   it('reclamação sem devolução (só mediação): devolucao null', () => {
     const r = mapearReclamacao({ reclamacao: { ...reclamacao, related_entities: [] }, devolucao: null, pedidos: [], anuncios: [], envio: null });
     expect(r).toMatchObject({ reclamacaoId: '5292183123', devolucao: null, subtipo: null, statusDevolucao: null });
+  });
+
+  it('lê o reason_id da reclamação (motivoId), também sem devolução; sem reason_id fica null', () => {
+    expect(mapearReclamacao(COMPLETA).motivoId).toBe('PDD9949');
+    const semDevolucao = mapearReclamacao({ reclamacao: { ...reclamacao, related_entities: [] }, devolucao: null, pedidos: [], anuncios: [], envio: null });
+    expect(semDevolucao.motivoId).toBe('PDD9949');
+    expect(mapearReclamacao({ ...COMPLETA, reclamacao: { ...reclamacao, reason_id: null } }).motivoId).toBeNull();
+  });
+
+  it('reason_id de tipo inesperado não quebra a reclamação: motivoId null', () => {
+    const r = mapearReclamacao({ ...COMPLETA, reclamacao: { ...reclamacao, reason_id: {} } });
+    expect(r.motivoId).toBeNull();
+    expect(r.devolucao?.devolucaoExternaId).toBe('14958493');
   });
 
   it('low_cost: sem envio físico (D10)', () => {
@@ -143,5 +158,20 @@ describe('funções do mapeamento', () => {
     expect(quantidadeML('2,0')).toBe(2);
     expect(quantidadeML('0')).toBeNull();
     expect(quantidadeML(null)).toBeNull();
+  });
+});
+
+describe('textoMotivoReclamacao (suposição A15: GET /post-purchase/v1/claims/reasons/{id})', () => {
+  it('usa detail; senão description; senão name que não é código; o resto vira null', () => {
+    expect(textoMotivoReclamacao(motivoReclamacao)).toBe('Comprador se arrependeu');
+    expect(textoMotivoReclamacao({ id: 'X', description: ' Produto com defeito ' })).toBe('Produto com defeito');
+    expect(textoMotivoReclamacao({ id: 'X', name: 'Produto com defeito' })).toBe('Produto com defeito');
+    expect(textoMotivoReclamacao({ id: 'X', name: 'repentant_buyer' })).toBeNull();
+    expect(textoMotivoReclamacao({ id: 'X', detail: '   ' })).toBeNull();
+    for (const ruim of [null, [], 'x', 42, { detail: 7 }]) expect(textoMotivoReclamacao(ruim)).toBeNull();
+  });
+
+  it('corta o texto em 500 caracteres (o mesmo limite do motivo manual e da planilha)', () => {
+    expect(textoMotivoReclamacao({ detail: `  ${'a'.repeat(600)}  ` })).toBe('a'.repeat(500));
   });
 });

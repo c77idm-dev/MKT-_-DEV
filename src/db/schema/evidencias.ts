@@ -46,7 +46,9 @@ export const evidencias = pgTable(
     index('evidencias_devolucao_idx').on(t.devolucaoId),
     index('evidencias_retirada_idx').on(t.retiradaId),
     uniqueIndex('evidencias_pacote_tipo_uq').on(t.devolucaoId, t.tipo).where(sql`"item_id" is null and "tipo" <> 'EXTRA'`),
-    uniqueIndex('evidencias_item_tipo_uq').on(t.itemId, t.tipo).where(sql`"item_id" is not null`),
+    // Melhoria 2: várias fotos da avaria (EXTRA) por unidade.
+    uniqueIndex('evidencias_item_tipo_uq').on(t.itemId, t.tipo).where(sql`"item_id" is not null and "tipo" <> 'EXTRA'`),
+    // Melhoria 3: fotos da retirada do Full (etiqueta e uma por item).
     uniqueIndex('evidencias_retirada_tipo_uq').on(t.retiradaId, t.tipo).where(sql`"retirada_id" is not null and "item_retirada_id" is null`),
     uniqueIndex('evidencias_item_retirada_tipo_uq').on(t.itemRetiradaId, t.tipo).where(sql`"item_retirada_id" is not null`),
     check('evidencias_dono', sql`num_nonnulls("devolucao_id", "retirada_id") = 1`),

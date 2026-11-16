@@ -4,6 +4,8 @@ import type { DevolucaoExterna, MarketplaceConnector } from '../tipos';
 export type DadosDevolucaoML = {
   reclamacaoId: string;
   statusReclamacao: string | null;
+  /** `reason_id` da reclamação (ex.: "PDD9949"); o texto vem de `obterMotivoReclamacao` (melhoria 1). */
+  motivoId: string | null;
   subtipo: string | null;
   statusDevolucao: string | null;
   atualizadaEm: Date | null;
@@ -17,6 +19,8 @@ export interface ConectorMercadoLivre extends MarketplaceConnector {
   readonly sellerId: string;
   obterReclamacao(reclamacaoId: string): Promise<DadosDevolucaoML>;
   reclamacoesAtualizadasDesde(desde: Date): AsyncIterable<ReclamacaoAtualizada>;
+  /** Texto do motivo da reclamação. Erro do ML ou da rede lança (quem chama decide); formato desconhecido → null. */
+  obterMotivoReclamacao(motivoId: string): Promise<string | null>;
 }
 
 export function ehConectorML(c: MarketplaceConnector | null): c is ConectorMercadoLivre {

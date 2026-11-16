@@ -4,6 +4,7 @@ import anuncio from '../../../../tests/fixtures/ml/doc/anuncio.json';
 import busca from '../../../../tests/fixtures/ml/doc/busca-reclamacoes.json';
 import devolucao from '../../../../tests/fixtures/ml/doc/devolucao.json';
 import envio from '../../../../tests/fixtures/ml/doc/envio.json';
+import motivoReclamacao from '../../../../tests/fixtures/ml/doc/motivo-reclamacao.json';
 import motivos from '../../../../tests/fixtures/ml/doc/motivos.json';
 import notaVenda from '../../../../tests/fixtures/ml/doc/nota-venda.json';
 import pedido from '../../../../tests/fixtures/ml/doc/pedido.json';
@@ -90,6 +91,20 @@ describe('ConectorML.obterReclamacao (spec §7.2: reclamação → devolução �
   it('obter lança ErroReclamacaoSemDevolucao quando não há devolução', async () => {
     const { conector } = montar({ 'GET /post-purchase/v1/claims/5292183123': json({ ...reclamacao, related_entities: [] }) });
     await expect(conector.obter('5292183123')).rejects.toBeInstanceOf(ErroReclamacaoSemDevolucao);
+  });
+});
+
+describe('ConectorML.obterMotivoReclamacao (melhoria 1)', () => {
+  it('chama /post-purchase/v1/claims/reasons/{id} e devolve o texto', async () => {
+    const { conector, chamadas } = montar({ 'GET /post-purchase/v1/claims/reasons/PDD9949': json(motivoReclamacao) });
+    expect(await conector.obterMotivoReclamacao('PDD9949')).toBe('Comprador se arrependeu');
+    expect(chamadas()).toEqual(['GET /post-purchase/v1/claims/reasons/PDD9949']);
+  });
+
+  it('resposta fora do formato: null; 404: lança o ErroML (quem chama decide)', async () => {
+    const { conector } = montar({ 'GET /post-purchase/v1/claims/reasons/PDD1': json({ id: 'PDD1', name: 'some_code' }) });
+    expect(await conector.obterMotivoReclamacao('PDD1')).toBeNull();
+    await expect(conector.obterMotivoReclamacao('PDD2')).rejects.toMatchObject({ status: 404 });
   });
 });
 

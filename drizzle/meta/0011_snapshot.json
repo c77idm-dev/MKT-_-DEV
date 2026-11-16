@@ -1,5 +1,5 @@
 {
-  "id": "6251ee62-8cde-4693-908d-c1785957e9b5",
+  "id": "5089a04c-a18f-4ba3-9864-a513169a207d",
   "prevId": "d929a22d-1bff-4c6b-a10a-f1f26781852a",
   "version": "7",
   "dialect": "postgresql",
@@ -1149,19 +1149,7 @@
           "name": "devolucao_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
-        },
-        "retirada_id": {
-          "name": "retirada_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "item_retirada_id": {
-          "name": "item_retirada_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "item_id": {
           "name": "item_id",
@@ -1280,21 +1268,6 @@
           "method": "btree",
           "with": {}
         },
-        "evidencias_retirada_idx": {
-          "name": "evidencias_retirada_idx",
-          "columns": [
-            {
-              "expression": "retirada_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "evidencias_pacote_tipo_uq": {
           "name": "evidencias_pacote_tipo_uq",
           "columns": [
@@ -1338,50 +1311,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "evidencias_retirada_tipo_uq": {
-          "name": "evidencias_retirada_tipo_uq",
-          "columns": [
-            {
-              "expression": "retirada_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "tipo",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"retirada_id\" is not null and \"item_retirada_id\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "evidencias_item_retirada_tipo_uq": {
-          "name": "evidencias_item_retirada_tipo_uq",
-          "columns": [
-            {
-              "expression": "item_retirada_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "tipo",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"item_retirada_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1391,32 +1320,6 @@
           "tableTo": "devolucoes",
           "columnsFrom": [
             "devolucao_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "evidencias_retirada_id_retiradas_full_id_fk": {
-          "name": "evidencias_retirada_id_retiradas_full_id_fk",
-          "tableFrom": "evidencias",
-          "tableTo": "retiradas_full",
-          "columnsFrom": [
-            "retirada_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "evidencias_item_retirada_id_itens_retirada_full_id_fk": {
-          "name": "evidencias_item_retirada_id_itens_retirada_full_id_fk",
-          "tableFrom": "evidencias",
-          "tableTo": "itens_retirada_full",
-          "columnsFrom": [
-            "item_retirada_id"
           ],
           "columnsTo": [
             "id"
@@ -1463,17 +1366,9 @@
       },
       "policies": {},
       "checkConstraints": {
-        "evidencias_dono": {
-          "name": "evidencias_dono",
-          "value": "num_nonnulls(\"devolucao_id\", \"retirada_id\") = 1"
-        },
-        "evidencias_item_retirada": {
-          "name": "evidencias_item_retirada",
-          "value": "\"item_retirada_id\" is null or (\"retirada_id\" is not null and \"item_id\" is null)"
-        },
         "evidencias_item_obrigatorio": {
           "name": "evidencias_item_obrigatorio",
-          "value": "\"tipo\" not in ('FOTO_3_PRODUTO', 'FOTO_4_CODIGO_SERIAL') or \"item_id\" is not null or \"item_retirada_id\" is not null"
+          "value": "\"tipo\" not in ('FOTO_3_PRODUTO', 'FOTO_4_CODIGO_SERIAL') or \"item_id\" is not null"
         }
       },
       "isRLSEnabled": false
@@ -2749,6 +2644,37 @@
       },
       "isRLSEnabled": false
     },
+    "public.motivos_reclamacao_ml": {
+      "name": "motivos_reclamacao_ml",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nome": {
+          "name": "nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "consultado_em": {
+          "name": "consultado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.reclamacoes_ml": {
       "name": "reclamacoes_ml",
       "schema": "",
@@ -2779,6 +2705,12 @@
         },
         "status_devolucao": {
           "name": "status_devolucao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivo_id": {
+          "name": "motivo_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -3171,284 +3103,6 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.itens_retirada_full": {
-      "name": "itens_retirada_full",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "retirada_id": {
-          "name": "retirada_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "produto_id": {
-          "name": "produto_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ean_lido": {
-          "name": "ean_lido",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "descricao": {
-          "name": "descricao",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "quantidade": {
-          "name": "quantidade",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "criado_em": {
-          "name": "criado_em",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "itens_retirada_full_retirada_idx": {
-          "name": "itens_retirada_full_retirada_idx",
-          "columns": [
-            {
-              "expression": "retirada_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "itens_retirada_full_produto_uq": {
-          "name": "itens_retirada_full_produto_uq",
-          "columns": [
-            {
-              "expression": "retirada_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "produto_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"produto_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "itens_retirada_full_ean_uq": {
-          "name": "itens_retirada_full_ean_uq",
-          "columns": [
-            {
-              "expression": "retirada_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "ean_lido",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"produto_id\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "itens_retirada_full_retirada_id_retiradas_full_id_fk": {
-          "name": "itens_retirada_full_retirada_id_retiradas_full_id_fk",
-          "tableFrom": "itens_retirada_full",
-          "tableTo": "retiradas_full",
-          "columnsFrom": [
-            "retirada_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "itens_retirada_full_produto_id_produtos_id_fk": {
-          "name": "itens_retirada_full_produto_id_produtos_id_fk",
-          "tableFrom": "itens_retirada_full",
-          "tableTo": "produtos",
-          "columnsFrom": [
-            "produto_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "itens_retirada_full_quantidade": {
-          "name": "itens_retirada_full_quantidade",
-          "value": "\"quantidade\" > 0"
-        },
-        "itens_retirada_full_descricao": {
-          "name": "itens_retirada_full_descricao",
-          "value": "\"produto_id\" is not null or (\"descricao\" is not null and length(trim(\"descricao\")) > 0)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.retiradas_full": {
-      "name": "retiradas_full",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "numero": {
-          "name": "numero",
-          "type": "bigserial",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "codigo": {
-          "name": "codigo",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "generated": {
-            "as": "'RF-' || case when \"numero\" < 1000000 then lpad(\"numero\"::text, 6, '0') else \"numero\"::text end",
-            "type": "stored"
-          }
-        },
-        "codigo_etiqueta": {
-          "name": "codigo_etiqueta",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "situacao": {
-          "name": "situacao",
-          "type": "situacao_retirada_full",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'ABERTA'"
-        },
-        "recebida_por": {
-          "name": "recebida_por",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recebida_em": {
-          "name": "recebida_em",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "concluida_em": {
-          "name": "concluida_em",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "criado_em": {
-          "name": "criado_em",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "retiradas_full_etiqueta_idx": {
-          "name": "retiradas_full_etiqueta_idx",
-          "columns": [
-            {
-              "expression": "codigo_etiqueta",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "retiradas_full_recebida_por_usuarios_id_fk": {
-          "name": "retiradas_full_recebida_por_usuarios_id_fk",
-          "tableFrom": "retiradas_full",
-          "tableTo": "usuarios",
-          "columnsFrom": [
-            "recebida_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "retiradas_full_numero_unique": {
-          "name": "retiradas_full_numero_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "numero"
-          ]
-        },
-        "retiradas_full_codigo_unique": {
-          "name": "retiradas_full_codigo_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "codigo"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "retiradas_full_concluida": {
-          "name": "retiradas_full_concluida",
-          "value": "(\"situacao\" = 'CONFERIDA') = (\"concluida_em\" is not null)"
-        }
-      },
-      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -3703,14 +3357,6 @@
         "ABERTA",
         "REENVIADA",
         "DISPENSADA"
-      ]
-    },
-    "public.situacao_retirada_full": {
-      "name": "situacao_retirada_full",
-      "schema": "public",
-      "values": [
-        "ABERTA",
-        "CONFERIDA"
       ]
     }
   },

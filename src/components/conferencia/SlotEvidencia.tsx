@@ -60,7 +60,7 @@ export function BotaoArquivo(p: { rotulo: string; accept: string; capture: boole
 }
 
 /** Miniatura: a foto ainda no aparelho (object URL) ou a pronta no servidor (link temporário). */
-function useMiniatura(estado: EstadoSlot, video: boolean): string | null {
+export function useMiniatura(estado: EstadoSlot, video: boolean): string | null {
   const arquivo = !video && 'registro' in estado ? estado.registro.arquivo : null;
   const local = useMemo(() => (arquivo ? URL.createObjectURL(arquivo) : null), [arquivo]);
   useEffect(() => () => {

@@ -78,8 +78,14 @@ export type UnidadeE2e = 'BOM' | 'AUSENTE' | { problema: Exclude<MotivoItem, 'AU
  * do merge da Fase 2. Antes de chamar, a devolução já chegou (Aguardando conferência ou já em conferência com o
  * Operador) e a `page` está logada como Operador. O EAN não é lido: concluir confirma o produto esperado (decisão 9).
  * O Vídeo de Prova é sempre enviado (padrão SEMPRE). No fim, a página volta ao detalhe da devolução.
+ * `aoConferirUnidade` (melhoria 2): roda no passo de cada unidade presente, depois das Fotos 3 e 4.
  */
-export async function conferirDevolucao(page: Page, codigo: string, unidades: UnidadeE2e[]): Promise<void> {
+export async function conferirDevolucao(
+  page: Page,
+  codigo: string,
+  unidades: UnidadeE2e[],
+  opcoes: { aoConferirUnidade?: (page: Page, indice: number) => Promise<void> } = {},
+): Promise<void> {
   await comBanco(async (db) => {
     const [d] = await db.select({ id: devolucoes.id, status: devolucoes.status }).from(devolucoes).where(eq(devolucoes.codigo, codigo));
     if (d.status === 'AGUARDANDO_CONFERENCIA') await iniciarConferencia(db, d.id, await usuarioPorEmail(db, USUARIOS_E2E.operador.email));
@@ -101,6 +107,7 @@ export async function conferirDevolucao(page: Page, codigo: string, unidades: Un
       await page.getByLabel('Tirar Foto 4', { exact: true }).setInputFiles(await fotoDeTeste(`foto-4-${i + 1}.jpg`));
       await esperarEnviada(page, 'Foto 3');
       await esperarEnviada(page, 'Foto 4');
+      await opcoes.aoConferirUnidade?.(page, i);
     }
     await page.getByRole('button', { name: 'Continuar' }).click();
   }

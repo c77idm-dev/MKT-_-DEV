@@ -59,3 +59,6 @@ export const TIPOS_FOTO_ACEITOS: readonly string[] = ['image/jpeg', 'image/png',
 
 /** Spec §9: o link temporário vale 10 minutos. */
 export const DURACAO_LINK_SEGUNDOS = 600;
+
+/** Melhoria 2: fotos da avaria (EXTRA) por unidade. */
+export const LIMITE_EXTRA_POR_UNIDADE = 6;

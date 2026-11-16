@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import type { Db, DbOuTx } from '@/db/client';
 import { ehViolacaoDeUnicidade } from '@/db/erros';
 import { devolucoes, evidencias, itensDevolucao, retiradasFull } from '@/db/schema';
@@ -11,6 +11,7 @@ import { situacaoParaEnvio } from '@/modules/retiradas/retiradas';
 import { armazenamentoDoProvedor } from './armazenamento';
 import {
   EVIDENCIAS_DO_ITEM,
+  LIMITE_EXTRA_POR_UNIDADE,
   LIMITE_FOTO_BYTES,
   LIMITE_VIDEO_BYTES,
   TIPOS_FOTO_ACEITOS,
@@ -79,7 +80,7 @@ async function autorizarEnvioRetirada(db: DbOuTx, meta: MetadadosEnvio & { retir
 
 /**
  * Quem pode mandar o quê (conferido ao criar o upload e de novo ao registrar):
- * - na conferência, só quem está com a trava (qualquer evidência);
+ * - na conferência, só quem está com a trava (qualquer evidência; até 6 fotos da avaria por unidade, melhoria 2);
  * - no Recebimento, Fotos 1 e 2 do pacote não identificado (spec §6.2), por quem opera devoluções.
  */
 export async function autorizarEnvio(db: DbOuTx, meta: MetadadosEnvio, tamanho: number | undefined, usuario: UsuarioSessao): Promise<void> {
@@ -115,6 +116,21 @@ export async function autorizarEnvio(db: DbOuTx, meta: MetadadosEnvio, tamanho: 
       .from(itensDevolucao)
       .where(and(eq(itensDevolucao.id, meta.itemId), eq(itensDevolucao.devolucaoId, devolucaoId)));
     if (!item) throw new ErroEnvio(400, 'A unidade não é desta devolução.');
+  }
+  if (meta.tipo === 'EXTRA') {
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(evidencias)
+      .where(
+        and(
+          eq(evidencias.devolucaoId, devolucaoId),
+          eq(evidencias.tipo, 'EXTRA'),
+          meta.itemId ? eq(evidencias.itemId, meta.itemId) : isNull(evidencias.itemId),
+        ),
+      );
+    if (total >= LIMITE_EXTRA_POR_UNIDADE) {
+      throw new ErroEnvio(409, `Limite de ${LIMITE_EXTRA_POR_UNIDADE} fotos da avaria por unidade. Remova uma para tirar outra.`);
+    }
   }
 }
 
@@ -153,6 +169,10 @@ export async function registrarRecebida(db: Db, e: EvidenciaRecebida): Promise<{
       // Trava o dono (devolução ou retirada do Full): dois envios da mesma vaga ao mesmo tempo esperam um pelo outro.
       if (dono.retiradaId) await tx.select({ id: retiradasFull.id }).from(retiradasFull).where(eq(retiradasFull.id, dono.retiradaId)).for('update');
       else await tx.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.id, dono.id)).for('update');
+      // O mesmo envio registrado ao mesmo tempo: o segundo esperou a trava e acha o primeiro aqui. Sem isso, a 6ª foto
+      // da avaria repetida bateria no limite (409) em vez de voltar como "repetida".
+      const [registrado] = await tx.select({ id: evidencias.id }).from(evidencias).where(eq(evidencias.idCliente, e.meta.idCliente));
+      if (registrado) return { evidenciaId: registrado.id, repetida: true };
       await autorizarEnvio(tx, e.meta, e.tamanho, e.usuario);
       const [anterior] =
         e.meta.tipo === 'EXTRA'

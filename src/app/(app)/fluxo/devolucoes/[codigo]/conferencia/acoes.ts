@@ -12,6 +12,7 @@ import { DECISOES, type EntradaItem } from '@/modules/conferencia/regras';
 import { desistirConferencia } from '@/modules/conferencia/trava';
 import { MOTIVOS_ITEM, type MotivoItem } from '@/modules/devolucoes/dominio';
 import { ErroDevolucao } from '@/modules/devolucoes/erros';
+import { ErroRemocao, removerFotoAvaria } from '@/modules/midia/remocao';
 
 const CODIGO_VALIDO = /^DEV-\d+$/;
 const NAO_ENCONTRADA = { ok: false as const, erros: ['Devolução não encontrada.'] };
@@ -72,4 +73,16 @@ export async function desistirAcao(devolucaoId: string, codigo: string): Promise
     revalidatePath('/fluxo', 'layout');
     return { ok: true, destino: `/fluxo/devolucoes/${codigo}` };
   });
+}
+
+/** Melhoria 2: remove uma foto da avaria (EXTRA). Só durante a conferência e só quem está com a trava. */
+export async function removerFotoAvariaAcao(evidenciaId: string): Promise<{ ok: true } | { ok: false; mensagem: string }> {
+  const usuario = await exigirPermissao('operar_devolucoes');
+  try {
+    await removerFotoAvaria(obterDb(), String(evidenciaId), usuario);
+    return { ok: true };
+  } catch (erro) {
+    if (erro instanceof ErroRemocao) return { ok: false, mensagem: erro.message };
+    throw erro;
+  }
 }

@@ -6,7 +6,8 @@ import type { ResultadoEan } from '@/modules/conferencia/itens';
 import type { ItemConferencia } from '@/modules/conferencia/leitura';
 import type { EntradaItem } from '@/modules/conferencia/regras';
 import { DESCRICAO_EVIDENCIA, type TipoEvidencia } from '@/modules/midia/dominio';
-import type { EstadoSlot } from './estadoSlot';
+import type { EstadoSlot, FotoExtra } from './estadoSlot';
+import { FotosAvaria } from './FotosAvaria';
 import { LeitorCodigo } from './LeitorCodigo';
 import { SlotEvidencia } from './SlotEvidencia';
 
@@ -32,10 +33,14 @@ type Props = {
   aoConferirEan: (lido: string | null) => void;
   aoEscolher: (tipo: TipoEvidencia, arquivo: File) => void;
   aoTentarDeNovo: (idCliente: string) => void;
+  /** Melhoria 2: fotos da avaria (EXTRA) desta unidade. */
+  fotosAvaria: FotoExtra[];
+  aoAdicionarAvaria: (arquivo: File) => void;
+  aoRemoverAvaria: (foto: FotoExtra) => Promise<string | null>;
 };
 
 /** Spec §6.3, passo 3: Foto 3, leitura do código de barras, Foto 4 com S/N, lote e validade; ou "não veio no pacote". */
-export function PassoItem({ item, valor, ean, slot, aoMudar, aoConferirEan, aoEscolher, aoTentarDeNovo }: Props) {
+export function PassoItem({ item, valor, ean, slot, aoMudar, aoConferirEan, aoEscolher, aoTentarDeNovo, fotosAvaria, aoAdicionarAvaria, aoRemoverAvaria }: Props) {
   const [digitado, setDigitado] = useState('');
   const base = `unidade-${item.id}`;
   const confere = ean?.situacao === 'confere' || ean?.situacao === 'confirmado';
@@ -144,6 +149,8 @@ export function PassoItem({ item, valor, ean, slot, aoMudar, aoConferirEan, aoEs
               </div>
             ))}
           </div>
+
+          <FotosAvaria fotos={fotosAvaria} aoEscolher={aoAdicionarAvaria} aoTentarDeNovo={aoTentarDeNovo} aoRemover={aoRemoverAvaria} />
 
           <button type="button" onClick={() => aoMudar({ decisao: 'AUSENTE', motivo: 'AUSENTE' }, true)} className={BOTAO_SECUNDARIO}>
             Não veio no pacote (ausente)

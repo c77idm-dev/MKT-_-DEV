@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { registrarEnvioAcao } from '@/modules/midia/acoes';
 import { armazemIndexedDb } from './armazemIndexedDb';
-import { FilaEnvios, type EnvioConcluido, type NovoEnvio, type RegistroEnvio } from './filaEnvios';
+import { FilaEnvios, juntarConcluido, type EnvioConcluido, type NovoEnvio, type RegistroEnvio } from './filaEnvios';
 import { criarTransporteTus } from './transporteTus';
 
 let filaDoAparelho: FilaEnvios | null = null;
@@ -61,7 +61,7 @@ export function useFilaEnvios(devolucaoId: string, aoConcluir?: (e: EnvioConclui
     const pararMudar = f.aoMudar(atualizar);
     const pararConcluir = f.aoConcluir((e) => {
       if (e.devolucaoId !== devolucaoId) return;
-      setConcluidos((lista) => [...lista.filter((x) => !(x.tipo === e.tipo && x.itemId === e.itemId)), e]);
+      setConcluidos((lista) => juntarConcluido(lista, e));
       aoConcluirRef.current?.(e);
     });
     const tentar = () => void f.processar();
@@ -92,5 +92,6 @@ export function useFilaEnvios(devolucaoId: string, aoConcluir?: (e: EnvioConclui
   );
   const tentarDeNovo = useCallback((idCliente: string) => fila().tentarDeNovo(idCliente), []);
   const descartar = useCallback((idCliente: string) => fila().descartar(idCliente), []);
-  return { envios, concluidos, adicionar, tentarDeNovo, descartar };
+  const remover = useCallback((idCliente: string) => fila().remover(idCliente), []);
+  return { envios, concluidos, adicionar, tentarDeNovo, descartar, remover };
 }
