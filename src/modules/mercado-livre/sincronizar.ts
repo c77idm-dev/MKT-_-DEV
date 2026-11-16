@@ -56,10 +56,13 @@ function unir(a: string[], b: string[]): string[] {
   return [...new Set([...a, ...b])];
 }
 
-/** O motivo do ML só entra no "Motivo do cliente" vazio: o digitado à mão ou vindo da planilha nunca é sobrescrito. */
+/**
+ * O motivo do ML só entra no "Motivo do cliente" vazio (nulo ou só espaço, tab e quebra de linha): o digitado à mão
+ * ou vindo da planilha nunca é sobrescrito.
+ */
 function motivoSeVazio(motivo: string | null) {
   return motivo
-    ? { motivoCliente: sql<string>`case when nullif(btrim(${devolucoes.motivoCliente}), '') is null then ${motivo} else ${devolucoes.motivoCliente} end` }
+    ? { motivoCliente: sql<string>`case when nullif(btrim(${devolucoes.motivoCliente}, ' ' || chr(9) || chr(10) || chr(13)), '') is null then ${motivo} else ${devolucoes.motivoCliente} end` }
     : {};
 }
 

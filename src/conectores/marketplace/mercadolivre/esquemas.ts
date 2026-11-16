@@ -39,8 +39,8 @@ export const esquemaReclamacao = z.looseObject({
   status: textoOuNulo,
   type: textoOuNulo,
   stage: textoOuNulo,
-  /** Código do motivo da reclamação (ex.: "PDD9949"); o texto vem de /claims/reasons/{id} (melhoria 1). */
-  reason_id: idOuNulo,
+  /** Código do motivo da reclamação (ex.: "PDD9949"); o texto vem de /claims/reasons/{id} (melhoria 1). Tipo inesperado vira null. */
+  reason_id: idOuNulo.catch(null),
   players: lista(
     z.looseObject({
       role: textoOuNulo,

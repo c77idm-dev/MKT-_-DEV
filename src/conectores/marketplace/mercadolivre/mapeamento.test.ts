@@ -55,6 +55,12 @@ describe('mapearReclamacao (spec §7.2 e §7.3)', () => {
     expect(mapearReclamacao({ ...COMPLETA, reclamacao: { ...reclamacao, reason_id: null } }).motivoId).toBeNull();
   });
 
+  it('reason_id de tipo inesperado não quebra a reclamação: motivoId null', () => {
+    const r = mapearReclamacao({ ...COMPLETA, reclamacao: { ...reclamacao, reason_id: {} } });
+    expect(r.motivoId).toBeNull();
+    expect(r.devolucao?.devolucaoExternaId).toBe('14958493');
+  });
+
   it('low_cost: sem envio físico (D10)', () => {
     const r = mapearReclamacao({ ...COMPLETA, devolucao: { ...devolucao, subtype: 'low_cost', status: 'closed', shipments: [] }, envio: null });
     expect(r.devolucao).toMatchObject({ semEnvioFisico: true, destinoEnvio: null, rastreio: null, statusCanal: 'closed' });
@@ -163,5 +169,9 @@ describe('textoMotivoReclamacao (suposição A15: GET /post-purchase/v1/claims/r
     expect(textoMotivoReclamacao({ id: 'X', name: 'repentant_buyer' })).toBeNull();
     expect(textoMotivoReclamacao({ id: 'X', detail: '   ' })).toBeNull();
     for (const ruim of [null, [], 'x', 42, { detail: 7 }]) expect(textoMotivoReclamacao(ruim)).toBeNull();
+  });
+
+  it('corta o texto em 500 caracteres (o mesmo limite do motivo manual e da planilha)', () => {
+    expect(textoMotivoReclamacao({ detail: `  ${'a'.repeat(600)}  ` })).toBe('a'.repeat(500));
   });
 });

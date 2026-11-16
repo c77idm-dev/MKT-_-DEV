@@ -82,6 +82,16 @@ describe('motivo da reclamação na sincronização (melhoria 1)', () => {
     ]);
   });
 
+  it('ML responde sem o texto do motivo: cria a devolução, o cache fica vazio e o motivo fica nulo', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await contaMLTeste(db);
+    conector.guardar(comMotivo('5000000031'));
+    expect(await sincronizarReclamacao(db, fila, '5000000031', AGORA)).toMatchObject({ acao: 'criada' });
+    expect(conector.consultasMotivo).toEqual(['PDD9949']);
+    expect(await db.select().from(motivosReclamacaoMl)).toEqual([]);
+    expect(await motivoDa('5000000031')).toBeNull();
+  });
+
   it('falha na consulta do motivo não derruba a sincronização e tenta de novo na próxima', async () => {
     const erros = vi.spyOn(console, 'error').mockImplementation(() => {});
     await contaMLTeste(db);

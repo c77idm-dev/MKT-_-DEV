@@ -231,6 +231,10 @@ describe('motivo da reclamação do ML no "Motivo do cliente" (melhoria 1)', () 
     expect(await aplicarReclamacao(db, dados, AGORA)).toMatchObject({ acao: 'atualizada' });
     expect((await devolucao(devolucaoId)).motivoCliente).toBe(MOTIVO);
 
+    await db.update(devolucoes).set({ motivoCliente: '\n\t \r' }).where(eq(devolucoes.id, devolucaoId));
+    await aplicarReclamacao(db, dados, AGORA);
+    expect((await devolucao(devolucaoId)).motivoCliente).toBe(MOTIVO);
+
     await db.update(devolucoes).set({ motivoCliente: ' Tamanho errado ' }).where(eq(devolucoes.id, devolucaoId));
     await aplicarReclamacao(db, dados, AGORA);
     expect((await devolucao(devolucaoId)).motivoCliente).toBe(' Tamanho errado ');

@@ -80,10 +80,13 @@ function ehTroca(r: ReclamacaoJson, d: DevolucaoJson): boolean {
 }
 
 const CODIGO = /^[a-z0-9_]+$/;
+/** O mesmo limite do "Motivo do cliente" digitado à mão ou vindo da planilha. */
+const MAX_MOTIVO = 500;
 
 /**
  * Função pura (suposição A15): o texto do motivo na resposta de GET /post-purchase/v1/claims/reasons/{id}.
  * `detail`, depois `description`, depois `name` se não for um código ("repentant_buyer"). Sem texto: null.
+ * Cortado em 500 caracteres.
  */
 export function textoMotivoReclamacao(json: unknown): string | null {
   const lido = esquemaMotivoReclamacao.safeParse(json);
@@ -94,7 +97,7 @@ export function textoMotivoReclamacao(json: unknown): string | null {
     [lido.data.name, false],
   ] as const) {
     const texto = typeof valor === 'string' ? valor.trim() : '';
-    if (texto && (podeSerCodigo || !CODIGO.test(texto))) return texto;
+    if (texto && (podeSerCodigo || !CODIGO.test(texto))) return texto.slice(0, MAX_MOTIVO).trimEnd();
   }
   return null;
 }
