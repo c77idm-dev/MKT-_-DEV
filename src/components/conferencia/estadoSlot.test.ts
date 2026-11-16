@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EnvioConcluido, RegistroEnvio } from '@/components/midia/filaEnvios';
-import { estadoDoSlot, evidenciasQueContam, textoDoSlot, type EvidenciaServidor } from './estadoSlot';
+import { estadoDoSlot, evidenciasQueContam, fotosExtras, textoDoSlot, type EvidenciaServidor } from './estadoSlot';
 
 const VAGA = { tipo: 'FOTO_1_ETIQUETA' as const, itemId: null };
 
@@ -50,5 +50,48 @@ describe('estadoDoSlot', () => {
       { tipo: 'FOTO_1_ETIQUETA', itemId: null },
       { tipo: 'FOTO_3_PRODUTO', itemId: 'i1' },
     ]);
+  });
+});
+
+describe('fotosExtras (melhoria 2: fotos da avaria da unidade)', () => {
+  const extraServidor = (id: string, extra: Partial<EvidenciaServidor> = {}) => servidor({ id, tipo: 'EXTRA', itemId: 'i1', ...extra });
+  const extraLocal = (idCliente: string, extra: Partial<RegistroEnvio> = {}) => envio({ idCliente, tipo: 'EXTRA', itemId: 'i1', ...extra });
+  const concluido = (idCliente: string, evidenciaId: string): EnvioConcluido => ({ idCliente, devolucaoId: 'd1', itemId: 'i1', tipo: 'EXTRA', evidenciaId });
+
+  it('junta servidor, concluídas e aparelho, sem duplicar a concluída que o servidor já tem', () => {
+    const fotos = fotosExtras(
+      'i1',
+      {
+        evidencias: [extraServidor('e1', { situacao: 'PRONTA', url: '/u1' }), extraServidor('e2')],
+        concluidos: [concluido('c2', 'e2'), concluido('c3', 'e3')],
+        envios: [extraLocal('c5', { criadoEm: 5, estado: 'enviando', progresso: 0.5 }), extraLocal('c4', { criadoEm: 4, estado: 'erro', mensagem: 'Limite' })],
+      },
+      new Set(),
+    );
+    expect(fotos.map((f) => f.chave)).toEqual(['e1', 'e2', 'e3', 'c4', 'c5']);
+    expect(fotos.map((f) => f.estado.tipo)).toEqual(['enviada', 'enviada', 'enviada', 'nao_enviada', 'enviando']);
+    expect(fotos[0]).toMatchObject({ estado: { tipo: 'enviada', pronta: true, url: '/u1' }, alvo: { tipo: 'servidor', evidenciaId: 'e1' } });
+    expect(fotos[2].alvo).toEqual({ tipo: 'servidor', evidenciaId: 'e3' });
+    expect(fotos[3].alvo).toEqual({ tipo: 'local', idCliente: 'c4' });
+  });
+
+  it('esconde removidas, APAGADA, as de outra unidade e as que não são EXTRA', () => {
+    const fotos = fotosExtras(
+      'i1',
+      {
+        evidencias: [
+          extraServidor('e1'),
+          extraServidor('e2', { situacao: 'APAGADA' }),
+          extraServidor('e3', { itemId: 'i2' }),
+          servidor({ id: 'e4', tipo: 'FOTO_3_PRODUTO', itemId: 'i1' }),
+          extraServidor('e5', { situacao: 'FALHOU', erro: 'carimbo falhou' }),
+        ],
+        concluidos: [concluido('c9', 'e9')],
+        envios: [extraLocal('c7', { itemId: 'i2' }), envio({ idCliente: 'c8', tipo: 'FOTO_3_PRODUTO', itemId: 'i1' })],
+      },
+      new Set(['e1', 'e9']),
+    );
+    expect(fotos.map((f) => f.chave)).toEqual(['e5']);
+    expect(fotos[0].estado).toEqual({ tipo: 'falhou', mensagem: 'carimbo falhou' });
   });
 });
