@@ -1,8 +1,15 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 15/11/2026 (Fases 0 a 6 prontas, no `main` e **publicadas na VPS** em 15/11; próximo passo: "Ligação das contas reais"). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 16/11/2026 (Fases 0 a 6 e o login novo no ar desde 15/11; em aberto: o celular do usuário não abre o site, `ERR_SSL_PROTOCOL_ERROR`; próximo passo grande: "Ligação das contas reais"). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
+- **Problema em aberto (16/11): o celular do usuário não abre o site.**
+  - Sintoma: no Chrome do Android, "Não foi possível estabelecer uma conexão segura com este site … enviou uma resposta inválida", `ERR_SSL_PROTOCOL_ERROR`. Acontece no Wi-Fi e também só no 5G.
+  - No PC do usuário o site abre normalmente.
+  - Conferido pelo PC de desenvolvimento em 16/11: `/api/saude` 200 (banco e fila ok), `/login` 200 com a tela nova, certificado Let's Encrypt válido (12/11/2026 a 10/02/2027), TLS 1.2 e 1.3 funcionando, DNS `devolucoes.179-199-128-100.sslip.io` → `179.199.128.100`, sem registro IPv6, arquivos do PWA e os JS com 200. GitHub Actions verde nas 3 últimas imagens.
+  - Conclusão até aqui: o servidor está bem; a causa está no próprio celular. Suspeita principal: **DNS privado** do Android (filtros como AdGuard/NextDNS bloqueiam domínios `sslip.io` e mandam o celular para um servidor de bloqueio, o que dá exatamente esse erro).
+  - Próximos passos da investigação: (1) o usuário diz o que está marcado em Configurações › "DNS privado"; (2) se precisar, logo depois de tentar no celular, rodar na VPS `tail -n 20 /var/log/nginx/error.log | grep -i -E "ssl|handshake"; tail -n 5 /var/log/nginx/access.log` para ver se o celular chega na VPS; (3) solução definitiva possível: um domínio próprio no lugar do `sslip.io` (já previsto na "Ligação das contas reais").
+  - Nada foi mudado no servidor por causa disso.
 - **Fases 0 a 6:** prontas, no `main` e **publicadas na VPS em 15/11/2026** (https://devolucoes.179-199-128-100.sslip.io), imagem do commit `0fd1dc3`/`37f25e7`.
   - **Login novo (15/11):** faixa verde da marca com código de barras "DEV · CONFERÊNCIA · NF", mostrar a senha e "Lembrar de mim" (extras). Spec [specs/2026-11-15-login-design.md](specs/2026-11-15-login-design.md), plano [plans/2026-11-15-login-faixa-verde.md](plans/2026-11-15-login-faixa-verde.md). No `main` (`da56cee`) e publicado na VPS no mesmo dia. A imagem anterior ficou com a tag local `antes-login`. O componente `src/components/FaixaCodigoBarras.tsx` (tom claro ou escuro) pode ser usado em outras telas; o usuário ainda vai dizer onde.
   - Publicação feita passo a passo com o usuário (ele prefere receber um passo de cada vez e devolver a saída, em vez de um texto inteiro para a Claude web). Roteiro: [../operacao/publicar-fases-2-6.md](../operacao/publicar-fases-2-6.md).
@@ -14,18 +21,18 @@ Atualizado em 15/11/2026 (Fases 0 a 6 prontas, no `main` e **publicadas na VPS**
   - Suíte do `main` depois da junção: 566 de unidade, 314 de integração, 145 e2e (7 pulados de propósito), nos projetos `computador` e `celular`.
   - Migrações: `0006_fundacao`, `0007_fase3_mercado_livre`, `0008_fase4_fiscal`.
   - Testes entre fases criados: `tests/e2e/integracao-ml.spec.ts` (Fase 3) e `tests/e2e/integracao-fiscal.spec.ts` (Fase 4).
-  - **Ainda não publicadas na VPS.** A publicação fica para depois da "Ligação das contas reais" (com `ML_CONECTOR=api` e `EMISSOR_NFE=focus` o sistema sobe, mas sem as contas essas partes não funcionam).
+  - Publicadas na VPS em 15/11, junto com as Fases 5 e 6 (o ML e a NF-e só funcionam depois da "Ligação das contas reais").
 - **Fase 5 (Remessas):** pronta, com revisão final aprovada e **juntada no `main`** em 14/11 (merge `6f19451`).
   - Suíte do `main` depois da junção: 610 de unidade, 369 de integração, 163 e2e (7 pulados de propósito), nos projetos `computador` e `celular`. O `conferencia.spec.ts:96` falhou e passou ao repetir.
   - Migração: `0009_fase5_remessas` (sem SQL escrito à mão). Dependência nova: `pdf-lib@1.17.1`.
   - Teste entre fases criado: `tests/e2e/integracao-remessas.spec.ts`.
-  - A NF de remessa real em homologação fica para a "Ligação das contas reais". Ainda não publicada na VPS.
+  - A NF de remessa real em homologação fica para a "Ligação das contas reais". Publicada na VPS em 15/11.
 - **Fase 6 (Acabamento):** pronta, com revisão final aprovada e **juntada no `main`** em 15/11 (merge `cf19052`). É a última fase: **as Fases 0 a 6 estão todas no `main`.**
   - Entregou: alertas no topo do Fluxo e a página `/fluxo/alertas` (extra), tela Falhas com "Tentar de novo" e "Dispensar" (extra), `midia.retencao` (prazo de guarda) e a limpeza LGPD das planilhas, limite de login por IP, cabeçalhos de segurança com CSP e sem `X-Powered-By`, `/api/saude` com 503, logs JSON do `web`, healthcheck do `web` e do `worker`, serviço `backup` (cifrado, bucket só de backup, 30 dias) com a restauração documentada.
   - Suíte do `main` depois da junção: 685 de unidade, 415 de integração, 187 e2e (7 pulados de propósito), nos projetos `computador` e `celular`. Na 1ª execução o PC dormiu no meio e dois testes de `cadastros.spec.ts` falharam em cascata (o 2º depende do mapeamento salvo pelo 1º); a 2ª execução passou inteira.
   - Migração: `0010_fase6_acabamento` (sem SQL escrito à mão). Nenhuma dependência npm nova.
   - Correção extra na integração (emenda **E20**): as variáveis `BACKUP_S3_*` e `BACKUP_SENHA` saíram do `.env.producao` e foram para o `.env.backup` (modelo `.env.backup.example`), lido só pelo serviço `backup`. Assim o `web` e o `worker` não enxergam a chave do bucket de backup nem a senha da cifra. O `scripts/infra.test.ts` garante isso.
-  - Ainda não publicada na VPS. O critério de pronto da spec §14 ("restauração de backup testada; NF em produção aprovada pelo contador") acontece na VPS e com o contador.
+  - Publicada na VPS em 15/11 (sem o serviço `backup`, que espera o B2). O critério de pronto da spec §14 ("restauração de backup testada; NF em produção aprovada pelo contador") acontece na VPS e com o contador.
 - **Planos e contrato:**
   - Contrato (obrigatório para as Fases 2 a 6): [plans/2026-11-12-contrato-fases-2-6.md](plans/2026-11-12-contrato-fases-2-6.md). A §10 tem as emendas E1–E20.
   - Fases 2 a 6: planos de 12/11 e 14/11 (todos executados). O plano da Fase 6 termina com a seção **"Depois da fase"**: o texto pronto para publicar na VPS, a passagem da NF-e para produção, as conferências manuais que sobraram e a pergunta da Inscrição Estadual.
@@ -39,7 +46,7 @@ Atualizado em 15/11/2026 (Fases 0 a 6 prontas, no `main` e **publicadas na VPS**
   - Citar o ERP **Bitbrain** nas telas está certo (spec §8 e §8.7): a NF de venda é baixada dele, o ZIP de XMLs é importado nele, e a série não pode colidir com a dele. A regra é só não usar domínio nem marca bitbrain no sistema.
   - O usuário aceitou as decisões dos planos das Fases 5 e 6 como estão (14/11).
 - **Pergunta em aberto para o usuário (fica para o fim do sistema, a pedido dele em 14/11):** a empresa tem Inscrição Estadual ou é isenta? Hoje a configuração fiscal só aceita o número. Se for isenta, é preciso aceitar "ISENTO".
-- **Segundo PC (usuário Windows "JEFFERSON LIMA"), preparado em 14/11:**
+- **Segundo PC (usuário Windows "JEFFERSON LIMA"), preparado em 14/11** (o PostgreSQL da porta 5433 foi religado em 16/11 depois de o PC reiniciar):
   - Worktrees em `/c/Users/JEFFERSON LIMA/devolucoes-wt/`, cada uma com `.env` próprio.
   - PostgreSQL 18 numa instância só do projeto, na **porta 5433**, com os dados em `C:\Users\JEFFERSON LIMA\pg-devolucoes\data`. A senha do `postgres` fica em `C:\Users\JEFFERSON LIMA\.postgres-superusuario.txt`. O PostgreSQL 18 da porta 5432 é de outra coisa: não mexa.
   - A instância não é serviço: depois de reiniciar o PC, suba com `"/c/Program Files/PostgreSQL/18/bin/pg_ctl.exe" -D "/c/Users/JEFFERSON LIMA/pg-devolucoes/data" -l "/c/Users/JEFFERSON LIMA/pg-devolucoes/postgres.log" start`.
