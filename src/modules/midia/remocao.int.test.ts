@@ -79,4 +79,31 @@ describe('removerFotoAvaria (melhoria 2)', () => {
     expect(await existe(id)).toBe(true);
     expect(await db.select().from(eventosHistorico).where(eq(eventosHistorico.acao, 'evidencia_removida'))).toHaveLength(0);
   });
+
+  it('corrida com o worker: a foto fica PRONTA enquanto a remoção espera a trava; o arquivo final também é apagado', async () => {
+    const d = await criarDevolucaoEmConferencia(db, operador);
+    const id = await criarEvidenciaTeste(db, { devolucaoId: d.id, itemId: d.itens[0], tipo: 'EXTRA', situacao: 'PROCESSANDO' });
+    const armazenamento = obterArmazenamento() as ArmazenamentoMemoria;
+    await armazenamento.salvar('evidencias/corrida.jpg', Readable.from([Buffer.from('x')]));
+
+    let remocao: Promise<void> | undefined;
+    // Outra conexão segura a devolução: a remoção lê a foto (ainda PROCESSANDO) e fica esperando a trava.
+    await sql.begin(async (tx) => {
+      await tx`select id from devolucoes where id = ${d.id} for update`;
+      remocao = removerFotoAvaria(db, id, operador);
+      for (let i = 0; i < 100; i++) {
+        const [{ esperando }] = await sql`select count(*)::int as esperando from pg_locks where not granted`;
+        if (esperando > 0) break;
+        await new Promise((ok) => setTimeout(ok, 50));
+      }
+      // O "worker" conclui o processamento nesse intervalo.
+      await tx`update evidencias set situacao_processamento = 'PRONTA', caminho = 'evidencias/corrida.jpg', provedor = 'memoria', sha256_final = ${'f'.repeat(64)} where id = ${id}`;
+    });
+    await remocao;
+
+    expect(await existe(id)).toBe(false);
+    expect(armazenamento.arquivos.has('evidencias/corrida.jpg')).toBe(false);
+    const [evento] = await db.select().from(eventosHistorico).where(eq(eventosHistorico.acao, 'evidencia_removida'));
+    expect(evento.dados).toMatchObject({ evidenciaId: id, sha256_final: 'f'.repeat(64) });
+  });
 });

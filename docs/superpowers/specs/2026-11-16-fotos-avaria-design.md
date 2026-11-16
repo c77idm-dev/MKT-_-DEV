@@ -19,6 +19,10 @@ O operador quer registrar de perto uma avaria ou um detalhe da unidade, além da
 - O detalhe da devolução já lista as `EXTRA` com o rótulo "Extra · Unidade N".
 - Nenhuma migração nova, a não ser que a remoção precise de um evento novo no histórico. Nesse caso, a chave nova usa o prefixo `evidencia_` em `rotulos/conferencia.ts`.
 
+## Notas da implementação (16/11/2026)
+- **Migração 0011 (`0011_melhoria2_fotos_avaria`) foi necessária.** O índice único `evidencias_item_tipo_uq` só ignorava `EXTRA` no pacote; na unidade, ele recusava a 2ª `EXTRA`. A migração recria o índice com `where "item_id" is not null and "tipo" <> 'EXTRA'`. O evento da remoção (`evidencia_removida`) não precisou de migração.
+- **A ordem da contestação já estava certa.** O `tipo` é um enum do Postgres, que ordena pela ordem de criação (`FOTO_1`…`FOTO_4`, `VIDEO_PROVA`, `EXTRA`), e não pela ordem alfabética. O `case when tipo = 'EXTRA'` ficou como proteção explícita, coberta por um teste de integração.
+
 ## Restrições
 - Celular primeiro: 390×844, sem rolagem lateral; miniaturas em grade que quebra de linha; alvos de 44 px ou mais (o "Remover" incluído); erro em `role="alert"` com foco; progresso com `role="progressbar"`.
 - A fila offline não pode perder nem duplicar uma foto extra. Remover uma foto que ainda está na fila tira ela da fila, sem enviar.

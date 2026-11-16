@@ -41,16 +41,25 @@ export async function removerFotoAvaria(db: Db, evidenciaId: string, usuario: Us
     if (!d || d.status !== 'EM_CONFERENCIA' || d.conferenteId !== usuario.id) {
       throw new ErroRemocao(409, 'A conferência desta devolução não está aberta por você.');
     }
-    await tx.delete(evidencias).where(eq(evidencias.id, e.id));
+    // A linha devolvida pelo DELETE é a de agora: o worker pode ter marcado PRONTA (com o arquivo final) depois da
+    // leitura acima, enquanto a remoção esperava a trava. Limpeza e evento usam esta, não a lida antes.
+    const [apagada] = await tx.delete(evidencias).where(eq(evidencias.id, e.id)).returning();
+    if (!apagada) throw new ErroRemocao(404, 'Foto não encontrada.');
     await registrarEvento(tx, {
       entidade: 'devolucao',
-      entidadeId: e.devolucaoId,
+      entidadeId: apagada.devolucaoId,
       acao: 'evidencia_removida',
       usuarioId: usuario.id,
       em: agora,
-      dados: { evidenciaId: e.id, tipo: e.tipo, itemId: e.itemId, sha256_original: e.sha256Original, sha256_final: e.sha256Final },
+      dados: {
+        evidenciaId: apagada.id,
+        tipo: apagada.tipo,
+        itemId: apagada.itemId,
+        sha256_original: apagada.sha256Original,
+        sha256_final: apagada.sha256Final,
+      },
     });
-    return { caminho: e.caminho, provedor: e.provedor, temporario: e.caminhoTemporario };
+    return { caminho: apagada.caminho, provedor: apagada.provedor, temporario: apagada.caminhoTemporario };
   });
 
   if (apagar.caminho && apagar.provedor) await armazenamentoDoProvedor(apagar.provedor).apagar(apagar.caminho).catch(() => undefined);

@@ -102,6 +102,7 @@ export function FotosAvaria({ fotos, aoEscolher, aoTentarDeNovo, aoRemover }: Pr
   const [removendo, setRemovendo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const caixaErro = useRef<HTMLParagraphElement>(null);
+  const titulo = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (erro) caixaErro.current?.focus();
@@ -113,7 +114,11 @@ export function FotosAvaria({ fotos, aoEscolher, aoTentarDeNovo, aoRemover }: Pr
     try {
       const mensagem = await aoRemover(foto);
       setErro(mensagem);
-      if (!mensagem) setConfirmando(null);
+      if (!mensagem) {
+        setConfirmando(null);
+        // O botão tocado some com a foto: o foco vai para o título do bloco, não para o body.
+        titulo.current?.focus();
+      }
     } finally {
       setRemovendo(false);
     }
@@ -123,7 +128,7 @@ export function FotosAvaria({ fotos, aoEscolher, aoTentarDeNovo, aoRemover }: Pr
   return (
     <section aria-labelledby={`${id}-titulo`} className={`${CARTAO} flex flex-col gap-3`}>
       <div className="flex flex-col gap-1">
-        <h3 id={`${id}-titulo`} className="text-base font-bold">
+        <h3 id={`${id}-titulo`} ref={titulo} tabIndex={-1} className="text-base font-bold outline-none">
           Fotos da avaria (opcional)
         </h3>
         <p className="text-sm text-texto-2">

@@ -133,6 +133,32 @@ describe('registrarRecebida', () => {
     await expect(autorizarEnvio(db, meta(d.id, { tipo: 'EXTRA', itemId: d.itens[1] }), 1000, operador)).resolves.toBeUndefined();
   });
 
+  describe('6ª foto da avaria ao mesmo tempo', () => {
+    async function comCincoExtras() {
+      const d = await criarDevolucaoEmConferencia(db, operador);
+      for (let i = 0; i < 5; i++) await criarEvidenciaTeste(db, { devolucaoId: d.id, itemId: d.itens[0], tipo: 'EXTRA' });
+      const envio = () => ({ meta: meta(d.id, { tipo: 'EXTRA', itemId: d.itens[0] }), caminhoTemporario: '/tmp/tus/y', tamanho: 10, sha256: 'a'.repeat(64), usuario: operador });
+      return { d, envio };
+    }
+
+    it('o mesmo envio registrado duas vezes ao mesmo tempo: uma grava, a outra é "repetida" (não 409)', async () => {
+      const { envio } = await comCincoExtras();
+      const um = envio();
+      const [a, b] = await Promise.all([registrarRecebida(db, um), registrarRecebida(db, { ...um })]);
+      expect(a.evidenciaId).toBe(b.evidenciaId);
+      expect([a.repetida, b.repetida].sort()).toEqual([false, true]);
+    });
+
+    it('dois envios diferentes ao mesmo tempo: só um passa, o outro recebe 409', async () => {
+      const { d, envio } = await comCincoExtras();
+      const resultados = await Promise.allSettled([registrarRecebida(db, envio()), registrarRecebida(db, envio())]);
+      expect(resultados.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(resultados.find((r) => r.status === 'rejected')).toMatchObject({ reason: { status: 409 } });
+      const extras = await db.select({ id: evidencias.id }).from(evidencias).where(eq(evidencias.devolucaoId, d.id));
+      expect(extras).toHaveLength(6);
+    });
+  });
+
   it('o Vídeo de Prova vai para a transcodificação', async () => {
     const d = await criarDevolucaoEmConferencia(db, operador);
     const r = await registrarRecebida(db, {

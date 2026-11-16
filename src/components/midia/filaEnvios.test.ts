@@ -179,14 +179,14 @@ describe('remover (melhoria 2: fotos da avaria)', () => {
     await fila.adicionar(extra('a'));
     await fila.processar();
     expect(chamadas).toHaveLength(1);
-    expect(await fila.remover('a')).toBe(true);
+    expect(await fila.remover('a')).toBe('removida');
     agora += 60_000;
     await fila.processar(true);
     expect(chamadas).toHaveLength(1);
     expect(await armazem.listar()).toEqual([]);
   });
 
-  it('remover durante o envio devolve false e o envio termina normalmente', async () => {
+  it('remover durante o envio devolve "subindo" e o envio termina normalmente', async () => {
     let liberar!: (r: ResultadoTransporte) => void;
     const armazem = new ArmazemMemoria();
     const fila = new FilaEnvios(armazem, () => new Promise<ResultadoTransporte>((ok) => (liberar = ok)));
@@ -194,7 +194,7 @@ describe('remover (melhoria 2: fotos da avaria)', () => {
     fila.aoConcluir((e) => concluidos.push(e.evidenciaId));
     await fila.adicionar(extra('a'));
     await expect.poll(async () => (await armazem.listar()).map((r) => r.estado)).toEqual(['enviando']);
-    expect(await fila.remover('a')).toBe(false);
+    expect(await fila.remover('a')).toBe('subindo');
     liberar({ ok: true, evidenciaId: 'ev-a' });
     await fila.processar();
     expect(concluidos).toEqual(['ev-a']);
@@ -221,6 +221,16 @@ describe('remover (melhoria 2: fotos da avaria)', () => {
     await fila.processar();
     expect(chamadas).toEqual([]);
     expect(await listarOriginal()).toEqual([]);
+  });
+
+  it('remover depois de a foto já ter subido: avisa "ja_enviada" (a tela pede para remover do servidor)', async () => {
+    const armazem = new ArmazemMemoria();
+    const { transporte } = transporteDe([]);
+    const fila = new FilaEnvios(armazem, transporte);
+    await fila.adicionar(extra('a'));
+    await fila.processar();
+    expect(await armazem.listar()).toEqual([]);
+    expect(await fila.remover('a')).toBe('ja_enviada');
   });
 
   it('juntarConcluido guarda duas EXTRA da mesma unidade e substitui a Foto 3', () => {

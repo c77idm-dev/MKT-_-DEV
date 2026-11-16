@@ -137,6 +137,10 @@ export async function registrarRecebida(db: Db, e: EvidenciaRecebida): Promise<{
     resultado = await db.transaction(async (tx) => {
       // Trava a devolução: dois envios da mesma vaga ao mesmo tempo esperam um pelo outro.
       await tx.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.id, e.meta.devolucaoId)).for('update');
+      // O mesmo envio registrado ao mesmo tempo: o segundo esperou a trava e acha o primeiro aqui. Sem isso, a 6ª foto
+      // da avaria repetida bateria no limite (409) em vez de voltar como "repetida".
+      const [registrado] = await tx.select({ id: evidencias.id }).from(evidencias).where(eq(evidencias.idCliente, e.meta.idCliente));
+      if (registrado) return { evidenciaId: registrado.id, repetida: true };
       await autorizarEnvio(tx, e.meta, e.tamanho, e.usuario);
       const [anterior] =
         e.meta.tipo === 'EXTRA'

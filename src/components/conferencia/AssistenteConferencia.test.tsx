@@ -8,7 +8,7 @@ import type { EvidenciaServidor } from './estadoSlot';
 import type { RespostaAcao } from './tipos';
 
 let enviosAtuais: RegistroEnvio[] = [];
-const removerDaFila = vi.fn<(idCliente: string) => Promise<boolean>>(async () => true);
+const removerDaFila = vi.fn<(idCliente: string) => Promise<'removida' | 'subindo' | 'ja_enviada'>>(async () => 'removida');
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock('./LeitorCodigo', () => ({ LeitorCodigo: () => null }));
 vi.mock('@/components/midia/useFilaEnvios', () => ({
@@ -134,7 +134,7 @@ describe('AssistenteConferencia: fotos da avaria (melhoria 2)', () => {
   });
 
   it('a foto ainda subindo não é removida: pede para aguardar', async () => {
-    removerDaFila.mockResolvedValueOnce(false);
+    removerDaFila.mockResolvedValueOnce('subindo');
     enviosAtuais = [{ ...envio('enviando'), idCliente: 'c1', tipo: 'EXTRA', itemId: 'i1', criadoEm: 1, progresso: 0.3 }];
     montar(acoesDe(), 1);
     fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
@@ -143,8 +143,31 @@ describe('AssistenteConferencia: fotos da avaria (melhoria 2)', () => {
     expect(screen.getByRole('alert').textContent).toContain('Aguarde: a foto ainda está subindo. Remova quando terminar.');
   });
 
+  it('a foto que acabou de subir: pede para tocar em Remover de novo', async () => {
+    removerDaFila.mockResolvedValueOnce('ja_enviada');
+    enviosAtuais = [{ ...envio('pendente'), idCliente: 'c1', tipo: 'EXTRA', itemId: 'i1', criadoEm: 1 }];
+    montar(acoesDe(), 1);
+    fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirmar remoção' })));
+    expect(screen.getByRole('alert').textContent).toContain('A foto já subiu: toque em Remover de novo.');
+  });
+
+  it('erro do servidor (não de rede) ao remover: mensagem genérica, sem falar em conexão', async () => {
+    montar(acoesDe({ removerFotoAvaria: vi.fn(async () => { throw new Error('falha no servidor'); }) }), 1, [extra('e1')]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirmar remoção' })));
+    expect(screen.getByRole('alert').textContent).toBe('Não foi possível remover agora. Tente de novo.');
+  });
+
+  it('foto da avaria com erro bloqueia o concluir e manda usar Remover', async () => {
+    enviosAtuais = [{ ...envio('erro'), tipo: 'EXTRA', itemId: 'i1' }];
+    montar(acoesDe(), 3);
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir conferência' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('1 foto(s) da avaria não foram enviadas: toque em Tentar de novo ou em Remover.');
+  });
+
   it('sem internet, a remoção do servidor avisa e a foto continua', async () => {
-    montar(acoesDe({ removerFotoAvaria: vi.fn(async () => { throw new Error('rede'); }) }), 1, [extra('e1')]);
+    montar(acoesDe({ removerFotoAvaria: vi.fn(async () => { throw new TypeError('Failed to fetch'); }) }), 1, [extra('e1')]);
     fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirmar remoção' })));
     expect(screen.getByRole('alert').textContent).toContain('Sem conexão: a remoção precisa de internet.');

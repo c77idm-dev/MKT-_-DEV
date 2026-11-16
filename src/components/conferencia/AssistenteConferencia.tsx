@@ -133,14 +133,19 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
   /** Melhoria 2: da fila do aparelho (nunca sobe) ou do servidor. Devolve a mensagem de erro, ou null. */
   async function removerFotoAvaria(foto: FotoExtra): Promise<string | null> {
     if (foto.alvo.tipo === 'local') {
-      return (await remover(foto.alvo.idCliente)) ? null : 'Aguarde: a foto ainda está subindo. Remova quando terminar.';
+      const r = await remover(foto.alvo.idCliente);
+      if (r === 'subindo') return 'Aguarde: a foto ainda está subindo. Remova quando terminar.';
+      if (r === 'ja_enviada') return 'A foto já subiu: toque em Remover de novo.';
+      return null;
     }
     const { evidenciaId } = foto.alvo;
     try {
       const r = await acoes.removerFotoAvaria(evidenciaId);
       if (!r.ok) return r.mensagem;
-    } catch {
-      return 'Sem conexão: a remoção precisa de internet. Tente de novo quando a conexão voltar.';
+    } catch (erro) {
+      // O fetch da Server Action sem rede lança TypeError; outro erro é do servidor e não adianta falar em conexão.
+      if (!navigator.onLine || erro instanceof TypeError) return 'Sem conexão: a remoção precisa de internet. Tente de novo quando a conexão voltar.';
+      return 'Não foi possível remover agora. Tente de novo.';
     }
     setRemovidas((atual) => new Set([...atual, evidenciaId]));
     atualizar();
@@ -212,9 +217,15 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
   async function concluir() {
     setErros([]);
     // Os que estão em erro não sobem sozinhos: a pessoa precisa agir. Os outros (em espera ou enviando) é só aguardar.
-    const comErro = envios.filter((e) => e.estado === 'erro').length;
-    if (comErro > 0) {
-      setErros([`${comErro} arquivo(s) não foram enviados: toque em Tentar de novo ou tire de novo.`]);
+    const comErro = envios.filter((e) => e.estado === 'erro');
+    if (comErro.length > 0) {
+      // Foto da avaria não tem "tirar de novo": a saída é tentar de novo ou remover (melhoria 2).
+      const avaria = comErro.filter((e) => e.tipo === 'EXTRA').length;
+      const outros = comErro.length - avaria;
+      setErros([
+        ...(outros > 0 ? [`${outros} arquivo(s) não foram enviados: toque em Tentar de novo ou tire de novo.`] : []),
+        ...(avaria > 0 ? [`${avaria} foto(s) da avaria não foram enviadas: toque em Tentar de novo ou em Remover.`] : []),
+      ]);
       return;
     }
     if (envios.length > 0) {

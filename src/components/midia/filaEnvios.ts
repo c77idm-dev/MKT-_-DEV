@@ -46,7 +46,8 @@ export class ArmazemMemoria implements ArmazemFila {
 
 export type ResultadoTransporte = { ok: true; evidenciaId: string } | { ok: false; definitivo: boolean; mensagem: string };
 export type Transporte = (r: RegistroEnvio, eventos: { aoProgresso(fracao: number): void; aoUrl(url: string): void }) => Promise<ResultadoTransporte>;
-export type EnvioConcluido = { idCliente: string; devolucaoId: string; itemId: string | null; tipo: TipoEvidencia; evidenciaId: string };
+export type ResultadoRemocao = 'removida' | 'subindo' | 'ja_enviada';
+export type EnvioConcluido ={ idCliente: string; devolucaoId: string; itemId: string | null; tipo: TipoEvidencia; evidenciaId: string };
 
 const SEM_CONEXAO = 'Sem conexão com o servidor. Tentando de novo…';
 
@@ -262,17 +263,22 @@ export class FilaEnvios {
   }
 
   /**
-   * Melhoria 2: a pessoa removeu a foto antes de ela subir. Tira da fila e ela nunca é enviada. false = está subindo
-   * agora (espere terminar e remova do servidor).
+   * Melhoria 2: a pessoa removeu a foto antes de ela subir. Tira da fila e ela nunca é enviada.
+   * - `subindo`: está subindo agora (espere terminar e remova do servidor);
+   * - `ja_enviada`: já subiu e saiu da fila (remova do servidor).
    */
-  async remover(idCliente: string): Promise<boolean> {
-    if (this.emEnvio === idCliente) return false;
+  async remover(idCliente: string): Promise<ResultadoRemocao> {
+    if (this.emEnvio === idCliente) return 'subindo';
+    const naFila = (await this.armazem.listar()).some((r) => r.idCliente === idCliente);
+    // De novo depois do await: a rodada pode ter começado este envio enquanto a lista era lida.
+    if (this.emEnvio === idCliente) return 'subindo';
+    if (!naFila) return 'ja_enviada';
     this.removidos.add(idCliente);
     await this.armazem.apagar(idCliente);
     this.arquivos.delete(idCliente);
     this.progresso.delete(idCliente);
     this.avisar();
-    return true;
+    return 'removida';
   }
 
   async descartar(idCliente: string): Promise<void> {

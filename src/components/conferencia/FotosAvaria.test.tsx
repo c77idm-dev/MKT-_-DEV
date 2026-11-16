@@ -55,6 +55,13 @@ describe('FotosAvaria (melhoria 2)', () => {
     await waitFor(() => expect(p.aoRemover).toHaveBeenCalledWith(fotos[1]));
   });
 
+  it('depois de remover, o foco vai para o título do bloco (não se perde no body)', async () => {
+    renderizar([enviada('e1')]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar remoção' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Fotos da avaria (opcional)' })));
+  });
+
   it('erro ao remover aparece em role=alert com foco', async () => {
     renderizar([enviada('e1')], { aoRemover: vi.fn(async () => 'Sem conexão: a remoção precisa de internet.') });
     fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
