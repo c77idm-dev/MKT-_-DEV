@@ -1,0 +1,296 @@
+<title>Guia das Devoluções</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column; a band with the system's own barcode strip on top; the 5 stages as a numbered track; tasks as tabbed step lists. */
+:root {
+  --fundo: #F2F4F3;
+  --sup: #FFFFFF;
+  --borda: #DDE3E0;
+  --texto: #13201D;
+  --texto2: #3A4A46;
+  --destaque: #0F766E;
+  --destaque-suave: #E3F2EF;
+  --faixa: #0F766E;
+  --faixa-txt: #E3F2EF;
+  --branco: #FFFFFF;
+  --bom: #166534; --bom-suave: #DCFCE7;
+  --prob: #9A3412; --prob-suave: #FFEDD5;
+  --aten: #93370D; --aten-suave: #FEF0C7;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --fundo: #0E1715; --sup: #16231F; --borda: #2A3A36; --texto: #E4ECE9; --texto2: #A9BAB5; --destaque: #2BA597; --destaque-suave: #173A35;
+  --bom: #6EE7A0; --bom-suave: #12301F; --prob: #FDBA74; --prob-suave: #3A2414; --aten: #FCD34D; --aten-suave: #3A2F12; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --fundo: #0E1715; --sup: #16231F; --borda: #2A3A36; --texto: #E4ECE9; --texto2: #A9BAB5; --destaque: #2BA597; --destaque-suave: #173A35;
+  --bom: #6EE7A0; --bom-suave: #12301F; --prob: #FDBA74; --prob-suave: #3A2414; --aten: #FCD34D; --aten-suave: #3A2F12; color-scheme: dark }
+
+body { background: var(--fundo); color: var(--texto); font-family: var(--sans); font-size: 15px; line-height: 1.55; }
+.faixa { background: var(--faixa); color: var(--branco); }
+.barras { height: 26px; background: repeating-linear-gradient(90deg, rgba(255,255,255,.85) 0 2px, transparent 2px 4px, rgba(255,255,255,.85) 4px 5px, transparent 5px 8px, rgba(255,255,255,.85) 8px 11px, transparent 11px 13px); }
+.legenda { font: 600 10px var(--mono); letter-spacing: .3em; text-align: center; color: var(--faixa-txt); padding-top: 6px; }
+.faixa .dentro, .pagina { max-width: 860px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.faixa .dentro { padding-block: 26px 34px; display: flex; flex-direction: column; gap: 10px; }
+.faixa h1 { margin: 0; font-size: clamp(26px, 6vw, 38px); line-height: 1.12; text-wrap: balance; }
+.faixa p { margin: 0; color: var(--faixa-txt); max-width: 60ch; }
+.faixa .rotulo { color: var(--faixa-txt); }
+.endereco { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); border-radius: 12px; padding: 8px 12px; font: 600 13px var(--mono); color: var(--branco); width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
+.endereco button { font: 600 12px var(--sans); background: var(--branco); color: var(--faixa); border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 32px; }
+
+.pagina { padding-block: 28px 56px; display: flex; flex-direction: column; gap: 40px; }
+h2 { margin: 0 0 6px; font-size: 22px; text-wrap: balance; }
+.sub { margin: 0 0 16px; color: var(--texto2); max-width: 65ch; }
+.rotulo { font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--destaque); }
+
+.trilha { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.trilha li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 14px; }
+.trilha li > div { min-width: 0; }
+.num { width: 40px; height: 40px; border-radius: 12px; background: var(--destaque-suave); color: var(--destaque); font: 700 17px var(--mono); display: grid; place-items: center; }
+.trilha h3 { margin: 0; font-size: 16px; }
+.trilha p { margin: 2px 0 0; color: var(--texto2); font-size: 14px; }
+.divide { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.divide span { border-radius: 10px; padding: 8px 10px; font-size: 13px; font-weight: 600; }
+.bom { background: var(--bom-suave); color: var(--bom); }
+.prob { background: var(--prob-suave); color: var(--prob); }
+.etiq { padding: 1px 6px; border-radius: 6px; }
+@media (max-width: 420px) { .divide { grid-template-columns: 1fr; } }
+
+.perfis { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.perfil { background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 16px; min-width: 0; }
+.perfil h3 { margin: 0 0 4px; font-size: 17px; }
+.perfil p { margin: 0 0 8px; color: var(--texto2); font-size: 14px; }
+.perfil ul { margin: 0; padding-left: 18px; font-size: 14px; }
+
+.abas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.abas button { font: 600 14px var(--sans); background: var(--sup); color: var(--texto); border: 1px solid var(--borda); border-radius: 999px; padding: 8px 14px; min-height: 44px; cursor: pointer; }
+.abas button[aria-selected="true"] { background: var(--destaque); border-color: var(--destaque); color: var(--branco); }
+.abas button:focus-visible, .endereco button:focus-visible { outline: 3px solid var(--destaque); outline-offset: 2px; }
+.painel { background: var(--sup); border: 1px solid var(--borda); border-radius: 16px; padding: 18px; }
+.painel h3 { margin: 0 0 4px; font-size: 18px; }
+.painel .quem { margin: 0 0 12px; color: var(--texto2); font-size: 14px; }
+.passos { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+.passos li::marker { font-family: var(--mono); font-weight: 600; color: var(--destaque); }
+.passos li { padding-left: 4px; }
+.passos ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+b.btn { font-weight: 600; background: var(--destaque-suave); color: var(--destaque); border-radius: 6px; padding: 0 6px; }
+code { font-family: var(--mono); font-size: 13px; }
+.nota { margin: 14px 0 0; border-radius: 12px; padding: 10px 12px; font-size: 14px; background: var(--aten-suave); color: var(--aten); }
+
+.lista-simples { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.lista-simples li { background: var(--sup); border: 1px solid var(--borda); border-radius: 14px; padding: 12px 14px; display: grid; gap: 2px; }
+.lista-simples strong { font-size: 15px; }
+.lista-simples span { color: var(--texto2); font-size: 14px; }
+.lista-simples .chip { justify-self: start; font: 600 11px var(--mono); letter-spacing: .06em; border-radius: 999px; padding: 2px 8px; }
+.lista-simples .chip.ok { background: var(--bom-suave); color: var(--bom); }
+.lista-simples .chip.breve { background: var(--aten-suave); color: var(--aten); }
+.dicas { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+</style>
+
+<header class="faixa">
+  <div class="barras" aria-hidden="true"></div>
+  <div class="legenda" aria-hidden="true">DEV · CONFERÊNCIA · NF</div>
+  <div class="dentro">
+    <span class="rotulo">Guia para a equipe</span>
+    <h1>Como usar o sistema de Devoluções</h1>
+    <p>O sistema mostra, em tempo real, onde está cada devolução: do e-commerce até a bancada, e daí para o armazém (Estoque Bom) ou para o fornecedor (Estoque Problema). Ele foi feito para o celular.</p>
+    <div class="endereco"><span id="url">devolucoes.179-199-128-100.sslip.io</span><button type="button" id="copiar">Copiar endereço</button></div>
+  </div>
+</header>
+
+<main class="pagina">
+  <section aria-labelledby="t-caminho">
+    <span class="rotulo">Como funciona</span>
+    <h2 id="t-caminho">O caminho de uma devolução</h2>
+    <p class="sub">Toda devolução passa por 5 etapas, na mesma ordem. No celular, você escolhe a etapa no topo do Fluxo; no computador, as 5 aparecem lado a lado.</p>
+    <ol class="trilha">
+      <li><span class="num">1</span><div><h3>Pedidos Pendentes de Chegada</h3><p>A devolução foi cadastrada (à mão, por planilha ou pelo Mercado Livre) e o pacote ainda está a caminho.</p></div></li>
+      <li><span class="num">2</span><div><h3>Pedidos Chegados - Aguardando Conferência</h3><p>O pacote chegou na bancada e foi bipado no Recebimento.</p></div></li>
+      <li><span class="num">3</span><div><h3>Em Conferência / Triagem &amp; Registro de Evidências</h3><p>Alguém abriu o pacote: fotos, código de barras, número de série, vídeo e o destino de cada unidade.</p></div></li>
+      <li><span class="num">4</span><div><h3>Destinação Fiscal e Estoque</h3><p>Conferido. Cada unidade foi separada:</p>
+        <div class="divide"><span class="bom">Estoque Bom: volta ao armazém para venda</span><span class="prob">Estoque Problema: vai para o fornecedor</span></div></div></li>
+      <li><span class="num">5</span><div><h3>Agrupamento por Fornecedor (Remessas)</h3><p>As unidades com problema ficam agrupadas em lotes por fornecedor, com todas as fotos e o histórico, até o envio e o resultado.</p></div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="t-perfis">
+    <span class="rotulo">Quem faz o quê</span>
+    <h2 id="t-perfis">Os 3 perfis</h2>
+    <p class="sub">Cada pessoa entra com o próprio e-mail e senha. O menu mostra só o que o perfil dela pode usar.</p>
+    <div class="perfis">
+      <div class="perfil"><h3>Operador</h3><p>Quem trabalha na bancada.</p><ul><li>Cadastra e recebe devoluções</li><li>Faz a conferência no celular</li><li>Registra retiradas do Full</li></ul></div>
+      <div class="perfil"><h3>Fiscal</h3><p>Quem cuida das notas e do estoque.</p><ul><li>Acompanha a etapa 4 e o Estoque Bom</li><li>Cuida dos lotes e das remessas</li><li>Mantém produtos e fornecedores</li></ul></div>
+      <div class="perfil"><h3>Gestor</h3><p>Quem tem a visão de tudo.</p><ul><li>Tudo o que os outros fazem</li><li>Contestações do Mercado Livre</li><li>Configurações, usuários e Falhas</li></ul></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-tarefas">
+    <span class="rotulo">Passo a passo</span>
+    <h2 id="t-tarefas">Como fazer cada tarefa</h2>
+    <p class="sub">Toque numa tarefa para ver os passos.</p>
+    <div class="abas" role="tablist" aria-label="Tarefas">
+      <button type="button" role="tab" id="a-entrar" aria-controls="p-entrar" aria-selected="true">Entrar</button>
+      <button type="button" role="tab" id="a-cadastrar" aria-controls="p-cadastrar" aria-selected="false">Cadastrar</button>
+      <button type="button" role="tab" id="a-receber" aria-controls="p-receber" aria-selected="false">Receber</button>
+      <button type="button" role="tab" id="a-conferir" aria-controls="p-conferir" aria-selected="false">Conferir</button>
+      <button type="button" role="tab" id="a-bom" aria-controls="p-bom" aria-selected="false">Estoque Bom</button>
+      <button type="button" role="tab" id="a-problema" aria-controls="p-problema" aria-selected="false">Estoque Problema</button>
+      <button type="button" role="tab" id="a-full" aria-controls="p-full" aria-selected="false">Retirada do Full</button>
+      <button type="button" role="tab" id="a-buscar" aria-controls="p-buscar" aria-selected="false">Buscar e alertas</button>
+    </div>
+
+    <div class="painel" role="tabpanel" id="p-entrar" aria-labelledby="a-entrar">
+      <h3>Entrar e deixar no celular</h3><p class="quem">Todos</p>
+      <ol class="passos">
+        <li>Abra o endereço no Chrome (Android) ou no Safari (iPhone).</li>
+        <li>Digite seu e-mail e sua senha. Toque em <b class="btn">Ver</b> se quiser conferir a senha.</li>
+        <li>Deixe marcado <b class="btn">Lembrar de mim neste aparelho</b>: na próxima vez o e-mail já vem preenchido.</li>
+        <li>Instale na tela inicial: no Chrome, menu ⋮ › <b class="btn">Adicionar à tela inicial</b>; no Safari, Compartilhar › <b class="btn">Adicionar à Tela de Início</b>. Ele abre como um aplicativo.</li>
+      </ol>
+      <p class="nota">Esqueceu a senha? Fale com o Gestor: ele troca em Configurações › Usuários.</p>
+    </div>
+
+    <div class="painel" role="tabpanel" id="p-cadastrar" aria-labelledby="a-cadastrar" hidden>
+      <h3>Cadastrar uma devolução</h3><p class="quem">Operador e Gestor</p>
+      <ol class="passos">
+        <li>No Fluxo, abra a etapa 1 e toque em <b class="btn">Nova devolução</b>.</li>
+        <li>Preencha canal, pedido, rastreio e os produtos (pelo SKU do cadastro).</li>
+        <li>Salve: ela nasce com um código como <code>DEV-000001</code> e fica em "Pendentes de Chegada".</li>
+        <li>Para muitas de uma vez, use <b class="btn">Importar planilha</b> na mesma etapa. A planilha também pode trazer o "Motivo do cliente".</li>
+      </ol>
+      <p class="nota">Quando a conta do Mercado Livre estiver ligada, as devoluções do ML entram sozinhas, já com o motivo da reclamação (por exemplo, "Comprador se arrependeu").</p>
+    </div>
+
+    <div class="painel" role="tabpanel" id="p-receber" aria-labelledby="a-receber" hidden>
+      <h3>Receber um pacote na bancada</h3><p class="quem">Operador e Gestor</p>
+      <ol class="passos">
+        <li>Abra <b class="btn">Recebimento</b>.</li>
+        <li>Toque em ler o código e aponte a câmera para a etiqueta de rastreio (ou digite o código).</li>
+        <li>Achou: aparece "Chegada registrada" e a devolução vai para a etapa 2.</li>
+        <li>Não achou ("Rastreio não encontrado"): escolha
+          <ul>
+            <li><b class="btn">Registrar pacote não identificado</b>: é devolução, mas sem cadastro. Tire a Foto 1 e a Foto 2; o Gestor identifica depois.</li>
+            <li><b class="btn">É retirada do Full (não é devolução)</b>: veja a aba "Retirada do Full".</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+
+    <div class="painel" role="tabpanel" id="p-conferir" aria-labelledby="a-conferir" hidden>
+      <h3>Conferir no celular</h3><p class="quem">Operador e Gestor</p>
+      <ol class="passos">
+        <li>Abra a devolução (etapa 2) e toque em <b class="btn">Iniciar conferência</b>. Ela fica presa com você até concluir ou desistir.</li>
+        <li><strong>Pacote:</strong> Foto 1 (etiqueta e declaração de conteúdo) e Foto 2 (embalagem por fora).</li>
+        <li><strong>Cada unidade:</strong> Foto 3 (produto fora da caixa) e Foto 4 (código de barras, nº de série e lote). Leia o código de barras: se o produto não for o esperado, o sistema avisa.</li>
+        <li>Preencha Nº de série (S/N), lote e validade quando houver.</li>
+        <li>Tem avaria ou detalhe? Em <b class="btn">Fotos da avaria (opcional)</b>, toque em <b class="btn">Adicionar foto</b> (até 6 por unidade). Errou? <b class="btn">Remover</b> e confirme.</li>
+        <li>Unidade não veio? Toque em <b class="btn">Não veio no pacote (ausente)</b>.</li>
+        <li>Grave o <strong>Vídeo de Prova</strong> do pacote.</li>
+        <li>Escolha o destino de cada unidade: <span class="bom etiq">Estoque Bom</span> ou <span class="prob etiq">Estoque Problema</span> (com o motivo).</li>
+        <li>Toque em <b class="btn">Concluir conferência</b>. Se faltar algo, o sistema mostra o quê.</li>
+      </ol>
+      <p class="nota">Sem internet no meio? Pode continuar: as fotos e o vídeo esperam no celular ("Aguardando conexão") e sobem sozinhos quando a internet voltar. Só o "Concluir" precisa de internet.</p>
+    </div>
+
+    <div class="painel" role="tabpanel" id="p-bom" aria-labelledby="a-bom" hidden>
+      <h3>Estoque Bom: o que volta ao armazém</h3><p class="quem">Todos veem</p>
+      <ol class="passos">
+        <li>No Fluxo, etapa 4, toque em <b class="btn">Planilha Volta ao armazém</b> (ou abra pelo Painel).</li>
+        <li>Escolha o período: <b class="btn">Hoje</b>, <b class="btn">Últimos 7 dias</b>, <b class="btn">Este mês</b> ou as datas "De" e "Até".</li>
+        <li>Confira os cartões: produto, quantidade, de onde veio (<code>DEV-…</code> ou <code>RF-…</code>) e a situação.</li>
+        <li>Toque em <b class="btn">Baixar planilha</b> e use o arquivo para lançar a entrada no AnyMarket e no ERP.</li>
+      </ol>
+    </div>
+
+    <div class="painel" role="tabpanel" id="p-problema" aria-labelledby="a-problema" hidden>
+      <h3>Estoque Problema: agrupar por fornecedor</h3><p class="quem">Fiscal e Gestor</p>
+      <ol class="passos">
+        <li>Abra <b class="btn">Lotes e Remessas</b>. Cada fornecedor tem um lote aberto que junta as unidades com problema, com fotos e histórico.</li>
+        <li>Quando for mandar, abra o lote e toque em <b class="btn">Fechar lote</b>, escolhendo o tipo (conserto, troca ou garantia).</li>
+        <li>Emita a NF de Remessa e baixe a lista consolidada (PDF ou Excel) para o fornecedor.</li>
+        <li>Registre o envio com o rastreio e, quando o fornecedor responder, o resultado de cada unidade. Com todas resolvidas, o lote fica Finalizado.</li>
+      </ol>
+      <p class="nota">Hoje as unidades com problema entram no lote depois da NF de devolução, que ainda não é emitida pelo sistema (veja "O que ainda vai ser ligado").</p>
+    </div>
+
+    <div class="painel" role="tabpanel" id="p-full" aria-labelledby="a-full" hidden>
+      <h3>Retirada do Full (não é devolução)</h3><p class="quem">Operador e Gestor fazem; todos veem</p>
+      <ol class="passos">
+        <li>É mercadoria nossa voltando do armazém do Mercado Livre. No Recebimento, bipe a etiqueta; se aparecer "Rastreio não encontrado", toque em <b class="btn">É retirada do Full (não é devolução)</b>. Também dá para abrir direto pelo atalho <b class="btn">Retirada do Full</b> no Recebimento.</li>
+        <li>Abre uma retirada com um código como <code>RF-000001</code> e o aviso "Isto não é devolução".</li>
+        <li>Tire a <strong>Foto da etiqueta</strong>.</li>
+        <li>Bipe cada produto (<b class="btn">Ler código de barras</b>, ou digite o EAN e toque em <b class="btn">Somar</b>). Produto fora do cadastro pede uma descrição curta.</li>
+        <li>Ajuste as quantidades com − e +, e toque em <b class="btn">Concluir retirada</b>. Guarde os produtos no estoque.</li>
+        <li>Todas as retiradas ficam na lista <b class="btn">Retiradas do Full</b>, e os itens entram na planilha do Estoque Bom.</li>
+      </ol>
+    </div>
+
+    <div class="painel" role="tabpanel" id="p-buscar" aria-labelledby="a-buscar" hidden>
+      <h3>Buscar, alertas e falhas</h3><p class="quem">Todos (Falhas só o Gestor)</p>
+      <ol class="passos">
+        <li><strong>Busca Avançada:</strong> no topo do Fluxo, toque em <b class="btn">Filtros</b> e procure por código DEV, pedido, rastreio, SKU, código de barras ou nº de série.</li>
+        <li><strong>Alertas:</strong> o bloco no topo do Fluxo mostra o que precisa de atenção (prazo do ML vencendo, NF rejeitada, unidade sem fornecedor…). Toque em <b class="btn">Ver todos os alertas</b> para a lista completa.</li>
+        <li><strong>Detalhe:</strong> toque em qualquer cartão para ver tudo da devolução: fotos, vídeo, motivo do cliente, NF, lote e o histórico de quem fez o quê e quando.</li>
+        <li><strong>Falhas</strong> (Gestor, em Configurações): tarefas automáticas que não deram certo depois de 5 tentativas, com <b class="btn">Tentar de novo</b>.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-breve">
+    <span class="rotulo">Situação hoje</span>
+    <h2 id="t-breve">O que já funciona e o que ainda vai ser ligado</h2>
+    <ul class="lista-simples">
+      <li><span class="chip ok">FUNCIONA</span><strong>Controle da bancada</strong><span>Cadastro, recebimento, conferência com fotos e vídeo, Estoque Bom e Problema, retirada do Full, planilha, busca e alertas.</span></li>
+      <li><span class="chip breve">EM ANDAMENTO</span><strong>Mercado Livre</strong><span>Sendo conectado agora. Depois, as devoluções do ML entram sozinhas, com o motivo da reclamação e o prazo.</span></li>
+      <li><span class="chip breve">DEPOIS</span><strong>NF de devolução e de remessa</strong><span>Depende da conta na Focus NFe com o certificado A1. Até lá, as devoluções conferidas ficam em "Aguardando NF".</span></li>
+      <li><span class="chip breve">DEPOIS</span><strong>Backup automático e fotos na nuvem</strong><span>Depende do Backblaze B2. Hoje as fotos ficam no servidor.</span></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="t-dicas">
+    <span class="rotulo">Dicas</span>
+    <h2 id="t-dicas">Para não ter problema</h2>
+    <ul class="dicas">
+      <li>Use sempre o mesmo celular na bancada e deixe o sistema instalado na tela inicial.</li>
+      <li>Fotos com luz boa e de perto: elas servem de prova para o ML e para o fornecedor.</li>
+      <li>Não deixe conferência aberta: conclua ou toque em <b class="btn">Desistir da conferência</b> (o que já foi feito fica guardado).</li>
+      <li>Se o site não abrir no celular e abrir no computador, desligue o "DNS privado" do Android (Configurações › DNS privado).</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(function () {
+  var abas = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function ativar(aba, foco) {
+    abas.forEach(function (a) {
+      var sel = a === aba;
+      a.setAttribute('aria-selected', String(sel));
+      a.tabIndex = sel ? 0 : -1;
+      document.getElementById(a.getAttribute('aria-controls')).hidden = !sel;
+    });
+    if (foco) aba.focus();
+  }
+  abas.forEach(function (a, i) {
+    a.tabIndex = i === 0 ? 0 : -1;
+    a.addEventListener('click', function () { ativar(a, false); });
+    a.addEventListener('keydown', function (e) {
+      var j = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : null;
+      if (j === null) return;
+      e.preventDefault();
+      ativar(abas[(j + abas.length) % abas.length], true);
+    });
+  });
+  var botao = document.getElementById('copiar');
+  function selecionar() {
+    var r = document.createRange(); r.selectNodeContents(document.getElementById('url'));
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  botao.addEventListener('click', function () {
+    var texto = 'https://' + document.getElementById('url').textContent;
+    var ok = function () { botao.textContent = 'Copiado'; setTimeout(function () { botao.textContent = 'Copiar endereço'; }, 1500); };
+    try { navigator.clipboard.writeText(texto).then(ok, selecionar); } catch (e) { selecionar(); }
+  });
+})();
+</script>
