@@ -12,6 +12,7 @@ import { exigirTransicao } from '@/modules/devolucoes/transicoes';
 import type { Fila } from '@/modules/fila/fila';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { rotuloStatusML } from './dominio';
+import { motivoEmCache } from './motivos';
 import { ANTES_DA_CHEGADA, encerradaNoML, proximoStatusML } from './status';
 
 const ENCERRADAS: StatusDevolucao[] = ['CANCELADA', 'EXTRAVIADA', 'CONCLUIDA'];
@@ -55,8 +56,15 @@ function unir(a: string[], b: string[]): string[] {
   return [...new Set([...a, ...b])];
 }
 
+/** O motivo do ML só entra no "Motivo do cliente" vazio: o digitado à mão ou vindo da planilha nunca é sobrescrito. */
+function motivoSeVazio(motivo: string | null) {
+  return motivo
+    ? { motivoCliente: sql<string>`case when nullif(btrim(${devolucoes.motivoCliente}), '') is null then ${motivo} else ${devolucoes.motivoCliente} end` }
+    : {};
+}
+
 /** Contrato §5.5: canal MERCADO_LIVRE, pedido = pedidos[0], itens pelo seller_sku (somados por SKU). */
-export function dadosNovaDevolucao(d: DevolucaoExterna): DadosNovaDevolucao {
+export function dadosNovaDevolucao(d: DevolucaoExterna, motivoCliente: string | null = null): DadosNovaDevolucao {
   const pedido = d.pedidos[0];
   if (!pedido) throw new ErroFormatoML('devolução', 'sem número de pedido');
   const porSku = new Map<string, number>();
@@ -70,7 +78,7 @@ export function dadosNovaDevolucao(d: DevolucaoExterna): DadosNovaDevolucao {
     reclamacaoId: d.reclamacaoId,
     rastreio: rastreioDe(d),
     transportadora: d.transportadora,
-    motivoCliente: null,
+    motivoCliente,
     postadaEm: null,
     itens: [...porSku].map(([sku, quantidade]) => ({ sku, quantidade })),
   };
@@ -100,6 +108,7 @@ async function evento(
 async function gravarReclamacao(tx: DbOuTx, dados: DadosDevolucaoML, devolucaoId: string | null, agora: Date): Promise<void> {
   const valores = {
     returnId: dados.devolucao?.devolucaoExternaId ?? null,
+    motivoId: dados.motivoId,
     subtipo: dados.subtipo,
     statusReclamacao: dados.statusReclamacao,
     statusDevolucao: dados.statusDevolucao,
@@ -110,7 +119,7 @@ async function gravarReclamacao(tx: DbOuTx, dados: DadosDevolucaoML, devolucaoId
   await tx.insert(reclamacoesMl).values({ claimId: dados.reclamacaoId, ...valores }).onConflictDoUpdate({ target: reclamacoesMl.claimId, set: valores });
 }
 
-async function atualizar(tx: DbOuTx, atual: Atual, d: DevolucaoExterna, agora: Date): Promise<void> {
+async function atualizar(tx: DbOuTx, atual: Atual, d: DevolucaoExterna, motivo: string | null, agora: Date): Promise<void> {
   const antesDaChegada = ANTES_DA_CHEGADA.includes(atual.status);
   const rastreio = rastreioDe(d);
   await tx
@@ -123,6 +132,7 @@ async function atualizar(tx: DbOuTx, atual: Atual, d: DevolucaoExterna, agora: D
       entregueSegundoCanalEm: atual.entregueSegundoCanalEm ?? d.entregueEm,
       // Antes da chegada o rastreio acompanha o ML (o reenvio da triagem traz um rastreio novo); depois, vale o lido na recepção.
       ...(antesDaChegada && rastreio ? { rastreio, transportadora: d.transportadora ?? atual.transportadora } : {}),
+      ...motivoSeVazio(motivo),
       atualizadaEm: agora,
     })
     .where(eq(devolucoes.id, atual.id));
@@ -164,7 +174,7 @@ async function manualDoPedido(tx: DbOuTx, pedidos: string[]): Promise<Atual | nu
   return d ?? null;
 }
 
-async function vincular(tx: DbOuTx, manual: Atual, d: DevolucaoExterna, agora: Date): Promise<boolean> {
+async function vincular(tx: DbOuTx, manual: Atual, d: DevolucaoExterna, motivo: string | null, agora: Date): Promise<boolean> {
   const [vinculada] = await tx
     .update(devolucoes)
     .set({
@@ -178,6 +188,7 @@ async function vincular(tx: DbOuTx, manual: Atual, d: DevolucaoExterna, agora: D
       rastreio: manual.rastreio ?? rastreioDe(d),
       transportadora: manual.transportadora ?? d.transportadora,
       pedidosExternos: unir(manual.pedidosExternos, d.pedidos),
+      ...motivoSeVazio(motivo),
       atualizadaEm: agora,
     })
     .where(and(eq(devolucoes.id, manual.id), isNull(devolucoes.devolucaoExternaId)))
@@ -227,6 +238,8 @@ export async function aplicarReclamacao(db: DbOuTx, dados: DadosDevolucaoML, ago
       await gravarReclamacao(tx, dados, null, agora);
       return { acao: 'sem_devolucao' };
     }
+    // O texto já foi buscado e guardado no cache antes da transação (tarefas.ts); aqui só é lido.
+    const motivo = await motivoEmCache(tx, dados.motivoId);
     const [existente] = await tx
       .select(COLUNAS)
       .from(devolucoes)
@@ -235,19 +248,19 @@ export async function aplicarReclamacao(db: DbOuTx, dados: DadosDevolucaoML, ago
     let acao: 'criada' | 'vinculada' | 'atualizada';
     let alvoId: string;
     if (existente) {
-      await atualizar(tx, existente, d, agora);
+      await atualizar(tx, existente, d, motivo, agora);
       acao = 'atualizada';
       alvoId = existente.id;
     } else {
       const manual = d.semEnvioFisico ? null : await manualDoPedido(tx, d.pedidos);
-      if (manual && (await vincular(tx, manual, d, agora))) {
+      if (manual && (await vincular(tx, manual, d, motivo, agora))) {
         acao = 'vinculada';
         alvoId = manual.id;
       } else if (d.semEnvioFisico || encerradaNoML(d)) {
         await gravarReclamacao(tx, dados, null, agora);
         return { acao: 'so_consulta', motivo: d.semEnvioFisico ? 'low_cost' : 'encerrada_no_ml' };
       } else {
-        const criada = await criarDevolucao(tx, dadosNovaDevolucao(d), { origem: 'API', usuario: null, canal: dadosCanal(d), agora });
+        const criada = await criarDevolucao(tx, dadosNovaDevolucao(d, motivo), { origem: 'API', usuario: null, canal: dadosCanal(d), agora });
         if (d.entregueEm) await evento(tx, criada.id, 'ml_entregue', agora, { dados: { entregueEm: d.entregueEm.toISOString() } });
         acao = 'criada';
         alvoId = criada.id;

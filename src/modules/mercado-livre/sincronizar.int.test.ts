@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { contestacoesCanal, devolucoes, itensDevolucao, reclamacoesMl } from '@/db/schema';
+import { contestacoesCanal, devolucoes, itensDevolucao, motivosReclamacaoMl, reclamacoesMl } from '@/db/schema';
 import { obterContestacao } from './contestacoes';
 import { FilaMemoria } from '@/modules/fila/fila';
 import { listarEventos } from '@/modules/historico/eventos';
@@ -198,5 +198,54 @@ describe('aplicarReclamacao (contrato §5.5, spec §7.2 e §7.3)', () => {
     const dados = dadosDevolucaoMLTeste(null);
     expect(await aplicarReclamacao(db, dados, AGORA)).toEqual({ acao: 'sem_devolucao' });
     expect(await reclamacao(dados.reclamacaoId)).toMatchObject({ returnId: null, devolucaoId: null });
+  });
+});
+
+describe('motivo da reclamação do ML no "Motivo do cliente" (melhoria 1)', () => {
+  const MOTIVO = 'Comprador se arrependeu';
+  async function emCache(id: string, nome: string) {
+    await db.insert(motivosReclamacaoMl).values({ id, nome, consultadoEm: AGORA });
+  }
+
+  it('motivo em cache vira o Motivo do cliente na criação, e o código fica em reclamacoes_ml', async () => {
+    await emCache('PDD9949', MOTIVO);
+    const d = devolucaoExternaTeste();
+    const { devolucaoId } = comDevolucao(await aplicarReclamacao(db, dadosDevolucaoMLTeste(d, { motivoId: 'PDD9949' }), AGORA));
+    expect((await devolucao(devolucaoId)).motivoCliente).toBe(MOTIVO);
+    expect((await reclamacao(d.reclamacaoId)).motivoId).toBe('PDD9949');
+  });
+
+  it('sem texto do motivo, o Motivo do cliente fica vazio (nunca o código cru)', async () => {
+    const d = devolucaoExternaTeste();
+    const { devolucaoId } = comDevolucao(await aplicarReclamacao(db, dadosDevolucaoMLTeste(d, { motivoId: 'PDD9949' }), AGORA));
+    expect((await devolucao(devolucaoId)).motivoCliente).toBeNull();
+    expect((await reclamacao(d.reclamacaoId)).motivoId).toBe('PDD9949');
+  });
+
+  it('na atualização preenche só se vazio; o digitado à mão não é sobrescrito', async () => {
+    const d = devolucaoExternaTeste();
+    const dados = dadosDevolucaoMLTeste(d, { motivoId: 'PDD9949' });
+    const { devolucaoId } = comDevolucao(await aplicarReclamacao(db, dados, AGORA));
+    await db.update(devolucoes).set({ motivoCliente: '  ' }).where(eq(devolucoes.id, devolucaoId));
+    await emCache('PDD9949', MOTIVO);
+    expect(await aplicarReclamacao(db, dados, AGORA)).toMatchObject({ acao: 'atualizada' });
+    expect((await devolucao(devolucaoId)).motivoCliente).toBe(MOTIVO);
+
+    await db.update(devolucoes).set({ motivoCliente: ' Tamanho errado ' }).where(eq(devolucoes.id, devolucaoId));
+    await aplicarReclamacao(db, dados, AGORA);
+    expect((await devolucao(devolucaoId)).motivoCliente).toBe(' Tamanho errado ');
+  });
+
+  it('D9: no vínculo, a manual com motivo fica com o dela; a manual sem motivo recebe o do ML', async () => {
+    await emCache('PDD9949', MOTIVO);
+    const operador = await criarUsuarioTeste(db);
+    const comMotivo = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido: 'P-MOT-1', rastreio: null, motivoCliente: 'Não serviu' });
+    const semMotivo = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido: 'P-MOT-2', rastreio: null });
+    for (const pedido of ['P-MOT-1', 'P-MOT-2']) {
+      const r = await aplicarReclamacao(db, dadosDevolucaoMLTeste(devolucaoExternaTeste({ pedidos: [pedido] }), { motivoId: 'PDD9949' }), AGORA);
+      expect(r).toMatchObject({ acao: 'vinculada' });
+    }
+    expect((await devolucao(comMotivo.id)).motivoCliente).toBe('Não serviu');
+    expect((await devolucao(semMotivo.id)).motivoCliente).toBe(MOTIVO);
   });
 });

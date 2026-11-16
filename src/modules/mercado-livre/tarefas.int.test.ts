@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ErroML } from '@/conectores/marketplace/mercadolivre/cliente';
 import { definirConectorParaTestes } from '@/conectores/marketplace/registro';
-import { contasMarketplace, devolucoes, notificacoesRecebidas } from '@/db/schema';
+import { contasMarketplace, devolucoes, motivosReclamacaoMl, notificacoesRecebidas } from '@/db/schema';
 import { FilaMemoria } from '@/modules/fila/fila';
 import type { ContextoTarefa } from '@/worker/tipos';
 import { manipuladoresMercadoLivre } from '@/worker/manipuladores/mercado-livre';
@@ -58,6 +58,45 @@ describe('sincronizarReclamacao (tarefa ml.sincronizar-reclamacao)', () => {
       throw new ErroML(500, '', '/post-purchase/v1/claims/5000000001');
     };
     await expect(sincronizarReclamacao(db, fila, '5000000001', AGORA)).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe('motivo da reclamação na sincronização (melhoria 1)', () => {
+  const comMotivo = (reclamacaoId: string) => dadosDevolucaoMLTeste(devolucaoExternaTeste({ reclamacaoId }), { motivoId: 'PDD9949' });
+  async function motivoDa(reclamacaoId: string) {
+    const [d] = await db.select({ motivo: devolucoes.motivoCliente }).from(devolucoes).where(eq(devolucoes.reclamacaoId, reclamacaoId));
+    return d?.motivo;
+  }
+
+  it('consulta o texto do motivo uma vez só (cache) para duas reclamações com o mesmo código', async () => {
+    await contaMLTeste(db);
+    conector.motivos.set('PDD9949', 'Comprador se arrependeu');
+    conector.guardar(comMotivo('5000000011')).guardar(comMotivo('5000000012'));
+    await sincronizarReclamacao(db, fila, '5000000011', AGORA);
+    await sincronizarReclamacao(db, fila, '5000000012', AGORA);
+    expect(conector.consultasMotivo).toEqual(['PDD9949']);
+    expect(await motivoDa('5000000011')).toBe('Comprador se arrependeu');
+    expect(await motivoDa('5000000012')).toBe('Comprador se arrependeu');
+    expect(await db.select({ id: motivosReclamacaoMl.id, nome: motivosReclamacaoMl.nome }).from(motivosReclamacaoMl)).toEqual([
+      { id: 'PDD9949', nome: 'Comprador se arrependeu' },
+    ]);
+  });
+
+  it('falha na consulta do motivo não derruba a sincronização e tenta de novo na próxima', async () => {
+    const erros = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await contaMLTeste(db);
+    conector.motivos.set('PDD9949', 'Comprador se arrependeu');
+    conector.falhaNoMotivo = new ErroML(500, '', '/post-purchase/v1/claims/reasons/PDD9949');
+    conector.guardar(comMotivo('5000000021'));
+    expect(await sincronizarReclamacao(db, fila, '5000000021', AGORA)).toMatchObject({ acao: 'criada' });
+    expect(await motivoDa('5000000021')).toBeNull();
+    expect(await db.select().from(motivosReclamacaoMl)).toEqual([]);
+    expect(erros).toHaveBeenCalled();
+
+    conector.falhaNoMotivo = null;
+    expect(await sincronizarReclamacao(db, fila, '5000000021', AGORA)).toMatchObject({ acao: 'atualizada' });
+    expect(await motivoDa('5000000021')).toBe('Comprador se arrependeu');
+    expect(conector.consultasMotivo).toEqual(['PDD9949', 'PDD9949']);
   });
 });
 
