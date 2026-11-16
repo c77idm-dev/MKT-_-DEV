@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 16/11/2026 (melhorias 1 a 4 dos vídeos do adm no `main`; publicação na VPS em seguida; perguntas da NF e da IE ficam para o fim). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 16/11/2026 (melhorias 1 a 4 dos vídeos do adm no `main` e publicadas na VPS; perguntas da NF e da IE ficam para o fim). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Melhorias dos vídeos do adm (16/11), no `main` (`514add1`):** vieram da transcrição de 3 vídeos que o adm mandou. Cada uma tem spec e plano em `docs/superpowers/specs|plans/2026-11-16-*`, revisão independente aprovada e suíte inteira verde (762 de unidade, 453 de integração, 210 e2e).
@@ -9,6 +9,7 @@ Atualizado em 16/11/2026 (melhorias 1 a 4 dos vídeos do adm no `main`; publica�
   3. **Retirada do Full** (mercadoria voltando do armazém do ML, não é devolução): botão no "Rastreio não encontrado", atalho no Recebimento, tela RF-000001 com bipar EAN e foto da etiqueta, lista "Retiradas do Full". Fotos na tabela `evidencias` com dono único (devolução ou retirada). Migração `0013`. As fotos das retiradas não entram no prazo de guarda.
   4. **Planilha "Volta ao armazém"** em `/fluxo/estoque-bom`: unidades do Estoque Bom (pela data da conferência, sem depender da NF) e itens das retiradas conferidas; "Baixar planilha" (.xlsx). Sem migração.
   5. **Buscar o pedido no ML ao bipar:** adiada (depende da conta do ML).
+  - **Publicadas na VPS em 16/11, 19h20** (imagem `6f084c8`): web e worker healthy, 14 migrações, `/api/saude` 200. Cópia de antes: `~/backups-devolucoes/banco-antes-melhorias_2026-11-16_1914.dump`; imagem anterior com a tag `antes-melhorias`.
   - **Visão do usuário (16/11):** por enquanto o sistema é **controle em tempo real**, sem integrações. Fluxo: o produto volta do e-commerce → chega no armazém MTC → vem para a bancada → bom volta ao armazém para venda; ruim fica agrupado com fotos e o processo aberto. O estoque fica no **AnyMarket** e no **ERP**, lançado à mão. O **Bitbrain** é só um hub que puxa dados do ML; o sistema não depende dele.
   - **Perguntas em aberto para o fim (o usuário não sabe responder agora):** (a) quem emite a NF de devolução hoje e onde; sem a Focus ligada as devoluções param na etapa 4 (a planilha da melhoria 4 já contorna isso); propostas: "NF emitida fora do sistema" (digitar o número) ou "Seguir sem NF". (b) Inscrição Estadual ou "ISENTO".
 - **Resolvido (16/11): o celular do usuário não abria o site.** Era o **DNS privado** do Android, e o usuário arrumou. Fica de lição: quem tiver DNS com filtro (AdGuard, NextDNS etc.) pode cair no mesmo erro com `sslip.io`; um domínio próprio evita isso.
