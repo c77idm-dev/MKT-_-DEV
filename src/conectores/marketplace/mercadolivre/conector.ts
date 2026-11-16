@@ -3,7 +3,7 @@ import type { ClienteML } from './cliente';
 import { formatarDataML } from './datas';
 import { ehRecusaDefinitiva, ErroMotivoIndisponivel, logErroML } from './erros';
 import { esquemaArquivoEnviado, esquemaBuscaReclamacoes, esquemaDevolucao, esquemaMotivos, esquemaNotaVenda, esquemaReclamacao } from './esquemas';
-import { analisar, ErroFormatoML, escolherEnvio, mapearReclamacao, temDevolucao } from './mapeamento';
+import { analisar, ErroFormatoML, escolherEnvio, mapearReclamacao, temDevolucao, textoMotivoReclamacao } from './mapeamento';
 import type { ConectorMercadoLivre, DadosDevolucaoML, ReclamacaoAtualizada } from './tipos';
 
 /** Spec §7.2: `limit` no máximo 100 e `offset + limit` abaixo de 10000. */
@@ -83,6 +83,10 @@ export class ConectorML implements ConectorMercadoLivre {
     const dados = await this.obterReclamacao(reclamacaoId);
     if (!dados.devolucao) throw new ErroReclamacaoSemDevolucao(reclamacaoId);
     return dados.devolucao;
+  }
+
+  async obterMotivoReclamacao(motivoId: string): Promise<string | null> {
+    return textoMotivoReclamacao(await this.cliente.get(`/post-purchase/v1/claims/reasons/${encodeURIComponent(motivoId)}`));
   }
 
   async *reclamacoesAtualizadasDesde(desde: Date): AsyncGenerator<ReclamacaoAtualizada> {

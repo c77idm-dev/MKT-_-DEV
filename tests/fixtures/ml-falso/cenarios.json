@@ -39,6 +39,7 @@
     },
     "7": {
       "nome": "dois pedidos",
+      "motivo": "PDD9939",
       "devolucao": { "status": "shipped", "subtype": "return_partial" },
       "envio": { "status": "shipped", "type": "return", "destino": "seller_address" },
       "itens": [
@@ -54,6 +55,11 @@
       "itens": [{ "sku": "MLF-FONE-01", "quantidade": "1.0" }]
     },
     "9": { "nome": "reclamação sem devolução", "semDevolucao": true, "itens": [] }
+  },
+  "motivosReclamacao": {
+    "PDD9949": "Comprador se arrependeu",
+    "PDD9939": "O produto tem defeito ou não funciona",
+    "PDD9944": "O produto é diferente do anunciado"
   },
   "notaVenda": {
     "cnpjEmitente": "11222333000181",

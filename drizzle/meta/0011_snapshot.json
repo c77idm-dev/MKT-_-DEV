@@ -1,5 +1,5 @@
 {
-  "id": "21f67071-37e2-48dc-8a0a-cd6f01ed2a25",
+  "id": "5089a04c-a18f-4ba3-9864-a513169a207d",
   "prevId": "d929a22d-1bff-4c6b-a10a-f1f26781852a",
   "version": "7",
   "dialect": "postgresql",
@@ -1307,7 +1307,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"item_id\" is not null and \"tipo\" <> 'EXTRA'",
+          "where": "\"item_id\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2644,6 +2644,37 @@
       },
       "isRLSEnabled": false
     },
+    "public.motivos_reclamacao_ml": {
+      "name": "motivos_reclamacao_ml",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nome": {
+          "name": "nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "consultado_em": {
+          "name": "consultado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.reclamacoes_ml": {
       "name": "reclamacoes_ml",
       "schema": "",
@@ -2674,6 +2705,12 @@
         },
         "status_devolucao": {
           "name": "status_devolucao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivo_id": {
+          "name": "motivo_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
