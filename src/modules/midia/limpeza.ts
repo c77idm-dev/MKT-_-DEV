@@ -6,6 +6,7 @@ import { evidencias, importacoes } from '@/db/schema';
 import { idDoJob, SCHEMA_FILA } from '@/modules/fila/fila';
 import type { NomeTarefa } from '@/modules/fila/tarefas';
 import { registrarEvento } from '@/modules/historico/eventos';
+import { donoDaEvidencia } from './processamento';
 import { pastaTus } from './temporarios';
 
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
@@ -22,7 +23,13 @@ function tarefaDaEvidencia(tipo: string): NomeTarefa {
 async function falharInterrompidas(db: Db, agora: Date, limite: Date, schemaFila: string): Promise<number> {
   if (!/^[a-z_][a-z0-9_]*$/.test(schemaFila)) throw new Error('Schema da fila inválido.');
   const candidatas = await db
-    .select({ id: evidencias.id, tipo: evidencias.tipo, devolucaoId: evidencias.devolucaoId, itemId: evidencias.itemId })
+    .select({
+      id: evidencias.id,
+      tipo: evidencias.tipo,
+      devolucaoId: evidencias.devolucaoId,
+      retiradaId: evidencias.retiradaId,
+      itemId: sql<string | null>`coalesce(${evidencias.itemId}, ${evidencias.itemRetiradaId})`,
+    })
     .from(evidencias)
     .where(and(inArray(evidencias.situacaoProcessamento, ['RECEBIDA', 'PROCESSANDO']), lt(evidencias.enviadoEm, limite)));
   if (candidatas.length === 0) return 0;
@@ -51,8 +58,8 @@ async function falharInterrompidas(db: Db, agora: Date, limite: Date, schemaFila
         .returning({ id: evidencias.id });
       if (!linha) return;
       await registrarEvento(tx, {
-        entidade: 'devolucao',
-        entidadeId: c.devolucaoId,
+        entidade: donoDaEvidencia(c).entidade,
+        entidadeId: donoDaEvidencia(c).id,
         acao: 'evidencia_falhou',
         usuarioId: null,
         em: agora,

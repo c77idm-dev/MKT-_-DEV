@@ -78,6 +78,13 @@
       "when": 1794712528830,
       "tag": "0010_fase6_acabamento",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794839935824,
+      "tag": "0011_melhoria3_retirada_full",
+      "breakpoints": true
     }
   ]
 }

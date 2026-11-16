@@ -3,6 +3,7 @@ import { bigint, check, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uu
 import { SITUACOES_PROCESSAMENTO, TIPOS_EVIDENCIA } from '../../modules/midia/dominio';
 import { usuarios } from './auth';
 import { devolucoes, itensDevolucao } from './devolucoes';
+import { itensRetiradaFull, retiradasFull } from './retiradas';
 
 export const tipoEvidenciaEnum = pgEnum('tipo_evidencia', TIPOS_EVIDENCIA);
 export const situacaoProcessamentoEnum = pgEnum('situacao_processamento', SITUACOES_PROCESSAMENTO);
@@ -12,9 +13,11 @@ export const evidencias = pgTable(
   'evidencias',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    devolucaoId: uuid('devolucao_id')
-      .notNull()
-      .references(() => devolucoes.id, { onDelete: 'cascade' }),
+    /** O dono é a devolução ou a retirada do Full (melhoria 3): exatamente um dos dois (check evidencias_dono). */
+    devolucaoId: uuid('devolucao_id').references(() => devolucoes.id, { onDelete: 'cascade' }),
+    retiradaId: uuid('retirada_id').references(() => retiradasFull.id, { onDelete: 'cascade' }),
+    /** Foto opcional de um item da retirada (tipo FOTO_3_PRODUTO). */
+    itemRetiradaId: uuid('item_retirada_id').references(() => itensRetiradaFull.id, { onDelete: 'cascade' }),
     /** Obrigatório só nas Fotos 3 e 4 (check). */
     itemId: uuid('item_id').references(() => itensDevolucao.id, { onDelete: 'cascade' }),
     tipo: tipoEvidenciaEnum('tipo').notNull(),
@@ -41,8 +44,16 @@ export const evidencias = pgTable(
   },
   (t) => [
     index('evidencias_devolucao_idx').on(t.devolucaoId),
+    index('evidencias_retirada_idx').on(t.retiradaId),
     uniqueIndex('evidencias_pacote_tipo_uq').on(t.devolucaoId, t.tipo).where(sql`"item_id" is null and "tipo" <> 'EXTRA'`),
     uniqueIndex('evidencias_item_tipo_uq').on(t.itemId, t.tipo).where(sql`"item_id" is not null`),
-    check('evidencias_item_obrigatorio', sql`"tipo" not in ('FOTO_3_PRODUTO', 'FOTO_4_CODIGO_SERIAL') or "item_id" is not null`),
+    uniqueIndex('evidencias_retirada_tipo_uq').on(t.retiradaId, t.tipo).where(sql`"retirada_id" is not null and "item_retirada_id" is null`),
+    uniqueIndex('evidencias_item_retirada_tipo_uq').on(t.itemRetiradaId, t.tipo).where(sql`"item_retirada_id" is not null`),
+    check('evidencias_dono', sql`num_nonnulls("devolucao_id", "retirada_id") = 1`),
+    check('evidencias_item_retirada', sql`"item_retirada_id" is null or ("retirada_id" is not null and "item_id" is null)`),
+    check(
+      'evidencias_item_obrigatorio',
+      sql`"tipo" not in ('FOTO_3_PRODUTO', 'FOTO_4_CODIGO_SERIAL') or "item_id" is not null or "item_retirada_id" is not null`,
+    ),
   ],
 );

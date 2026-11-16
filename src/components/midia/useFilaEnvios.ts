@@ -42,7 +42,7 @@ export function useManterFilaAtiva() {
  * Envios de uma devolução. Tenta de novo ao abrir a tela, quando a rede volta, quando o app volta ao primeiro
  * plano e a cada 2 s (só o que já passou da espera). O iPhone não envia com o app fechado (pesquisa §4).
  */
-export function useFilaEnvios(devolucaoId: string, aoConcluir?: (e: EnvioConcluido) => void) {
+export function useFilaEnvios(devolucaoId: string, aoConcluir?: (e: EnvioConcluido) => void, dono: 'devolucao' | 'retirada' = 'devolucao') {
   const [envios, setEnvios] = useState<RegistroEnvio[]>([]);
   const [concluidos, setConcluidos] = useState<EnvioConcluido[]>([]);
   const aoConcluirRef = useRef(aoConcluir);
@@ -86,7 +86,10 @@ export function useFilaEnvios(devolucaoId: string, aoConcluir?: (e: EnvioConclui
     };
   }, [devolucaoId]);
 
-  const adicionar = useCallback((novo: Omit<NovoEnvio, 'devolucaoId'>) => fila().adicionar({ ...novo, devolucaoId }), [devolucaoId]);
+  const adicionar = useCallback(
+    (novo: Omit<NovoEnvio, 'devolucaoId' | 'retirada'>) => fila().adicionar({ ...novo, devolucaoId, ...(dono === 'retirada' ? { retirada: true } : {}) }),
+    [devolucaoId, dono],
+  );
   const tentarDeNovo = useCallback((idCliente: string) => fila().tentarDeNovo(idCliente), []);
   const descartar = useCallback((idCliente: string) => fila().descartar(idCliente), []);
   return { envios, concluidos, adicionar, tentarDeNovo, descartar };

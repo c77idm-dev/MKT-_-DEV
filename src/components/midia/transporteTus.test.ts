@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { criarTransporteTus, idDoEnvio, resultadoDoErro } from './transporteTus';
 
-const falso = vi.hoisted(() => ({ opcoes: null as null | { onSuccess: () => Promise<void> }, url: '' }));
+const falso = vi.hoisted(() => ({ opcoes: null as null | { onSuccess: () => Promise<void>; metadata?: Record<string, string> }, url: '' }));
 vi.mock('tus-js-client', () => ({
   Upload: class {
     constructor(_arquivo: unknown, opcoes: { onSuccess: () => Promise<void> }) {
@@ -37,5 +37,13 @@ describe('transporte tus', () => {
     const res = await transporte(r as never, { aoUrl: () => {}, aoProgresso: () => {} } as never);
     expect(registrar).toHaveBeenCalledWith('abc123', 'cli-1');
     expect(res).toEqual({ ok: true, evidenciaId: 'ev1' });
+  });
+
+  it('foto da retirada do Full (melhoria 3): o dono vai em retiradaId, sem devolucaoId', async () => {
+    falso.url = '/api/midia/abc124';
+    const transporte = criarTransporteTus(vi.fn().mockResolvedValue({ ok: true, evidenciaId: 'ev2' }));
+    const r = { idCliente: 'cli-2', devolucaoId: 'rf1', retirada: true, itemId: 'it1', tipo: 'FOTO_3_PRODUTO', tipoConteudo: 'image/jpeg', nome: 'b.jpg', arquivo: new Blob(['x']) };
+    await transporte(r as never, { aoUrl: () => {}, aoProgresso: () => {} } as never);
+    expect(falso.opcoes?.metadata).toEqual({ idCliente: 'cli-2', retiradaId: 'rf1', itemId: 'it1', tipo: 'FOTO_3_PRODUTO', tipoConteudo: 'image/jpeg', nome: 'b.jpg' });
   });
 });

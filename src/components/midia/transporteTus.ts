@@ -37,7 +37,8 @@ export function criarTransporteTus(registrar: (uploadId: string, idCliente: stri
         storeFingerprintForResuming: false,
         metadata: {
           idCliente: r.idCliente,
-          devolucaoId: r.devolucaoId,
+          // Retirada do Full (melhoria 3): o dono vai em retiradaId.
+          ...(r.retirada ? { retiradaId: r.devolucaoId } : { devolucaoId: r.devolucaoId }),
           tipo: r.tipo,
           tipoConteudo: r.tipoConteudo,
           nome: r.nome,

@@ -4,7 +4,10 @@ export type EstadoEnvio = 'pendente' | 'enviando' | 'erro';
 
 export type RegistroEnvio = {
   idCliente: string;
+  /** Id do dono: a devolução ou, com `retirada`, a retirada do Full (o nome fica pelos envios já guardados no aparelho). */
   devolucaoId: string;
+  /** Melhoria 3: o dono é uma retirada do Full. */
+  retirada?: boolean;
   itemId: string | null;
   tipo: TipoEvidencia;
   nome: string;
@@ -22,7 +25,7 @@ export type RegistroEnvio = {
   progresso: number;
 };
 
-export type NovoEnvio = Pick<RegistroEnvio, 'idCliente' | 'devolucaoId' | 'itemId' | 'tipo' | 'nome' | 'tipoConteudo' | 'arquivo'>;
+export type NovoEnvio = Pick<RegistroEnvio, 'idCliente' | 'devolucaoId' | 'retirada' | 'itemId' | 'tipo' | 'nome' | 'tipoConteudo' | 'arquivo'>;
 
 export interface ArmazemFila {
   listar(): Promise<RegistroEnvio[]>;

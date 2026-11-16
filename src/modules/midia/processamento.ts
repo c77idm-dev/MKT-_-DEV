@@ -1,9 +1,9 @@
 import { createReadStream } from 'node:fs';
 import { readFile, rm, stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '@/db/client';
-import { devolucoes, evidencias, usuarios } from '@/db/schema';
+import { devolucoes, evidencias, retiradasFull, usuarios } from '@/db/schema';
 import { CONFIG_TAREFAS, type NomeTarefa } from '@/modules/fila/tarefas';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { obterArmazenamento, provedorAtual } from './armazenamento';
@@ -22,20 +22,30 @@ async function carregar(db: Db, evidenciaId: string) {
     .select({
       id: evidencias.id,
       devolucaoId: evidencias.devolucaoId,
-      itemId: evidencias.itemId,
+      retiradaId: evidencias.retiradaId,
+      itemId: sql<string | null>`coalesce(${evidencias.itemId}, ${evidencias.itemRetiradaId})`,
       tipo: evidencias.tipo,
       situacao: evidencias.situacaoProcessamento,
       caminhoTemporario: evidencias.caminhoTemporario,
       sha256Original: evidencias.sha256Original,
       enviadoEm: evidencias.enviadoEm,
-      codigo: devolucoes.codigo,
+      /** DEV-… ou, na retirada do Full, RF-… (vai no carimbo da foto). */
+      codigo: sql<string>`coalesce(${devolucoes.codigo}, ${retiradasFull.codigo})`,
       usuarioNome: usuarios.nome,
     })
     .from(evidencias)
-    .innerJoin(devolucoes, eq(devolucoes.id, evidencias.devolucaoId))
+    .leftJoin(devolucoes, eq(devolucoes.id, evidencias.devolucaoId))
+    .leftJoin(retiradasFull, eq(retiradasFull.id, evidencias.retiradaId))
     .leftJoin(usuarios, eq(usuarios.id, evidencias.enviadoPor))
     .where(eq(evidencias.id, evidenciaId));
   return e ?? null;
+}
+
+/** A devolução ou a retirada do Full (melhoria 3) dona da evidência: o histórico e a chave no armazenamento são dela. */
+export function donoDaEvidencia(e: { devolucaoId: string | null; retiradaId: string | null }): { entidade: 'devolucao' | 'retirada_full'; id: string } {
+  if (e.retiradaId) return { entidade: 'retirada_full', id: e.retiradaId };
+  if (e.devolucaoId) return { entidade: 'devolucao', id: e.devolucaoId };
+  throw new Error('Evidência sem dono.');
 }
 
 export type EvidenciaEmProcessamento = NonNullable<Awaited<ReturnType<typeof carregar>>> & { caminhoTemporario: string };
@@ -73,8 +83,8 @@ export async function concluirProcessamento(
       .returning({ id: evidencias.id });
     if (!linha) return false;
     await registrarEvento(tx, {
-      entidade: 'devolucao',
-      entidadeId: e.devolucaoId,
+      entidade: donoDaEvidencia(e).entidade,
+      entidadeId: donoDaEvidencia(e).id,
       acao: 'evidencia_processada',
       usuarioId: null,
       em: agora,
@@ -96,8 +106,8 @@ export async function registrarErro(db: Db, e: EvidenciaEmProcessamento, tarefa:
       .returning({ id: evidencias.id });
     if (linha && ultima) {
       await registrarEvento(tx, {
-        entidade: 'devolucao',
-        entidadeId: e.devolucaoId,
+        entidade: donoDaEvidencia(e).entidade,
+        entidadeId: donoDaEvidencia(e).id,
         acao: 'evidencia_falhou',
         usuarioId: null,
         em: ctx.agora,
@@ -126,7 +136,7 @@ export async function processarFoto(db: Db, evidenciaId: string, ctx: ContextoPr
       codigo: e.codigo,
       usuario: e.usuarioNome ?? 'usuário removido',
     });
-    const chave = chaveEvidencia(e.devolucaoId, e.id, 'jpg');
+    const chave = chaveEvidencia(donoDaEvidencia(e).id, e.id, 'jpg');
     const armazenamento = obterArmazenamento();
     await armazenamento.salvar(chave, Readable.from([conteudo]), { tipoConteudo: 'image/jpeg', tamanho: conteudo.length });
     const ok = await concluirProcessamento(db, e, { chave, tipoConteudo: 'image/jpeg', tamanho: conteudo.length, sha256Final: sha256DoBuffer(conteudo) }, ctx.agora);
@@ -159,7 +169,7 @@ export async function transcodificarVideo(
     if (problema) throw new Error(problema);
     const { size: tamanho } = await stat(saida);
     const sha256Final = await sha256DoArquivo(saida);
-    const chave = chaveEvidencia(e.devolucaoId, e.id, 'mp4');
+    const chave = chaveEvidencia(donoDaEvidencia(e).id, e.id, 'mp4');
     const armazenamento = obterArmazenamento();
     await armazenamento.salvar(chave, createReadStream(saida), { tipoConteudo: 'video/mp4', tamanho });
     const ok = await concluirProcessamento(db, e, { chave, tipoConteudo: 'video/mp4', tamanho, sha256Final }, ctx.agora);

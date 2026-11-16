@@ -1,12 +1,13 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import type { Db, DbOuTx } from '@/db/client';
 import { ehViolacaoDeUnicidade } from '@/db/erros';
-import { devolucoes, evidencias, itensDevolucao } from '@/db/schema';
+import { devolucoes, evidencias, itensDevolucao, retiradasFull } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
 import { pode } from '@/modules/auth/permissoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { obterFila } from '@/modules/fila/fila';
 import { registrarEvento } from '@/modules/historico/eventos';
+import { situacaoParaEnvio } from '@/modules/retiradas/retiradas';
 import { armazenamentoDoProvedor } from './armazenamento';
 import {
   EVIDENCIAS_DO_ITEM,
@@ -34,7 +35,10 @@ export class ErroEnvio extends Error {
 
 export type MetadadosEnvio = {
   idCliente: string;
-  devolucaoId: string;
+  /** O dono da evidência: a devolução ou, na melhoria 3, a retirada do Full (`retiradaId`). Exatamente um dos dois. */
+  devolucaoId: string | null;
+  retiradaId?: string | null;
+  /** Na retirada do Full, o item da retirada (foto opcional do item). */
   itemId: string | null;
   tipo: TipoEvidencia;
   tipoConteudo: string;
@@ -46,15 +50,31 @@ export function lerMetadados(m: Record<string, string | null> | undefined): Meta
   const v = (chave: string) => (m[chave] ?? '').trim();
   const idCliente = v('idCliente');
   const devolucaoId = v('devolucaoId');
+  const retiradaId = v('retiradaId');
   const itemId = v('itemId');
   const tipo = v('tipo');
   const tipoConteudo = v('tipoConteudo').toLowerCase();
   if (!ehUuid(idCliente)) return 'Envio sem identificação.';
-  if (!ehUuid(devolucaoId)) return 'Devolução inválida.';
+  if (retiradaId ? !ehUuid(retiradaId) : !ehUuid(devolucaoId)) return retiradaId ? 'Retirada inválida.' : 'Devolução inválida.';
   if (itemId && !ehUuid(itemId)) return 'Unidade inválida.';
   if (!ehTipoEvidencia(tipo)) return 'Tipo de evidência inválido.';
   if (!tipoConteudo) return 'Tipo do arquivo não informado.';
-  return { idCliente, devolucaoId, itemId: itemId || null, tipo, tipoConteudo, nome: v('nome').slice(0, 120) || 'arquivo' };
+  const dono = retiradaId ? { devolucaoId: null, retiradaId } : { devolucaoId };
+  return { idCliente, ...dono, itemId: itemId || null, tipo, tipoConteudo, nome: v('nome').slice(0, 120) || 'arquivo' };
+}
+
+/**
+ * Foto da retirada do Full (melhoria 3): Foto 1 = etiqueta (sem item); Foto 3 = foto opcional de um item da retirada.
+ * Só com a retirada Aberta, por quem opera devoluções (a regra do perfil vem antes, em autorizarEnvio).
+ */
+async function autorizarEnvioRetirada(db: DbOuTx, meta: MetadadosEnvio & { retiradaId: string }): Promise<void> {
+  if (meta.tipo !== 'FOTO_1_ETIQUETA' && meta.tipo !== 'FOTO_3_PRODUTO') {
+    throw new ErroEnvio(400, 'Na retirada do Full só vão a foto da etiqueta e a foto de cada item.');
+  }
+  const s = await situacaoParaEnvio(db, meta.retiradaId, meta.itemId);
+  if (!s.existe) throw new ErroEnvio(404, 'Retirada não encontrada.');
+  if (!s.aberta) throw new ErroEnvio(409, 'Esta retirada já foi conferida.');
+  if (meta.itemId && !s.itemDaRetirada) throw new ErroEnvio(400, 'O item não é desta retirada.');
 }
 
 /**
@@ -77,10 +97,13 @@ export async function autorizarEnvio(db: DbOuTx, meta: MetadadosEnvio, tamanho: 
   if (daUnidade && !meta.itemId) throw new ErroEnvio(400, 'Fotos 3 e 4 são de uma unidade: falta dizer qual.');
   if (!daUnidade && meta.tipo !== 'EXTRA' && meta.itemId) throw new ErroEnvio(400, 'Fotos 1 e 2 e o Vídeo de Prova são do pacote, não de uma unidade.');
 
+  if (meta.retiradaId) return autorizarEnvioRetirada(db, { ...meta, retiradaId: meta.retiradaId });
+  if (!meta.devolucaoId) throw new ErroEnvio(400, 'Devolução inválida.');
+  const devolucaoId = meta.devolucaoId;
   const [d] = await db
     .select({ status: devolucoes.status, conferenteId: devolucoes.conferenteId, naoIdentificada: devolucoes.naoIdentificada })
     .from(devolucoes)
-    .where(eq(devolucoes.id, meta.devolucaoId));
+    .where(eq(devolucoes.id, devolucaoId));
   if (!d) throw new ErroEnvio(404, 'Devolução não encontrada.');
   const naConferencia = d.status === 'EM_CONFERENCIA' && d.conferenteId === usuario.id;
   const noRecebimento =
@@ -90,9 +113,16 @@ export async function autorizarEnvio(db: DbOuTx, meta: MetadadosEnvio, tamanho: 
     const [item] = await db
       .select({ id: itensDevolucao.id })
       .from(itensDevolucao)
-      .where(and(eq(itensDevolucao.id, meta.itemId), eq(itensDevolucao.devolucaoId, meta.devolucaoId)));
+      .where(and(eq(itensDevolucao.id, meta.itemId), eq(itensDevolucao.devolucaoId, devolucaoId)));
     if (!item) throw new ErroEnvio(400, 'A unidade não é desta devolução.');
   }
+}
+
+/** A devolução ou a retirada do Full (melhoria 3) de que a evidência é. */
+function donoDoEnvio(meta: MetadadosEnvio): { id: string; retiradaId: string | null } {
+  if (meta.retiradaId) return { id: meta.retiradaId, retiradaId: meta.retiradaId };
+  if (meta.devolucaoId) return { id: meta.devolucaoId, retiradaId: null };
+  throw new ErroEnvio(400, 'Devolução inválida.');
 }
 
 export type EvidenciaRecebida = {
@@ -115,12 +145,14 @@ export async function registrarRecebida(db: Db, e: EvidenciaRecebida): Promise<{
   const [jaExiste] = await db.select({ id: evidencias.id }).from(evidencias).where(eq(evidencias.idCliente, e.meta.idCliente));
   if (jaExiste) return { evidenciaId: jaExiste.id, repetida: true };
 
+  const dono = donoDoEnvio(e.meta);
   const apagarDepois: { caminho: string | null; provedor: string | null; temporario: string | null }[] = [];
   let resultado: { evidenciaId: string; repetida: boolean };
   try {
     resultado = await db.transaction(async (tx) => {
-      // Trava a devolução: dois envios da mesma vaga ao mesmo tempo esperam um pelo outro.
-      await tx.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.id, e.meta.devolucaoId)).for('update');
+      // Trava o dono (devolução ou retirada do Full): dois envios da mesma vaga ao mesmo tempo esperam um pelo outro.
+      if (dono.retiradaId) await tx.select({ id: retiradasFull.id }).from(retiradasFull).where(eq(retiradasFull.id, dono.retiradaId)).for('update');
+      else await tx.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.id, dono.id)).for('update');
       await autorizarEnvio(tx, e.meta, e.tamanho, e.usuario);
       const [anterior] =
         e.meta.tipo === 'EXTRA'
@@ -130,9 +162,15 @@ export async function registrarRecebida(db: Db, e: EvidenciaRecebida): Promise<{
               .from(evidencias)
               .where(
                 and(
-                  eq(evidencias.devolucaoId, e.meta.devolucaoId),
+                  dono.retiradaId ? eq(evidencias.retiradaId, dono.retiradaId) : eq(evidencias.devolucaoId, dono.id),
                   eq(evidencias.tipo, e.meta.tipo),
-                  e.meta.itemId ? eq(evidencias.itemId, e.meta.itemId) : isNull(evidencias.itemId),
+                  dono.retiradaId
+                    ? e.meta.itemId
+                      ? eq(evidencias.itemRetiradaId, e.meta.itemId)
+                      : isNull(evidencias.itemRetiradaId)
+                    : e.meta.itemId
+                      ? eq(evidencias.itemId, e.meta.itemId)
+                      : isNull(evidencias.itemId),
                 ),
               );
       if (anterior) {
@@ -142,8 +180,10 @@ export async function registrarRecebida(db: Db, e: EvidenciaRecebida): Promise<{
       const [nova] = await tx
         .insert(evidencias)
         .values({
-          devolucaoId: e.meta.devolucaoId,
-          itemId: e.meta.itemId,
+          devolucaoId: dono.retiradaId ? null : dono.id,
+          itemId: dono.retiradaId ? null : e.meta.itemId,
+          retiradaId: dono.retiradaId,
+          itemRetiradaId: dono.retiradaId ? e.meta.itemId : null,
           tipo: e.meta.tipo,
           tipoConteudo: e.meta.tipoConteudo,
           caminhoTemporario: e.caminhoTemporario,
@@ -156,8 +196,8 @@ export async function registrarRecebida(db: Db, e: EvidenciaRecebida): Promise<{
         .returning({ id: evidencias.id });
       const dados = { evidenciaId: nova.id, tipo: e.meta.tipo, itemId: e.meta.itemId, sha256_original: e.sha256 };
       await registrarEvento(tx, {
-        entidade: 'devolucao',
-        entidadeId: e.meta.devolucaoId,
+        entidade: dono.retiradaId ? 'retirada_full' : 'devolucao',
+        entidadeId: dono.id,
         acao: anterior ? 'evidencia_refeita' : 'evidencia_enviada',
         usuarioId: e.usuario.id,
         em: agora,
