@@ -42,7 +42,8 @@ export const evidencias = pgTable(
   (t) => [
     index('evidencias_devolucao_idx').on(t.devolucaoId),
     uniqueIndex('evidencias_pacote_tipo_uq').on(t.devolucaoId, t.tipo).where(sql`"item_id" is null and "tipo" <> 'EXTRA'`),
-    uniqueIndex('evidencias_item_tipo_uq').on(t.itemId, t.tipo).where(sql`"item_id" is not null`),
+    // Melhoria 2: várias fotos da avaria (EXTRA) por unidade.
+    uniqueIndex('evidencias_item_tipo_uq').on(t.itemId, t.tipo).where(sql`"item_id" is not null and "tipo" <> 'EXTRA'`),
     check('evidencias_item_obrigatorio', sql`"tipo" not in ('FOTO_3_PRODUTO', 'FOTO_4_CODIGO_SERIAL') or "item_id" is not null`),
   ],
 );

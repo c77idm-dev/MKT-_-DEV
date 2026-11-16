@@ -76,7 +76,8 @@ export async function fotosParaContestacao(db: DbOuTx, devolucaoId: string, iten
         itensProblemaIds.length > 0 ? or(isNull(evidencias.itemId), inArray(evidencias.itemId, itensProblemaIds)) : isNull(evidencias.itemId),
       ),
     )
-    .orderBy(asc(evidencias.tipo), asc(evidencias.enviadoEm))
+    // Melhoria 2: as Fotos 1 a 4 sempre antes das fotos da avaria (EXTRA), sem depender da ordem do enum no banco.
+    .orderBy(asc(sql`case when ${evidencias.tipo} = 'EXTRA' then 1 else 0 end`), asc(evidencias.tipo), asc(evidencias.enviadoEm))
     .limit(MAX_FOTOS_CONTESTACAO);
   return linhas.map((l) => l.id);
 }

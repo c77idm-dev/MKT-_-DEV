@@ -66,6 +66,24 @@ describe('processarResultadoConferencia (tarefa ml.enviar-resultado)', () => {
     expect((await acoes(d.id)).filter((a) => a === 'contestacao_criada')).toHaveLength(1);
   });
 
+  it('a pré-seleção da contestação põe as Fotos 1 a 4 antes das extras (melhoria 2)', async () => {
+    const d = await devolucaoMLConferidaTeste(db, { itens: [{ destino: 'PROBLEMA', motivo: 'AVARIADO' }] });
+    const [problema] = d.itens;
+    const extras = [];
+    for (let i = 0; i < 8; i++) extras.push(await fotoTeste(db, { devolucaoId: d.id, tipo: 'EXTRA', itemId: problema.id }));
+    const fixas = [
+      await fotoTeste(db, { devolucaoId: d.id, tipo: 'FOTO_1_ETIQUETA' }),
+      await fotoTeste(db, { devolucaoId: d.id, tipo: 'FOTO_2_EMBALAGEM' }),
+      await fotoTeste(db, { devolucaoId: d.id, tipo: 'FOTO_3_PRODUTO', itemId: problema.id }),
+      await fotoTeste(db, { devolucaoId: d.id, tipo: 'FOTO_4_CODIGO_SERIAL', itemId: problema.id }),
+    ];
+    expect(await processarResultadoConferencia(db, d.id, AGORA)).toBe('contestacao_criada');
+    const [c] = await db.select().from(contestacoesCanal);
+    expect(c.evidencias).toHaveLength(10);
+    expect(c.evidencias.slice(0, 4)).toEqual(fixas.map((f) => f.id));
+    expect(c.evidencias.slice(4)).toEqual(extras.slice(0, 6).map((f) => f.id));
+  });
+
   it('todos AUSENTE: a devolução já está CONCLUIDA e a contestação é SRF5', async () => {
     const d = await devolucaoMLConferidaTeste(db, { itens: [{ destino: null }] });
     expect(await processarResultadoConferencia(db, d.id, AGORA)).toBe('contestacao_criada');

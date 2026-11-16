@@ -46,12 +46,21 @@ export class ArmazemMemoria implements ArmazemFila {
 
 export type ResultadoTransporte = { ok: true; evidenciaId: string } | { ok: false; definitivo: boolean; mensagem: string };
 export type Transporte = (r: RegistroEnvio, eventos: { aoProgresso(fracao: number): void; aoUrl(url: string): void }) => Promise<ResultadoTransporte>;
-export type EnvioConcluido = { idCliente: string; devolucaoId: string; itemId: string | null; tipo: TipoEvidencia; evidenciaId: string };
+export type ResultadoRemocao = 'removida' | 'subindo' | 'ja_enviada';
+export type EnvioConcluido ={ idCliente: string; devolucaoId: string; itemId: string | null; tipo: TipoEvidencia; evidenciaId: string };
 
 const SEM_CONEXAO = 'Sem conexão com o servidor. Tentando de novo…';
 
 function mesmaVaga(a: RegistroEnvio, b: RegistroEnvio): boolean {
   return a.devolucaoId === b.devolucaoId && a.tipo === b.tipo && a.itemId === b.itemId;
+}
+
+/**
+ * Lista do que foi confirmado nesta tela. Fotos da avaria (EXTRA) acumulam (melhoria 2); as outras vagas guardam só o
+ * mais novo. O mesmo envio confirmado de novo não duplica.
+ */
+export function juntarConcluido(lista: EnvioConcluido[], e: EnvioConcluido): EnvioConcluido[] {
+  return [...lista.filter((x) => x.idCliente !== e.idCliente && (e.tipo === 'EXTRA' || !(x.tipo === e.tipo && x.itemId === e.itemId))), e];
 }
 
 /** 2 s, 4 s, 8 s... até 5 min, com ±20% de sorteio para os celulares não tentarem todos juntos (pesquisa §4). */
@@ -73,6 +82,10 @@ export class FilaEnvios {
   private readonly arquivos = new Map<string, Blob>();
   private readonly ouvintes = new Set<() => void>();
   private readonly ouvintesConcluidos = new Set<(e: EnvioConcluido) => void>();
+  /** O que está subindo agora (não dá para tirar no meio: o servidor pode já ter registrado). */
+  private emEnvio: string | null = null;
+  /** Removidos pela pessoa (melhoria 2): nunca sobem, mesmo que a rodada já os tenha escolhido. */
+  private readonly removidos = new Set<string>();
 
   constructor(
     private readonly armazem: ArmazemFila,
@@ -171,6 +184,20 @@ export class FilaEnvios {
 
   /** true = pode seguir para o próximo; false = falha passageira (para a rodada). */
   private async enviar(r: RegistroEnvio): Promise<boolean> {
+    // Síncrono até marcar emEnvio: remover() vê ou o removido, ou o emEnvio, nunca um intervalo entre os dois.
+    if (this.removidos.has(r.idCliente)) {
+      await this.armazem.apagar(r.idCliente);
+      return true;
+    }
+    this.emEnvio = r.idCliente;
+    try {
+      return await this.enviarAgora(r);
+    } finally {
+      this.emEnvio = null;
+    }
+  }
+
+  private async enviarAgora(r: RegistroEnvio): Promise<boolean> {
     let uploadUrl = r.uploadUrl;
     await this.armazem.gravar({ ...r, estado: 'enviando', mensagem: null, progresso: 0 });
     this.avisar();
@@ -233,6 +260,25 @@ export class FilaEnvios {
     await this.armazem.gravar({ ...r, estado: 'pendente', proximaTentativaEm: 0, mensagem: null });
     this.avisar();
     await this.processar(true);
+  }
+
+  /**
+   * Melhoria 2: a pessoa removeu a foto antes de ela subir. Tira da fila e ela nunca é enviada.
+   * - `subindo`: está subindo agora (espere terminar e remova do servidor);
+   * - `ja_enviada`: já subiu e saiu da fila (remova do servidor).
+   */
+  async remover(idCliente: string): Promise<ResultadoRemocao> {
+    if (this.emEnvio === idCliente) return 'subindo';
+    const naFila = (await this.armazem.listar()).some((r) => r.idCliente === idCliente);
+    // De novo depois do await: a rodada pode ter começado este envio enquanto a lista era lida.
+    if (this.emEnvio === idCliente) return 'subindo';
+    if (!naFila) return 'ja_enviada';
+    this.removidos.add(idCliente);
+    await this.armazem.apagar(idCliente);
+    this.arquivos.delete(idCliente);
+    this.progresso.delete(idCliente);
+    this.avisar();
+    return 'removida';
   }
 
   async descartar(idCliente: string): Promise<void> {

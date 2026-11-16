@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ArmazemMemoria, FilaEnvios, proximaEspera, type NovoEnvio, type ResultadoTransporte, type Transporte } from './filaEnvios';
+import { ArmazemMemoria, FilaEnvios, juntarConcluido, proximaEspera, type NovoEnvio, type ResultadoTransporte, type Transporte } from './filaEnvios';
 
 function novo(idCliente: string): NovoEnvio {
   return { idCliente, devolucaoId: 'd1', itemId: null, tipo: 'FOTO_1_ETIQUETA', nome: 'foto.jpg', tipoConteudo: 'image/jpeg', arquivo: new Blob(['abc']) };
@@ -165,5 +165,81 @@ describe('proximaEspera (espera crescente com sorteio, até 5 min)', () => {
     expect(proximaEspera(1, 0)).toBe(1600);
     expect(proximaEspera(1, 1)).toBe(2400);
     expect(proximaEspera(30, 0.5)).toBe(300_000);
+  });
+});
+
+describe('remover (melhoria 2: fotos da avaria)', () => {
+  const extra = (idCliente: string): NovoEnvio => ({ ...novo(idCliente), itemId: 'i1', tipo: 'EXTRA' });
+
+  it('remover tira da fila e o envio nunca acontece', async () => {
+    const armazem = new ArmazemMemoria();
+    const { transporte, chamadas } = transporteDe([{ ok: false, definitivo: false, mensagem: 'Sem conexão' }]);
+    let agora = 1_000_000;
+    const fila = new FilaEnvios(armazem, transporte, () => agora, () => 0.5);
+    await fila.adicionar(extra('a'));
+    await fila.processar();
+    expect(chamadas).toHaveLength(1);
+    expect(await fila.remover('a')).toBe('removida');
+    agora += 60_000;
+    await fila.processar(true);
+    expect(chamadas).toHaveLength(1);
+    expect(await armazem.listar()).toEqual([]);
+  });
+
+  it('remover durante o envio devolve "subindo" e o envio termina normalmente', async () => {
+    let liberar!: (r: ResultadoTransporte) => void;
+    const armazem = new ArmazemMemoria();
+    const fila = new FilaEnvios(armazem, () => new Promise<ResultadoTransporte>((ok) => (liberar = ok)));
+    const concluidos: string[] = [];
+    fila.aoConcluir((e) => concluidos.push(e.evidenciaId));
+    await fila.adicionar(extra('a'));
+    await expect.poll(async () => (await armazem.listar()).map((r) => r.estado)).toEqual(['enviando']);
+    expect(await fila.remover('a')).toBe('subindo');
+    liberar({ ok: true, evidenciaId: 'ev-a' });
+    await fila.processar();
+    expect(concluidos).toEqual(['ev-a']);
+    expect(await armazem.listar()).toEqual([]);
+  });
+
+  it('remover depois de a rodada escolher o envio: ele é pulado', async () => {
+    const armazem = new ArmazemMemoria();
+    const { transporte, chamadas } = transporteDe([]);
+    const fila = new FilaEnvios(armazem, transporte);
+    // A rodada lê a lista (assíncrono) e só depois começa o envio: a remoção cai nesse intervalo.
+    const listarOriginal = armazem.listar.bind(armazem);
+    let removerNaLeitura = false;
+    armazem.listar = async () => {
+      const lista = await listarOriginal();
+      if (removerNaLeitura) {
+        removerNaLeitura = false;
+        await fila.remover('a');
+      }
+      return lista;
+    };
+    await armazem.gravar({ ...extra('a'), tamanho: 3, criadoEm: 1, tentativas: 0, proximaTentativaEm: 0, estado: 'pendente', uploadUrl: null, mensagem: null, progresso: 0 });
+    removerNaLeitura = true;
+    await fila.processar();
+    expect(chamadas).toEqual([]);
+    expect(await listarOriginal()).toEqual([]);
+  });
+
+  it('remover depois de a foto já ter subido: avisa "ja_enviada" (a tela pede para remover do servidor)', async () => {
+    const armazem = new ArmazemMemoria();
+    const { transporte } = transporteDe([]);
+    const fila = new FilaEnvios(armazem, transporte);
+    await fila.adicionar(extra('a'));
+    await fila.processar();
+    expect(await armazem.listar()).toEqual([]);
+    expect(await fila.remover('a')).toBe('ja_enviada');
+  });
+
+  it('juntarConcluido guarda duas EXTRA da mesma unidade e substitui a Foto 3', () => {
+    const base = { devolucaoId: 'd1', itemId: 'i1' };
+    let lista = juntarConcluido([], { ...base, idCliente: 'a', tipo: 'EXTRA', evidenciaId: 'e1' });
+    lista = juntarConcluido(lista, { ...base, idCliente: 'b', tipo: 'EXTRA', evidenciaId: 'e2' });
+    lista = juntarConcluido(lista, { ...base, idCliente: 'c', tipo: 'FOTO_3_PRODUTO', evidenciaId: 'e3' });
+    lista = juntarConcluido(lista, { ...base, idCliente: 'd', tipo: 'FOTO_3_PRODUTO', evidenciaId: 'e4' });
+    lista = juntarConcluido(lista, { ...base, idCliente: 'a', tipo: 'EXTRA', evidenciaId: 'e1' });
+    expect(lista.map((x) => x.evidenciaId)).toEqual(['e2', 'e4', 'e1']);
   });
 });
