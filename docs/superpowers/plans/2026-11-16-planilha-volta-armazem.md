@@ -55,7 +55,7 @@
 - `planilhaVolta(p: Periodo, linhas: LinhaVolta[]): (string | number | null)[][]`: `['Volta ao armazém']`, `['Período', 'DD/MM/AAAA a DD/MM/AAAA']`, linha vazia, `COLUNAS_VOLTA`, uma linha por `LinhaVolta` (Data em `formatarDataHora`).
 
 - [ ] **Passo 1: Testes (`dominio.test.ts`)**
-  - `'período: padrão hoje em Brasília, De depois de Até e mais de 366 dias são inválidos'`: com `agora = 2026-11-17T02:30:00Z` (23h30 do dia 16 em Brasília), `lerPeriodo({}, agora)` é `{ de: '2026-11-16', ate: '2026-11-16', valido: true }`; `validarPeriodoVolta('2026-11-17', '2026-11-16')` falso; `('2025-11-16', '2026-11-16')` (367 dias) falso; `('2025-11-17', '2026-11-16')` (366) verdadeiro; `('2026-02-30', …)` falso.
+  - `'período: padrão hoje em Brasília, De depois de Até e mais de 366 dias são inválidos'`: com `agora = 2026-11-17T02:30:00Z` (23h30 do dia 16 em Brasília), `lerPeriodo({}, agora)` é `{ de: '2026-11-16', ate: '2026-11-16', valido: true }`; `validarPeriodoVolta('2026-11-17', '2026-11-16')` falso; `('2025-11-15', '2026-11-16')` (367 dias) falso; `('2025-11-16', '2026-11-16')` (366) verdadeiro; `('2026-02-30', …)` falso.
   - `'atalhos: Hoje, Últimos 7 dias e Este mês'`: com `agora` em 16/11/2026, `[{Hoje, 16..16}, {Últimos 7 dias, 10..16}, {Este mês, 01..16}]`.
   - `'Situação: rótulos da spec e o rótulo do próprio status nos outros'`: AGUARDANDO_NF → "Aguardando NF", DISPONIVEL_VENDA → "Disponível para venda", EM_LOTE → "Em lote".
   - `'nome do arquivo'`: `volta-ao-armazem_2026-11-01_a_2026-11-16.xlsx`.
