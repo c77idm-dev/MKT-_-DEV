@@ -115,6 +115,24 @@ describe('registrarRecebida', () => {
     expect(evento.dados).toMatchObject({ evidenciaAnteriorId: antiga, sha256_original_anterior: 'd'.repeat(64), sha256_original: 'e'.repeat(64) });
   });
 
+  it('a unidade aceita até 6 fotos da avaria; a 7ª é recusada com 409', async () => {
+    const d = await criarDevolucaoEmConferencia(db, operador, { itens: [{ sku: 'SKU-TESTE', quantidade: 2 }] });
+    const extra = (itemId: string) => ({
+      meta: meta(d.id, { tipo: 'EXTRA', itemId }),
+      caminhoTemporario: '/tmp/tus/x',
+      tamanho: 10,
+      sha256: 'a'.repeat(64),
+      usuario: operador,
+    });
+    for (let i = 0; i < 6; i++) expect((await registrarRecebida(db, extra(d.itens[0]))).repetida).toBe(false);
+    await expect(registrarRecebida(db, extra(d.itens[0]))).rejects.toMatchObject({
+      status: 409,
+      message: 'Limite de 6 fotos da avaria por unidade. Remova uma para tirar outra.',
+    });
+    await expect(autorizarEnvio(db, meta(d.id, { tipo: 'EXTRA', itemId: d.itens[0] }), 1000, operador)).rejects.toMatchObject({ status: 409 });
+    await expect(autorizarEnvio(db, meta(d.id, { tipo: 'EXTRA', itemId: d.itens[1] }), 1000, operador)).resolves.toBeUndefined();
+  });
+
   it('o Vídeo de Prova vai para a transcodificação', async () => {
     const d = await criarDevolucaoEmConferencia(db, operador);
     const r = await registrarRecebida(db, {

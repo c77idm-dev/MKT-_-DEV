@@ -1,0 +1,2 @@
+DROP INDEX "evidencias_item_tipo_uq";--> statement-breakpoint
+CREATE UNIQUE INDEX "evidencias_item_tipo_uq" ON "evidencias" USING btree ("item_id","tipo") WHERE "item_id" is not null and "tipo" <> 'EXTRA';

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import type { Db, DbOuTx } from '@/db/client';
 import { ehViolacaoDeUnicidade } from '@/db/erros';
 import { devolucoes, evidencias, itensDevolucao } from '@/db/schema';
@@ -10,6 +10,7 @@ import { registrarEvento } from '@/modules/historico/eventos';
 import { armazenamentoDoProvedor } from './armazenamento';
 import {
   EVIDENCIAS_DO_ITEM,
+  LIMITE_EXTRA_POR_UNIDADE,
   LIMITE_FOTO_BYTES,
   LIMITE_VIDEO_BYTES,
   TIPOS_FOTO_ACEITOS,
@@ -59,7 +60,7 @@ export function lerMetadados(m: Record<string, string | null> | undefined): Meta
 
 /**
  * Quem pode mandar o quê (conferido ao criar o upload e de novo ao registrar):
- * - na conferência, só quem está com a trava (qualquer evidência);
+ * - na conferência, só quem está com a trava (qualquer evidência; até 6 fotos da avaria por unidade, melhoria 2);
  * - no Recebimento, Fotos 1 e 2 do pacote não identificado (spec §6.2), por quem opera devoluções.
  */
 export async function autorizarEnvio(db: DbOuTx, meta: MetadadosEnvio, tamanho: number | undefined, usuario: UsuarioSessao): Promise<void> {
@@ -92,6 +93,21 @@ export async function autorizarEnvio(db: DbOuTx, meta: MetadadosEnvio, tamanho: 
       .from(itensDevolucao)
       .where(and(eq(itensDevolucao.id, meta.itemId), eq(itensDevolucao.devolucaoId, meta.devolucaoId)));
     if (!item) throw new ErroEnvio(400, 'A unidade não é desta devolução.');
+  }
+  if (meta.tipo === 'EXTRA') {
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(evidencias)
+      .where(
+        and(
+          eq(evidencias.devolucaoId, meta.devolucaoId),
+          eq(evidencias.tipo, 'EXTRA'),
+          meta.itemId ? eq(evidencias.itemId, meta.itemId) : isNull(evidencias.itemId),
+        ),
+      );
+    if (total >= LIMITE_EXTRA_POR_UNIDADE) {
+      throw new ErroEnvio(409, `Limite de ${LIMITE_EXTRA_POR_UNIDADE} fotos da avaria por unidade. Remova uma para tirar outra.`);
+    }
   }
 }
 

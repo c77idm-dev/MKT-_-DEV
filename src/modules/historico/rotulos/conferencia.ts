@@ -9,4 +9,5 @@ export const ROTULOS_CONFERENCIA: Record<string, string> = {
   evidencia_processada: 'Evidência processada',
   evidencia_refeita: 'Evidência refeita',
   evidencia_falhou: 'Falha no processamento da evidência',
+  evidencia_removida: 'Foto da avaria removida',
 };
