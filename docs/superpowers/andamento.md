@@ -1,9 +1,9 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 16/11/2026 (Fases 0 a 6 e o login novo no ar desde 15/11; em aberto: o celular do usuário não abre o site, `ERR_SSL_PROTOCOL_ERROR`; próximo passo grande: "Ligação das contas reais"). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 16/11/2026 (Fases 0 a 6 e o login novo no ar desde 15/11; o erro do celular era o DNS privado, resolvido; próximo passo grande: "Ligação das contas reais"). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
-- **Problema em aberto (16/11): o celular do usuário não abre o site.**
+- **Resolvido (16/11): o celular do usuário não abria o site.** Era o **DNS privado** do Android, e o usuário arrumou. Fica de lição: quem tiver DNS com filtro (AdGuard, NextDNS etc.) pode cair no mesmo erro com `sslip.io`; um domínio próprio evita isso.
   - Sintoma: no Chrome do Android, "Não foi possível estabelecer uma conexão segura com este site … enviou uma resposta inválida", `ERR_SSL_PROTOCOL_ERROR`. Acontece no Wi-Fi e também só no 5G.
   - No PC do usuário o site abre normalmente.
   - Conferido pelo PC de desenvolvimento em 16/11: `/api/saude` 200 (banco e fila ok), `/login` 200 com a tela nova, certificado Let's Encrypt válido (12/11/2026 a 10/02/2027), TLS 1.2 e 1.3 funcionando, DNS `devolucoes.179-199-128-100.sslip.io` → `179.199.128.100`, sem registro IPv6, arquivos do PWA e os JS com 200. GitHub Actions verde nas 3 últimas imagens.
