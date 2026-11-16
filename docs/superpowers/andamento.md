@@ -1,8 +1,16 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 16/11/2026 (Fases 0 a 6 e o login novo no ar desde 15/11; o erro do celular era o DNS privado, resolvido; próximo passo grande: "Ligação das contas reais"). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 16/11/2026 (melhorias 1 a 4 dos vídeos do adm no `main`; publicação na VPS em seguida; perguntas da NF e da IE ficam para o fim). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
+- **Melhorias dos vídeos do adm (16/11), no `main` (`514add1`):** vieram da transcrição de 3 vídeos que o adm mandou. Cada uma tem spec e plano em `docs/superpowers/specs|plans/2026-11-16-*`, revisão independente aprovada e suíte inteira verde (762 de unidade, 453 de integração, 210 e2e).
+  1. **Motivo da reclamação do ML** no cartão e no "Motivo do cliente" (consulta `/post-purchase/v1/claims/reasons/{id}` com cache; nunca sobrescreve motivo manual). Migração `0011`. Suposição A15 do formato da resposta, a confirmar com a conta real.
+  2. **Fotos da avaria** na conferência: até 6 por unidade, com "Remover" (segundo toque). Migração `0012` (índice único ignora EXTRA).
+  3. **Retirada do Full** (mercadoria voltando do armazém do ML, não é devolução): botão no "Rastreio não encontrado", atalho no Recebimento, tela RF-000001 com bipar EAN e foto da etiqueta, lista "Retiradas do Full". Fotos na tabela `evidencias` com dono único (devolução ou retirada). Migração `0013`. As fotos das retiradas não entram no prazo de guarda.
+  4. **Planilha "Volta ao armazém"** em `/fluxo/estoque-bom`: unidades do Estoque Bom (pela data da conferência, sem depender da NF) e itens das retiradas conferidas; "Baixar planilha" (.xlsx). Sem migração.
+  5. **Buscar o pedido no ML ao bipar:** adiada (depende da conta do ML).
+  - **Visão do usuário (16/11):** por enquanto o sistema é **controle em tempo real**, sem integrações. Fluxo: o produto volta do e-commerce → chega no armazém MTC → vem para a bancada → bom volta ao armazém para venda; ruim fica agrupado com fotos e o processo aberto. O estoque fica no **AnyMarket** e no **ERP**, lançado à mão. O **Bitbrain** é só um hub que puxa dados do ML; o sistema não depende dele.
+  - **Perguntas em aberto para o fim (o usuário não sabe responder agora):** (a) quem emite a NF de devolução hoje e onde; sem a Focus ligada as devoluções param na etapa 4 (a planilha da melhoria 4 já contorna isso); propostas: "NF emitida fora do sistema" (digitar o número) ou "Seguir sem NF". (b) Inscrição Estadual ou "ISENTO".
 - **Resolvido (16/11): o celular do usuário não abria o site.** Era o **DNS privado** do Android, e o usuário arrumou. Fica de lição: quem tiver DNS com filtro (AdGuard, NextDNS etc.) pode cair no mesmo erro com `sslip.io`; um domínio próprio evita isso.
   - Sintoma: no Chrome do Android, "Não foi possível estabelecer uma conexão segura com este site … enviou uma resposta inválida", `ERR_SSL_PROTOCOL_ERROR`. Acontece no Wi-Fi e também só no 5G.
   - No PC do usuário o site abre normalmente.
