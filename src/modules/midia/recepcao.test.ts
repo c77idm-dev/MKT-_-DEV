@@ -16,6 +16,19 @@ describe('lerMetadados (o que o celular manda no Upload-Metadata)', () => {
     });
   });
 
+  it('foto da retirada do Full (melhoria 3): o dono vem em retiradaId, e a devolução fica vazia', () => {
+    expect(lerMetadados({ idCliente: ID, retiradaId: DEV, itemId: ID, tipo: 'FOTO_3_PRODUTO', tipoConteudo: 'image/jpeg', nome: 'item.jpg' })).toEqual({
+      idCliente: ID,
+      devolucaoId: null,
+      retiradaId: DEV,
+      itemId: ID,
+      tipo: 'FOTO_3_PRODUTO',
+      tipoConteudo: 'image/jpeg',
+      nome: 'item.jpg',
+    });
+    expect(lerMetadados({ idCliente: ID, retiradaId: 'x', tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg' })).toBe('Retirada inválida.');
+  });
+
   it('explica o que está errado', () => {
     expect(lerMetadados(undefined)).toBe('Envio sem identificação.');
     expect(lerMetadados({ idCliente: ID, devolucaoId: 'x', tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg' })).toBe('Devolução inválida.');

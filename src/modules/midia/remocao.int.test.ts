@@ -8,6 +8,7 @@ import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { criarDevolucaoEmConferencia, criarEvidenciaTeste } from '../../../tests/helpers/fabricas-conferencia';
 import { obterArmazenamento } from './armazenamento';
 import type { ArmazenamentoMemoria } from './armazenamento-memoria';
+import { criarRetirada } from '@/modules/retiradas/retiradas';
 import { removerFotoAvaria } from './remocao';
 
 const { db, sql } = criarDbTeste();
@@ -50,6 +51,16 @@ describe('removerFotoAvaria (melhoria 2)', () => {
     expect(eventos).toHaveLength(1);
     expect(eventos[0]).toMatchObject({ entidade: 'devolucao', entidadeId: d.id, usuarioId: operador.id });
     expect(eventos[0].dados).toMatchObject({ evidenciaId: id, tipo: 'EXTRA', itemId: d.itens[0], sha256_original: 'c'.repeat(64) });
+  });
+
+  it('a foto de uma retirada do Full (melhoria 3) não é foto da avaria: não encontrada (404)', async () => {
+    const r = await criarRetirada(db, 'FULL-REM', operador);
+    const [e] = await db
+      .insert(evidencias)
+      .values({ retiradaId: r.id, tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg', tamanhoOriginal: 10, sha256Original: 'a'.repeat(64), idCliente: crypto.randomUUID() })
+      .returning({ id: evidencias.id });
+    await expect(removerFotoAvaria(db, e.id, operador)).rejects.toMatchObject({ status: 404, message: 'Foto não encontrada.' });
+    expect(await db.select().from(evidencias).where(eq(evidencias.id, e.id))).toHaveLength(1);
   });
 
   it('não remove Fotos 1 a 4 nem o Vídeo de Prova (400)', async () => {

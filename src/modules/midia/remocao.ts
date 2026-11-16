@@ -30,12 +30,14 @@ export async function removerFotoAvaria(db: Db, evidenciaId: string, usuario: Us
 
   const apagar = await db.transaction(async (tx) => {
     const [e] = await tx.select().from(evidencias).where(eq(evidencias.id, evidenciaId));
-    if (!e) throw new ErroRemocao(404, 'Foto não encontrada.');
+    // Melhoria 3: foto de retirada do Full (sem devolução) não é foto da avaria.
+    if (!e || !e.devolucaoId) throw new ErroRemocao(404, 'Foto não encontrada.');
+    const devolucaoId = e.devolucaoId;
     // Trava a devolução, como no envio: remoção e envio da mesma devolução esperam um pelo outro.
     const [d] = await tx
       .select({ status: devolucoes.status, conferenteId: devolucoes.conferenteId })
       .from(devolucoes)
-      .where(eq(devolucoes.id, e.devolucaoId))
+      .where(eq(devolucoes.id, devolucaoId))
       .for('update');
     if (e.tipo !== 'EXTRA') throw new ErroRemocao(400, 'Só as fotos da avaria podem ser removidas.');
     if (!d || d.status !== 'EM_CONFERENCIA' || d.conferenteId !== usuario.id) {
@@ -47,7 +49,7 @@ export async function removerFotoAvaria(db: Db, evidenciaId: string, usuario: Us
     if (!apagada) throw new ErroRemocao(404, 'Foto não encontrada.');
     await registrarEvento(tx, {
       entidade: 'devolucao',
-      entidadeId: apagada.devolucaoId,
+      entidadeId: devolucaoId,
       acao: 'evidencia_removida',
       usuarioId: usuario.id,
       em: agora,

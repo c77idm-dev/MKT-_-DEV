@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db, DbOuTx } from '@/db/client';
-import { contestacoesCanal, devolucoes, evidencias, falhasTarefas, lotes, notasFiscais } from '@/db/schema';
+import { contestacoesCanal, devolucoes, evidencias, falhasTarefas, lotes, notasFiscais, retiradasFull } from '@/db/schema';
 import { formatarDataHora } from '@/lib/formatar';
 import { mensagemDoErro } from '@/lib/log';
 import { ehUuid } from '@/lib/uuid';
@@ -193,7 +193,10 @@ async function buscarReferencias(
   const idsContest = ids('contestacaoId');
 
   const evid = idsEvid.length
-    ? await db.select({ id: evidencias.id, devolucaoId: evidencias.devolucaoId }).from(evidencias).where(inArray(evidencias.id, idsEvid))
+    ? await db
+        .select({ id: evidencias.id, devolucaoId: evidencias.devolucaoId, retiradaId: evidencias.retiradaId })
+        .from(evidencias)
+        .where(inArray(evidencias.id, idsEvid))
     : [];
   const notas = idsNota.length
     ? await db
@@ -219,6 +222,13 @@ async function buscarReferencias(
   const devs = todasDev.length
     ? await db.select({ id: devolucoes.id, codigo: devolucoes.codigo }).from(devolucoes).where(inArray(devolucoes.id, todasDev))
     : [];
+  // Melhoria 3: a foto de uma retirada do Full aponta para a retirada.
+  const idsRetiradas = [...new Set(evid.map((e) => e.retiradaId).filter((v): v is string => !!v))];
+  const rets = idsRetiradas.length
+    ? await db.select({ id: retiradasFull.id, codigo: retiradasFull.codigo }).from(retiradasFull).where(inArray(retiradasFull.id, idsRetiradas))
+    : [];
+  const codigoRetirada = new Map(rets.map((r) => [r.id, r.codigo]));
+  const evidRetirada = new Map(evid.map((e) => [e.id, e.retiradaId]));
   const lts = todosLotes.length ? await db.select({ id: lotes.id, codigo: lotes.codigo }).from(lotes).where(inArray(lotes.id, todosLotes)) : [];
   const codigoDev = new Map(devs.map((d) => [d.id, d.codigo]));
   const codigoLote = new Map(lts.map((l) => [l.id, l.codigo]));
@@ -240,7 +250,12 @@ async function buscarReferencias(
     const contestacaoId = idValido(dados, 'contestacaoId');
     const claimId = texto(dados, 'claimId');
     if (devolucaoId) ref = dev(devolucaoId);
-    else if (evidenciaId) ref = dev(evidDev.get(evidenciaId));
+    else if (evidenciaId) {
+      ref = dev(evidDev.get(evidenciaId));
+      const retiradaId = evidRetirada.get(evidenciaId);
+      const codigo = retiradaId ? codigoRetirada.get(retiradaId) : undefined;
+      if (!ref && codigo) ref = { texto: codigo, href: `/fluxo/retiradas-full/${codigo}` };
+    }
     else if (notaId) {
       const nota = notaPor.get(notaId);
       ref = dev(nota?.devolucaoId);

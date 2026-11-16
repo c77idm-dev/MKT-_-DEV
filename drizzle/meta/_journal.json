@@ -92,6 +92,13 @@
       "when": 1794842937232,
       "tag": "0012_melhoria2_fotos_avaria",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794849038239,
+      "tag": "0013_melhoria3_retirada_full",
+      "breakpoints": true
     }
   ]
 }

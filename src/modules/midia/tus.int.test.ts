@@ -11,6 +11,7 @@ import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { criarDevolucaoEmConferencia } from '../../../tests/helpers/fabricas-conferencia';
+import { concluirRetirada, biparProduto, criarRetirada } from '@/modules/retiradas/retiradas';
 import { sha256DoBuffer } from './hash';
 import { registrarEnvio } from './registro-envio';
 import { criarServidorTus } from './tus';
@@ -62,6 +63,23 @@ async function enviar(conteudo: Buffer, campos: Record<string, string>, comCooki
 }
 
 describe('upload pelo tus (route handler /api/midia)', () => {
+  it('retirada do Full (melhoria 3): o envio com retiradaId grava a foto na retirada; conferida, o tus recusa com 409', async () => {
+    const ret = await criarRetirada(db, 'FULL-TUS', operador);
+    const idCliente = randomUUID();
+    const r = await enviar(Buffer.from('etiqueta'), { idCliente, retiradaId: ret.id, tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg', nome: 'etiqueta.jpg' });
+    expect(r.status).toBe(204);
+    const { evidenciaId } = await registrarEnvio(db, tus.armazem, r.id!, operador);
+    const [e] = await db.select().from(evidencias).where(eq(evidencias.id, evidenciaId));
+    expect(e).toMatchObject({ idCliente, devolucaoId: null, retiradaId: ret.id, itemRetiradaId: null, tipo: 'FOTO_1_ETIQUETA' });
+
+    await biparProduto(db, ret.id, '123', 'Capinha', operador);
+    await concluirRetirada(db, ret.id, operador);
+    const depois = await enviar(Buffer.from('outra'), { idCliente: randomUUID(), retiradaId: ret.id, tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg' });
+    expect(depois.status).toBe(409);
+    const invalida = await enviar(Buffer.from('x'), { idCliente: randomUUID(), retiradaId: 'nao-e-uuid', tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg' });
+    expect(invalida.status).toBe(400);
+  });
+
   it('recebe a foto, guarda o usuário no envio e o registro grava a evidência com o SHA-256', async () => {
     const d = await criarDevolucaoEmConferencia(db, operador);
     const conteudo = Buffer.from('jpeg-de-mentira');

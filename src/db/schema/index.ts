@@ -10,3 +10,4 @@ export * from './lotes';
 export * from './mercado-livre';
 export * from './notificacoes';
 export * from './acabamento';
+export * from './retiradas';

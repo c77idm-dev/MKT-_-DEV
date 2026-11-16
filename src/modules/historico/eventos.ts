@@ -7,6 +7,7 @@ import { ROTULOS_CONFERENCIA } from './rotulos/conferencia';
 import { ROTULOS_FISCAL } from './rotulos/fiscal';
 import { ROTULOS_LOTES } from './rotulos/lotes';
 import { ROTULOS_MERCADO_LIVRE } from './rotulos/mercado-livre';
+import { ROTULOS_RETIRADAS } from './rotulos/retiradas';
 
 /** Contrato §4.7. Evidência registra evento na devolução (dados: evidenciaId, tipo, itemId e os hashes). */
 export type EntidadeHistorico =
@@ -17,7 +18,9 @@ export type EntidadeHistorico =
   | 'conta_marketplace'
   | 'contestacao'
   | 'nota_fiscal'
-  | 'lote';
+  | 'lote'
+  /** Melhoria 3: a retirada do Full (as fotos dela gravam evidencia_* aqui). */
+  | 'retirada_full';
 
 export type NovoEvento = {
   entidade: EntidadeHistorico;
@@ -80,6 +83,7 @@ export const ROTULO_ACAO: Record<string, string> = {
   ...ROTULOS_FISCAL,
   ...ROTULOS_LOTES,
   ...ROTULOS_ACABAMENTO,
+  ...ROTULOS_RETIRADAS,
 };
 
 export function rotuloDaAcao(acao: string): string {

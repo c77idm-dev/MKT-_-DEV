@@ -3,13 +3,40 @@
 import Link from 'next/link';
 import { useActionState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { FotosPacote } from '@/components/conferencia/FotosPacote';
-import { ALERTA_ERRO, BOTAO_PRIMARIO, CAMPO, ROTULO } from '@/components/estilos';
+import { ALERTA_ERRO, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, ROTULO } from '@/components/estilos';
 import { useManterFilaAtiva } from '@/components/midia/useFilaEnvios';
 import { useLeitorCamera } from '@/components/leitor/useLeitorCamera';
+import { criarRetiradaAcao, type EstadoNovaRetirada } from '../retiradas-full/acoes';
 import { registrarChegadaAcao, type EstadoRecebimento } from './acoes';
 import { podeAceitarLeitura } from './guarda';
 
 const INICIAL: EstadoRecebimento = { tipo: 'inicial' };
+const SEM_ERRO_RETIRADA: EstadoNovaRetirada = { erro: null };
+
+/**
+ * Melhoria 3: o código não é de nenhuma devolução porque o pacote é uma retirada do Full (mercadoria da empresa voltando
+ * do armazém do ML). Abre a retirada com o código lido como etiqueta, sem criar devolução.
+ */
+function BotaoRetiradaFull({ rastreio, desabilitado }: { rastreio: string; desabilitado: boolean }) {
+  const [estado, acao, pendente] = useActionState(criarRetiradaAcao, SEM_ERRO_RETIRADA);
+  const erroRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (estado.erro) erroRef.current?.focus();
+  }, [estado]);
+  return (
+    <form action={acao} className="flex flex-col gap-2">
+      <input type="hidden" name="codigoEtiqueta" value={rastreio} />
+      <button type="submit" disabled={desabilitado || pendente} className={`${BOTAO_SECUNDARIO} min-h-14 w-full`}>
+        É retirada do Full (não é devolução)
+      </button>
+      {estado.erro && (
+        <p ref={erroRef} tabIndex={-1} role="alert" className={ALERTA_ERRO}>
+          {estado.erro}
+        </p>
+      )}
+    </form>
+  );
+}
 
 type Tom = 'sucesso' | 'aviso' | 'erro';
 
@@ -115,6 +142,7 @@ function Resultado({ estado, acao, pendente }: { estado: EstadoRecebimento; acao
               Registrar pacote não identificado
             </button>
           </form>
+          <BotaoRetiradaFull key={estado.rastreio} rastreio={estado.rastreio} desabilitado={pendente} />
         </Cartao>
       )}
       {estado.tipo === 'erro' && <Cartao tom="erro" titulo="Não foi possível registrar" mensagem={estado.mensagem} />}

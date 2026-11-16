@@ -75,12 +75,14 @@ type Props = {
   descricao: string;
   estado: EstadoSlot;
   video?: boolean;
+  /** Vaga que pode ficar vazia (foto do item da retirada do Full): o vazio diz "Opcional", não "Falta". */
+  opcional?: boolean;
   aoEscolher: (arquivo: File) => void;
   aoTentarDeNovo: (idCliente: string) => void;
 };
 
 /** Uma vaga da grade de evidências (spec §6.0): miniatura com ✓ quando enviada, vaga tracejada quando falta. */
-export function SlotEvidencia({ titulo, descricao, estado, video = false, aoEscolher, aoTentarDeNovo }: Props) {
+export function SlotEvidencia({ titulo, descricao, estado, video = false, opcional = false, aoEscolher, aoTentarDeNovo }: Props) {
   const id = useId();
   const miniatura = useMiniatura(estado, video);
   const borda =
@@ -111,7 +113,7 @@ export function SlotEvidencia({ titulo, descricao, estado, video = false, aoEsco
           {descricao && <p className="text-sm text-texto-2">{descricao}</p>}
           <p aria-live="polite" className={`mt-1 text-sm font-semibold ${corTexto}`}>
             {estado.tipo === 'enviada' && <span aria-hidden="true">✓ </span>}
-            {textoDoSlot(estado)}
+            {opcional && estado.tipo === 'vazio' ? 'Opcional' : textoDoSlot(estado)}
           </p>
         </div>
       </div>
@@ -133,7 +135,7 @@ export function SlotEvidencia({ titulo, descricao, estado, video = false, aoEsco
           <BotaoArquivo video rotulo="Escolher arquivo de vídeo" accept="video/*" capture={false} principal={false} aoEscolher={aoEscolher} />
         </>
       ) : (
-        <BotaoArquivo rotulo={refazer ? `Tirar ${titulo} de novo` : `Tirar ${titulo}`} accept="image/*" capture principal={!refazer} aoEscolher={aoEscolher} />
+        <BotaoArquivo rotulo={refazer ? `Tirar ${titulo} de novo` : `Tirar ${titulo}`} accept="image/*" capture principal={!refazer && !opcional} aoEscolher={aoEscolher} />
       )}
     </div>
   );
