@@ -8,8 +8,9 @@ import { formatarDataHora } from '@/lib/formatar';
 import type { ParametrosBusca } from '@/lib/parametros';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import type { TomSelo } from '@/modules/devolucoes/selos';
-import { listarVoltaAoArmazem } from '@/modules/volta-armazem/consulta';
+import { listarVoltaAoArmazem, resumirVoltaAoArmazem } from '@/modules/volta-armazem/consulta';
 import {
+  atalhoAtivo,
   atalhosDoPeriodo,
   CARTOES_MAXIMOS,
   hrefDaOrigem,
@@ -64,8 +65,13 @@ function CartaoVolta({ linha }: { linha: LinhaVolta }) {
 export default async function PaginaEstoqueBom({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   await exigirPermissao('ver_listas');
   const periodo = lerPeriodo(await searchParams);
-  const linhas = periodo.valido ? await listarVoltaAoArmazem(obterDb(), periodo) : [];
-  const unidades = linhas.reduce((soma, l) => soma + l.quantidade, 0);
+  const db = obterDb();
+  // Os cartões: no máximo 201 linhas, as mais recentes primeiro. Os totais vêm de uma consulta agregada; a planilha traz tudo.
+  const [linhas, resumo] = periodo.valido
+    ? await Promise.all([listarVoltaAoArmazem(db, periodo, { ordem: 'desc', limite: CARTOES_MAXIMOS + 1 }), resumirVoltaAoArmazem(db, periodo)])
+    : [[], { linhas: 0, unidades: 0 }];
+  const { unidades } = resumo;
+  const atalho = atalhoAtivo(periodo);
   const consulta = new URLSearchParams({ de: periodo.de, ate: periodo.ate });
 
   return (
@@ -80,7 +86,7 @@ export default async function PaginaEstoqueBom({ searchParams }: { searchParams:
 
       <nav aria-label="Atalhos do período" className="flex flex-wrap gap-2">
         {atalhosDoPeriodo().map((a) => {
-          const ativo = periodo.de === a.de && periodo.ate === a.ate;
+          const ativo = a.rotulo === atalho;
           return (
             <Link
               key={a.rotulo}
@@ -131,8 +137,8 @@ export default async function PaginaEstoqueBom({ searchParams }: { searchParams:
             </ul>
           )}
           {/* (extra) A página fica leve: além de 200 cartões, só a planilha traz tudo. */}
-          {linhas.length > CARTOES_MAXIMOS && (
-            <p className="text-sm text-texto-2">{`Mostrando as primeiras ${CARTOES_MAXIMOS} de ${linhas.length} linhas. Baixe a planilha para ver tudo.`}</p>
+          {resumo.linhas > CARTOES_MAXIMOS && (
+            <p className="text-sm text-texto-2">{`Mostrando as ${CARTOES_MAXIMOS} mais recentes de ${resumo.linhas} linhas. Baixe a planilha para ver tudo.`}</p>
           )}
           <div className="acima-barra sticky z-20 -mx-4 border-t border-borda bg-superficie/95 px-4 py-3 sm:-mx-8 sm:px-8 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0">
             {/* <a> e não <Link>: é um download (rota de API), não uma navegação do app. */}

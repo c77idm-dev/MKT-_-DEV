@@ -50,6 +50,9 @@ test('Estoque Bom: abre pela etapa 4, filtra Hoje, mostra a unidade e o item da 
   await expect(item).toContainText('Retirada do Full');
   await expect(item).toContainText('Quantidade: 2');
   await expect(item.getByRole('link', { name: dados.ret })).toHaveAttribute('href', `/fluxo/retiradas-full/${dados.ret}`);
+  // Os cartões vêm do mais recente para o mais antigo: a retirada foi concluída depois da conferência.
+  const textos = await page.getByRole('article').allTextContents();
+  expect(textos.findIndex((t) => t.includes(dados.skuRet))).toBeLessThan(textos.findIndex((t) => t.includes(dados.skuDev)));
 
   const baixar = page.getByRole('link', { name: 'Baixar planilha' });
   expect((await baixar.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);

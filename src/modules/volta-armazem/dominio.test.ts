@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { paraArrayBuffer } from '../../../tests/helpers/xlsx';
 import { gerarXlsx } from '@/modules/lotes/xlsx';
 import {
+  atalhoAtivo,
   atalhosDoPeriodo,
   CARTOES_MAXIMOS,
   COLUNAS_VOLTA,
@@ -39,6 +40,14 @@ describe('período da planilha Volta ao armazém', () => {
       { rotulo: 'Últimos 7 dias', de: '2026-11-10', ate: '2026-11-16' },
       { rotulo: 'Este mês', de: '2026-11-01', ate: '2026-11-16' },
     ]);
+  });
+
+  it('só o primeiro atalho que casa fica ativo (no dia 1, Hoje e não Este mês)', () => {
+    const dia1 = new Date('2026-11-01T15:00:00Z');
+    expect(atalhoAtivo({ de: '2026-11-01', ate: '2026-11-01' }, dia1)).toBe('Hoje');
+    expect(atalhoAtivo({ de: '2026-11-10', ate: '2026-11-16' }, NOITE_DO_DIA_16)).toBe('Últimos 7 dias');
+    expect(atalhoAtivo({ de: '2026-11-01', ate: '2026-11-16' }, NOITE_DO_DIA_16)).toBe('Este mês');
+    expect(atalhoAtivo({ de: '2026-11-02', ate: '2026-11-16' }, NOITE_DO_DIA_16)).toBeNull();
   });
 });
 

@@ -76,6 +76,11 @@ export function atalhosDoPeriodo(agora: Date = new Date()): { rotulo: RotuloAtal
   ];
 }
 
+/** O atalho do período, se houver. Só o primeiro que casa (no dia 1, "Hoje" e não "Este mês"). */
+export function atalhoAtivo(p: Periodo, agora: Date = new Date()): RotuloAtalho | null {
+  return atalhosDoPeriodo(agora).find((a) => a.de === p.de && a.ate === p.ate)?.rotulo ?? null;
+}
+
 /** "Aguardando NF", "Disponível para venda" e, para os outros status, o rótulo do próprio status. */
 export function situacaoDaUnidade(status: StatusItem): string {
   return ROTULO_STATUS_ITEM[status];
