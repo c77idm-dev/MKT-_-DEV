@@ -60,6 +60,12 @@ export async function PaginaEstoque({ aba, searchParams }: { aba: DestinoEstoque
           );
         })}
       </nav>
+      {/* Melhoria 4: a planilha do que volta ao armazém (independente da NF). */}
+      {aba === 'BOM' && (
+        <Link href="/fluxo/estoque-bom" className={`${LINK_VOLTAR} -my-2 self-start`}>
+          Planilha Volta ao armazém
+        </Link>
+      )}
       {pendencias.length > 0 && (
         <section aria-labelledby="titulo-pendencias" className={`${ALERTA_ATENCAO} flex flex-col gap-1`}>
           <h2 id="titulo-pendencias" className="font-bold">
