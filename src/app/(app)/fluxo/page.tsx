@@ -67,9 +67,15 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
         )}
       </div>
       {/* (extra) Melhoria 3: quem não passa pelo Recebimento (o Fiscal) também chega às retiradas do Full. Discreto: não é devolução. */}
-      <Link href="/fluxo/retiradas-full" className={`${LINK_VOLTAR} -mt-2 w-fit`}>
-        Retiradas do Full
-      </Link>
+      {/* Melhoria 4: a planilha do que volta ao armazém, ao lado (também só leitura). */}
+      <div className="-mt-2 flex flex-wrap gap-x-5">
+        <Link href="/fluxo/retiradas-full" className={`${LINK_VOLTAR} w-fit`}>
+          Retiradas do Full
+        </Link>
+        <Link href="/fluxo/estoque-bom" className={`${LINK_VOLTAR} w-fit`}>
+          Planilha Volta ao armazém
+        </Link>
+      </div>
       <AlertasPainel alertas={alertas} limite={ALERTAS_NO_PAINEL} />
       <BuscaAvancada acao="/fluxo/busca" filtros={{}} />
       <div className="md:hidden">
