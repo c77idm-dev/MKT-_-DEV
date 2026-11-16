@@ -62,7 +62,7 @@ export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Pro
   const [ocupado, iniciar] = useTransition();
   const campoEanRef = useRef<HTMLInputElement>(null);
   const campoDescricaoRef = useRef<HTMLInputElement>(null);
-  const { envios, concluidos, adicionar, tentarDeNovo } = useFilaEnvios(retirada.id, undefined, 'retirada');
+  const { envios, concluidos, adicionar, tentarDeNovo, descartar } = useFilaEnvios(retirada.id, undefined, 'retirada');
   const [erroFoto, setErroFoto] = useState<string | null>(null);
 
   useEffect(() => {
@@ -117,11 +117,24 @@ export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Pro
     });
   }
 
+  /**
+   * Remover o item: antes, tira da fila do aparelho as fotos dele que ainda não subiram. Sem o item, o servidor recusaria
+   * o envio (400) e a foto ficaria presa no IndexedDB.
+   */
+  function remover(itemId: string) {
+    mudarItem(async () => {
+      for (const e of envios.filter((x) => x.itemId === itemId)) await descartar(e.idCliente);
+      return acoes.remover(retirada.id, itemId);
+    });
+  }
+
   function concluir() {
     const faltas = pendenciasParaConcluir({ fotoEtiqueta: fotoEtiqueta.tipo === 'enviada', itens: itens.length });
     if (fotoEtiqueta.tipo === 'enviando' || fotoEtiqueta.tipo === 'aguardando') {
       faltas.splice(faltas.indexOf('Tire a foto da etiqueta.'), 1, 'Espere a foto da etiqueta terminar de enviar.');
     }
+    // Depois de conferida, o servidor recusa fotos (409): a conclusão espera as dos itens que ainda estão subindo.
+    if (envios.some((e) => e.itemId !== null && e.estado !== 'erro')) faltas.push('Espere as fotos dos itens terminarem de enviar.');
     if (faltas.length > 0) {
       setErroConcluir(faltas);
       return;
@@ -129,7 +142,10 @@ export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Pro
     setErroConcluir(null);
     iniciar(async () => {
       const r = await acoes.concluir(retirada.id);
-      if (aplicar(r, setErroConcluir)) router.refresh();
+      if (!aplicar(r, setErroConcluir)) return;
+      // As fotos de item recusadas de vez pelo servidor não têm mais para onde ir: saem do aparelho.
+      for (const e of envios.filter((x) => x.itemId !== null && x.estado === 'erro')) await descartar(e.idCliente);
+      router.refresh();
     });
   }
 
@@ -242,7 +258,7 @@ export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Pro
               ocupado={ocupado}
               foto={slot('FOTO_3_PRODUTO', item.id)}
               aoMudarQuantidade={(delta) => mudarItem(() => acoes.quantidade(retirada.id, item.id, delta))}
-              aoRemover={() => mudarItem(() => acoes.remover(retirada.id, item.id))}
+              aoRemover={() => remover(item.id)}
               aoEscolherFoto={(a) => void escolherFoto('FOTO_3_PRODUTO', item.id, a)}
               aoTentarDeNovo={(id) => void tentarDeNovo(id)}
             />

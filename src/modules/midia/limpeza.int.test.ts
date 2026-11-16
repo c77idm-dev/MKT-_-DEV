@@ -7,6 +7,8 @@ import type { PgBoss } from 'pg-boss';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eventosHistorico, evidencias, importacoes } from '@/db/schema';
 import { criarFilas, criarPgBoss, enviarPorPgBoss } from '@/modules/fila/fila';
+import { listarEventos } from '@/modules/historico/eventos';
+import { criarRetirada } from '@/modules/retiradas/retiradas';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { criarDbTeste, limparTabelas, urlBancoTeste } from '../../../tests/helpers/db';
 import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
@@ -92,5 +94,28 @@ describe('limparTemporarios (extra: tarefa diária limpeza.temporarios)', () => 
     expect((await linha(comJob)).situacaoProcessamento).toBe('RECEBIDA');
     expect((await linha(recente)).situacaoProcessamento).toBe('RECEBIDA');
     expect(await db.select({ id: eventosHistorico.id }).from(eventosHistorico).where(eq(eventosHistorico.acao, 'evidencia_falhou'))).toHaveLength(2);
+  });
+
+  it('foto presa de uma retirada do Full (melhoria 3): FALHOU com o evento na retirada, não numa devolução', async () => {
+    const r = await criarRetirada(db, 'FULL-PRESA', operador);
+    const [e] = await db
+      .insert(evidencias)
+      .values({
+        retiradaId: r.id,
+        tipo: 'FOTO_1_ETIQUETA',
+        tipoConteudo: 'image/jpeg',
+        tamanhoOriginal: 10,
+        sha256Original: 'a'.repeat(64),
+        idCliente: crypto.randomUUID(),
+        situacaoProcessamento: 'PROCESSANDO',
+        enviadoEm: doisDiasAntes,
+      })
+      .returning({ id: evidencias.id });
+    expect((await limparTemporarios(db, { agora, pasta, schemaFila: SCHEMA_FILA_TESTE })).interrompidas).toBe(1);
+    expect((await db.select().from(evidencias).where(eq(evidencias.id, e.id)))[0].situacaoProcessamento).toBe('FALHOU');
+    const falhou = (await listarEventos(db, 'retirada_full', r.id)).filter((x) => x.acao === 'evidencia_falhou');
+    expect(falhou.map((x) => x.dados)).toEqual([{ evidenciaId: e.id, tipo: 'FOTO_1_ETIQUETA', itemId: null, erro: 'Processamento interrompido.' }]);
+    const [ev] = await db.select().from(eventosHistorico).where(eq(eventosHistorico.acao, 'evidencia_falhou'));
+    expect(ev).toMatchObject({ entidade: 'retirada_full', entidadeId: r.id });
   });
 });

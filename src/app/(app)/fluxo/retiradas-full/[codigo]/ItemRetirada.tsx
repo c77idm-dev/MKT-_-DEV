@@ -32,10 +32,10 @@ export function ItemRetirada({ item, ocupado, foto, aoMudarQuantidade, aoRemover
             {item.descricao}
           </h3>
           {item.semCadastro && (
-                <span className="shrink-0 whitespace-nowrap">
-                  <Selo texto="sem cadastro" tom="atencao" />
-                </span>
-              )}
+            <span className="shrink-0 whitespace-nowrap">
+              <Selo texto="sem cadastro" tom="atencao" />
+            </span>
+          )}
         </div>
         <p className="break-all font-mono text-[13px] text-texto-2">
           {item.sku ? `${item.sku} · ` : ''}EAN {item.eanLido ?? '—'}
@@ -53,7 +53,8 @@ export function ItemRetirada({ item, ocupado, foto, aoMudarQuantidade, aoRemover
           >
             −
           </button>
-          <span className="min-w-10 text-center text-lg font-bold tabular-nums" aria-label={`Quantidade: ${item.quantidade}`}>
+          <span className="min-w-10 text-center text-lg font-bold tabular-nums">
+            <span className="sr-only">Quantidade: </span>
             {item.quantidade}
           </span>
           <button

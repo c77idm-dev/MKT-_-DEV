@@ -1,8 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { falhasTarefas } from '@/db/schema';
+import { evidencias, falhasTarefas } from '@/db/schema';
 import { definirFilaParaTestes, FilaMemoria } from '@/modules/fila/fila';
 import { listarEventos } from '@/modules/historico/eventos';
+import { criarRetirada } from '@/modules/retiradas/retiradas';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { criarFalhaTeste } from '../../../tests/helpers/fabricas-acabamento';
@@ -78,5 +79,17 @@ describe('listarFalhas', () => {
       ['Sincronizar reclamação do Mercado Livre', { texto: 'Reclamação 5012345678', href: null }],
       ['Enviar o resultado da conferência ao ML', { texto: dev.codigo, href: `/fluxo/devolucoes/${dev.codigo}` }],
     ]);
+  });
+
+  it('a foto de uma retirada do Full (melhoria 3) que falhou aponta para a retirada', async () => {
+    const operador = await criarUsuarioTeste(db, 'OPERADOR');
+    const r = await criarRetirada(db, 'FULL-FALHA', operador);
+    const [e] = await db
+      .insert(evidencias)
+      .values({ retiradaId: r.id, tipo: 'FOTO_1_ETIQUETA', tipoConteudo: 'image/jpeg', tamanhoOriginal: 10, sha256Original: 'a'.repeat(64), idCliente: crypto.randomUUID() })
+      .returning({ id: evidencias.id });
+    await criarFalhaTeste(db, { tarefa: 'midia.processar-foto', dados: { evidenciaId: e.id } });
+    const { falhas } = await listarFalhas(db);
+    expect(falhas.map((f) => f.referencia)).toEqual([{ texto: r.codigo, href: `/fluxo/retiradas-full/${r.codigo}` }]);
   });
 });

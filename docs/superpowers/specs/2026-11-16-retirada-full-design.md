@@ -45,3 +45,25 @@ O usuário quer as três coisas: **avisar** o operador que não é devolução, 
 
 ## Depois, com a conta do ML ligada (fora desta melhoria)
 - Tentar reconhecer sozinho que a etiqueta é de retirada do Full e trazer os itens esperados para conferir contra o que chegou.
+
+## Notas da implementação
+- **Evidências:** a tabela `evidencias` foi reaproveitada.
+  - `devolucao_id` passou a aceitar nulo, e entraram `retirada_id` e `item_retirada_id`.
+  - A regra `evidencias_dono` (`num_nonnulls(devolucao_id, retirada_id) = 1`) exige exatamente um dono.
+  - Por isso a foto da retirada usa o mesmo tus, a mesma fila offline do celular, o mesmo processamento (carimbo com o código RF e SHA-256), o mesmo armazenamento e os mesmos links de 10 minutos.
+  - O histórico das fotos vai para a entidade `retirada_full`, com as chaves `evidencia_*` que já existiam.
+- **Tipos das fotos:**
+  - a foto da etiqueta é `FOTO_1_ETIQUETA`, sem item;
+  - a foto opcional do item é `FOTO_3_PRODUTO`, com `item_retirada_id`;
+  - na retirada, qualquer outro tipo, vídeo inclusive, é recusado.
+- **A mesma etiqueta:** se ela já tem uma retirada Aberta, abrir de novo devolve essa. Toque duplo, ou o botão do Recebimento e o atalho usados juntos, não criam duas.
+- **EAN:** é procurado no cadastro sem os zeros à esquerda, como na conferência. O mesmo EAN "sem cadastro" soma no item que já existe, sem pedir a descrição de novo.
+- **Limites:**
+  - a quantidade de cada item vai de 1 a 9999: o "−" para em 1, e para tirar o item usa-se "Remover";
+  - a descrição curta tem de 1 a 120 caracteres.
+- **Fila do aparelho:**
+  - "Remover" descarta antes as fotos do item que ainda estão na fila;
+  - "Concluir retirada" espera as fotos dos itens que ainda estão subindo;
+  - as fotos que o servidor recusou de vez saem do aparelho ao concluir.
+- **(extra)** Link discreto "Retiradas do Full" no Fluxo, para quem não passa pelo Recebimento (o Fiscal).
+- **Prazo de guarda:** as fotos das retiradas não entram no prazo de guarda (midia.retencao, por devolução); fica para depois, se o volume pedir.

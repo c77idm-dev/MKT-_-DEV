@@ -135,10 +135,10 @@ export default async function PaginaRetirada({ params }: Props) {
                   {item.descricao}
                 </h3>
                 {item.semCadastro && (
-                <span className="shrink-0 whitespace-nowrap">
-                  <Selo texto="sem cadastro" tom="atencao" />
-                </span>
-              )}
+                  <span className="shrink-0 whitespace-nowrap">
+                    <Selo texto="sem cadastro" tom="atencao" />
+                  </span>
+                )}
               </div>
               <p className="break-all font-mono text-[13px] text-texto-2">
                 {item.sku ? `${item.sku} · ` : ''}EAN {item.eanLido ?? '—'}

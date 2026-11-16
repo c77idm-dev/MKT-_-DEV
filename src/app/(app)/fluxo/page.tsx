@@ -4,7 +4,7 @@ import { AlertasPainel, ALERTAS_NO_PAINEL } from '@/components/acabamento/Alerta
 import { BuscaAvancada } from '@/components/BuscaAvancada';
 import { EtapasCelular } from '@/components/EtapasCelular';
 import { QuadroFluxo } from '@/components/QuadroFluxo';
-import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, VAZIO } from '@/components/estilos';
+import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, LINK_VOLTAR, VAZIO } from '@/components/estilos';
 import { DivisaoEstoque } from '@/components/fiscal/DivisaoEstoque';
 import { CartaoLote } from '@/components/lotes/CartaoLote';
 import { obterDb } from '@/db';
@@ -66,6 +66,10 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
           </div>
         )}
       </div>
+      {/* (extra) Melhoria 3: quem não passa pelo Recebimento (o Fiscal) também chega às retiradas do Full. Discreto: não é devolução. */}
+      <Link href="/fluxo/retiradas-full" className={`${LINK_VOLTAR} -mt-2 w-fit`}>
+        Retiradas do Full
+      </Link>
       <AlertasPainel alertas={alertas} limite={ALERTAS_NO_PAINEL} />
       <BuscaAvancada acao="/fluxo/busca" filtros={{}} />
       <div className="md:hidden">

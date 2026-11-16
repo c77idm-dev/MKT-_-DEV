@@ -74,9 +74,9 @@ test('retirada do Full: do "Rastreio não encontrado" até Conferida (melhoria 3
 
   // + e − no carregador; "Remover" pede o segundo toque.
   await page.getByRole('button', { name: 'Aumentar Carregador de teste' }).click();
-  await expect(page.getByRole('article', { name: 'Carregador de teste' }).getByLabel('Quantidade: 2')).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Carregador de teste' }).getByText('Quantidade: 2')).toBeVisible();
   await page.getByRole('button', { name: 'Diminuir Carregador de teste' }).click();
-  await expect(page.getByRole('article', { name: 'Carregador de teste' }).getByLabel('Quantidade: 1')).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Carregador de teste' }).getByText('Quantidade: 1')).toBeVisible();
   await page.getByRole('button', { name: 'Remover Carregador de teste' }).click();
   await expect(page.getByRole('button', { name: 'Toque de novo para remover Carregador de teste' })).toBeVisible();
   await page.getByRole('heading', { name: 'Bipar produto' }).click();
@@ -131,7 +131,12 @@ test('o Fiscal vê a lista e a retirada, mas não abre nem confere', async ({ pa
   const etiqueta = codigoUnico('FULLF');
   const { codigo } = await comBanco(async (db) => criarRetirada(db, etiqueta, await usuarioPorEmail(db, USUARIOS_E2E.operador.email)));
   await entrarComo(page, USUARIOS_E2E.fiscal);
-  await page.goto('/fluxo/retiradas-full');
+  // (extra) O Fiscal não passa pelo Recebimento: o link fica no Fluxo.
+  const link = page.getByRole('link', { name: 'Retiradas do Full', exact: true });
+  expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await semRolagemLateral(page);
+  await link.click();
+  await expect(page).toHaveURL(/\/fluxo\/retiradas-full$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Retiradas do Full' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Retirada do Full', exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: new RegExp(`^${codigo}`) }).click();
