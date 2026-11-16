@@ -31,7 +31,11 @@ export function ItemRetirada({ item, ocupado, foto, aoMudarQuantidade, aoRemover
           <h3 id={idTitulo} className="min-w-0 break-words text-base font-bold">
             {item.descricao}
           </h3>
-          {item.semCadastro && <Selo texto="sem cadastro" tom="atencao" />}
+          {item.semCadastro && (
+                <span className="shrink-0 whitespace-nowrap">
+                  <Selo texto="sem cadastro" tom="atencao" />
+                </span>
+              )}
         </div>
         <p className="break-all font-mono text-[13px] text-texto-2">
           {item.sku ? `${item.sku} · ` : ''}EAN {item.eanLido ?? '—'}

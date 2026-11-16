@@ -19,6 +19,14 @@ import { TelaRetirada } from './TelaRetirada';
 
 type Props = { params: Promise<{ codigo: string }> };
 
+/** Na retirada as evidências são fotos (da etiqueta ou do item): o histórico fala de foto. */
+const ROTULO_FOTO: Record<string, string> = {
+  evidencia_enviada: 'Foto enviada',
+  evidencia_refeita: 'Foto refeita',
+  evidencia_processada: 'Foto processada',
+  evidencia_falhou: 'Foto falhou no servidor',
+};
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { codigo } = await params;
   return { title: `${codigo} · Retirada do Full · Gestão de Devoluções` };
@@ -126,7 +134,11 @@ export default async function PaginaRetirada({ params }: Props) {
                 <h3 id={`item-${item.id}`} className="min-w-0 break-words text-base font-bold">
                   {item.descricao}
                 </h3>
-                {item.semCadastro && <Selo texto="sem cadastro" tom="atencao" />}
+                {item.semCadastro && (
+                <span className="shrink-0 whitespace-nowrap">
+                  <Selo texto="sem cadastro" tom="atencao" />
+                </span>
+              )}
               </div>
               <p className="break-all font-mono text-[13px] text-texto-2">
                 {item.sku ? `${item.sku} · ` : ''}EAN {item.eanLido ?? '—'}
@@ -146,7 +158,7 @@ export default async function PaginaRetirada({ params }: Props) {
         <ol className="flex flex-col gap-3">
           {eventos.map((e) => (
             <li key={e.id} className="flex flex-col text-sm">
-              <span className="font-semibold">{rotuloDaAcao(e.acao)}</span>
+              <span className="font-semibold">{ROTULO_FOTO[e.acao] ?? rotuloDaAcao(e.acao)}</span>
               <span className="text-xs text-texto-2">
                 {formatarDataHora(e.em)} · {e.usuarioNome ?? 'Sistema'}
               </span>

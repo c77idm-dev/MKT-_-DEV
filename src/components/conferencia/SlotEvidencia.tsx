@@ -135,7 +135,7 @@ export function SlotEvidencia({ titulo, descricao, estado, video = false, opcion
           <BotaoArquivo video rotulo="Escolher arquivo de vídeo" accept="video/*" capture={false} principal={false} aoEscolher={aoEscolher} />
         </>
       ) : (
-        <BotaoArquivo rotulo={refazer ? `Tirar ${titulo} de novo` : `Tirar ${titulo}`} accept="image/*" capture principal={!refazer} aoEscolher={aoEscolher} />
+        <BotaoArquivo rotulo={refazer ? `Tirar ${titulo} de novo` : `Tirar ${titulo}`} accept="image/*" capture principal={!refazer && !opcional} aoEscolher={aoEscolher} />
       )}
     </div>
   );

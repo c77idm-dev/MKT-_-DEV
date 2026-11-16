@@ -19,6 +19,13 @@ describe('SlotEvidencia', () => {
     expect(aoEscolher).toHaveBeenCalledWith(arquivo);
   });
 
+  it('vaga opcional (foto do item da retirada do Full): o vazio diz "Opcional", não "Falta"', () => {
+    render(<SlotEvidencia opcional titulo="Foto do item" descricao="" estado={{ tipo: 'vazio' }} aoEscolher={vi.fn()} aoTentarDeNovo={vi.fn()} />);
+    const grupo = screen.getAllByRole('group', { name: 'Foto do item' }).at(-1)!;
+    expect(grupo.textContent).toContain('Opcional');
+    expect(grupo.textContent).not.toContain('Falta');
+  });
+
   it('enviando: barra de progresso com o valor', () => {
     render(<SlotEvidencia titulo="Foto 2" descricao="" estado={{ tipo: 'enviando', progresso: 0.5, registro }} aoEscolher={vi.fn()} aoTentarDeNovo={vi.fn()} />);
     expect(screen.getByRole('progressbar', { name: 'Envio da Foto 2' }).getAttribute('aria-valuenow')).toBe('50');

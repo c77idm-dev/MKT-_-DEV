@@ -20,9 +20,8 @@ export function CartaoRetirada({ retirada }: { retirada: RetiradaLista }) {
         <span>{formatarDataHora(retirada.recebidaEm)}</span>
         <span aria-hidden="true">·</span>
         <span>{`${retirada.totalItens} ${retirada.totalItens === 1 ? 'item' : 'itens'}`}</span>
-        <span aria-hidden="true">·</span>
-        <span>Recebida por {retirada.recebidaPorNome ?? 'usuário removido'}</span>
       </span>
+      <span className="text-xs text-texto-2">Recebida por {retirada.recebidaPorNome ?? 'usuário removido'}</span>
     </Link>
   );
 }

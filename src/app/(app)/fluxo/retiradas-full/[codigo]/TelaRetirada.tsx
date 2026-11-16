@@ -250,7 +250,7 @@ export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Pro
         )}
       </section>
 
-      <div className="acima-barra sticky z-20 -mx-4 flex flex-col gap-2 border-t border-borda bg-superficie/95 px-4 py-3 sm:-mx-8 sm:px-8 md:bottom-0">
+      <div className="acima-barra sticky z-20 -mx-4 flex flex-col gap-2 border-t border-borda bg-superficie px-4 py-3 sm:-mx-8 sm:px-8 md:bottom-0">
         {erroConcluir && <Alerta mensagens={erroConcluir} />}
         <button type="button" onClick={concluir} disabled={ocupado} className={`${BOTAO_PRIMARIO} min-h-14 w-full text-lg`}>
           Concluir retirada
