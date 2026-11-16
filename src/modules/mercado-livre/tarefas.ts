@@ -7,6 +7,7 @@ import { configML } from './config';
 import { obterConectorML } from './conector';
 import { ErroContaReconectar, marcarSincronizacao, obterContaML, renovarContasAVencer } from './contas';
 import { fetchDoML } from './fabrica-conector';
+import { garantirTextoMotivo } from './motivos';
 import { chaveTarefaReclamacao, marcarNotificacoesProcessadas } from './notificacoes';
 import { aplicarReclamacao, type ResultadoAplicacao } from './sincronizar';
 
@@ -33,6 +34,8 @@ export async function sincronizarReclamacao(db: DbOuTx, fila: Fila, reclamacaoId
     await marcarNotificacoesProcessadas(db, reclamacaoId, agora);
     return null;
   }
+  // Antes da transação: a consulta do texto do motivo não segura a trava nem derruba a sincronização se falhar.
+  await garantirTextoMotivo(db, conector, dados.motivoId, agora);
   const resultado = await aplicarReclamacao(db, dados, agora, fila);
   await marcarNotificacoesProcessadas(db, reclamacaoId, agora);
   return resultado;

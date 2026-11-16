@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { eq } from 'drizzle-orm';
 import { idReclamacaoFalsa } from '../../src/conectores/marketplace/mercadolivre/falso';
-import { entrarComo, paginaNaoEncontrada, semRolagemLateral } from './apoio';
+import { devolucoes } from '../../src/db/schema';
+import { comBanco, entrarComo, paginaNaoEncontrada, semRolagemLateral } from './apoio';
 import { alvosDeToque44, avisarML, contestacaoPronta, emModoFalso, esperarDevolucaoDaReclamacao, garantirContaFalsa, semContaML } from './apoio-ml';
 import { USUARIOS_E2E } from './dados';
 
@@ -56,6 +58,32 @@ test('aviso do ML cria a devolução sozinha e o detalhe mostra a seção Mercad
   await expect(secao.getByText('A caminho')).toBeVisible();
   await semRolagemLateral(page);
   await alvosDeToque44(secao);
+});
+
+test('a devolução do ML falso mostra o motivo da reclamação no cartão e no detalhe (melhoria 1)', async ({ page, request }) => {
+  await garantirContaFalsa();
+  const reclamacaoId = idReclamacaoFalsa(1);
+  await avisarML(request, reclamacaoId);
+  const codigo = await esperarDevolucaoDaReclamacao(reclamacaoId);
+
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto(`/fluxo/busca?reclamacao=${reclamacaoId}`);
+  const cartao = page.getByRole('link', { name: new RegExp(codigo) });
+  await expect(cartao).toContainText('Motivo: Comprador se arrependeu');
+  await semRolagemLateral(page);
+
+  await page.goto(`/fluxo/devolucoes/${codigo}`);
+  await expect(page.getByRole('heading', { level: 1, name: codigo })).toBeVisible();
+  await expect(page.getByText('Comprador se arrependeu', { exact: true })).toBeVisible();
+
+  // Motivo longo (digitado à mão, por exemplo): uma linha com reticências, sem rolagem lateral no celular.
+  const longo = 'O comprador disse que o produto chegou diferente do anunciado, com a cor e o tamanho trocados e a caixa amassada';
+  await comBanco((db) => db.update(devolucoes).set({ motivoCliente: longo }).where(eq(devolucoes.codigo, codigo)));
+  await page.goto(`/fluxo/busca?reclamacao=${reclamacaoId}`);
+  const linha = page.getByRole('link', { name: new RegExp(codigo) }).getByText(`Motivo: ${longo}`);
+  await expect(linha).toBeVisible();
+  expect(await linha.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await semRolagemLateral(page);
 });
 
 test('o endpoint de avisos recusa JSON inválido (400) e aceita aviso de outro recurso (200)', async ({ request }) => {

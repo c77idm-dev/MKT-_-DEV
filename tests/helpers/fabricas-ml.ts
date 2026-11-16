@@ -89,6 +89,7 @@ export function dadosDevolucaoMLTeste(
   return {
     reclamacaoId: devolucao?.reclamacaoId ?? `CLM-${marca()}`,
     statusReclamacao: 'opened',
+    motivoId: null,
     subtipo: devolucao === null ? null : devolucao.semEnvioFisico ? 'low_cost' : 'return_total',
     statusDevolucao: devolucao ? devolucao.statusCanal.split('/')[0] : null,
     atualizadaEm: new Date(),
@@ -105,6 +106,10 @@ export class ConectorMLMemoria implements ConectorMercadoLivre {
   readonly enviados: { devolucaoExternaId: string; resultado: ResultadoConferencia }[] = [];
   readonly buscas: Date[] = [];
   falhaNoEnvio: unknown = null;
+  /** Textos dos motivos da reclamação (reason_id → texto), as consultas feitas e a falha a lançar nelas. */
+  readonly motivos = new Map<string, string>();
+  readonly consultasMotivo: string[] = [];
+  falhaNoMotivo: unknown = null;
 
   guardar(dados: DadosDevolucaoML): this {
     this.reclamacoes.set(dados.reclamacaoId, dados);
@@ -115,6 +120,12 @@ export class ConectorMLMemoria implements ConectorMercadoLivre {
     const dados = this.reclamacoes.get(reclamacaoId);
     if (!dados) throw new ErroML(404, '{"message":"not_found"}', `/post-purchase/v1/claims/${reclamacaoId}`);
     return dados;
+  }
+
+  async obterMotivoReclamacao(motivoId: string): Promise<string | null> {
+    this.consultasMotivo.push(motivoId);
+    if (this.falhaNoMotivo) throw this.falhaNoMotivo;
+    return this.motivos.get(motivoId) ?? null;
   }
 
   async obter(reclamacaoId: string): Promise<DevolucaoExterna> {

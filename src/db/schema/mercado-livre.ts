@@ -64,6 +64,8 @@ export const reclamacoesMl = pgTable(
     subtipo: text('subtipo'),
     statusReclamacao: text('status_reclamacao'),
     statusDevolucao: text('status_devolucao'),
+    /** `reason_id` da reclamação (ex.: "PDD9949"; melhoria 1). O texto fica em motivos_reclamacao_ml. */
+    motivoId: text('motivo_id'),
     devolucaoId: uuid('devolucao_id').references(() => devolucoes.id, { onDelete: 'set null' }),
     atualizadaNoMlEm: timestamp('atualizada_no_ml_em', { withTimezone: true }),
     sincronizadaEm: timestamp('sincronizada_em', { withTimezone: true }).notNull(),
@@ -74,3 +76,10 @@ export const reclamacoesMl = pgTable(
     index('reclamacoes_ml_subtipo_idx').on(t.subtipo),
   ],
 );
+
+/** Cache dos textos dos motivos de reclamação do ML (melhoria 1): um código já consultado não é pedido de novo. */
+export const motivosReclamacaoMl = pgTable('motivos_reclamacao_ml', {
+  id: text('id').primaryKey(),
+  nome: text('nome').notNull(),
+  consultadoEm: timestamp('consultado_em', { withTimezone: true }).notNull(),
+});

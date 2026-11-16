@@ -6,9 +6,13 @@ import { Selo } from './Selo';
 
 const CONTAGEM = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold';
 
-/** Cartão do quadro e das listas (protótipo C-Painel): código, canal, produto, rastreio, selos e, na etapa 4, o estoque. */
+/**
+ * Cartão do quadro e das listas (protótipo C-Painel): código, canal, produto, rastreio, motivo do cliente (uma linha),
+ * selos e, na etapa 4, o estoque.
+ */
 export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }) {
   const outras = d.unidades - 1;
+  const motivo = d.motivoCliente?.trim() || null;
   const destinos = d.destinos && (d.destinos.bom > 0 || d.destinos.problema > 0) ? d.destinos : null;
   return (
     <Link
@@ -24,6 +28,12 @@ export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }
         {outras > 0 ? ` + ${outras} ${outras === 1 ? 'unidade' : 'unidades'}` : ''}
       </span>
       <span className="break-all font-mono text-xs text-texto-2">{d.rastreio ?? 'Sem rastreio'}</span>
+      {motivo && (
+        // w-0 + min-w-full: a linha não alarga o cartão (nem a coluna da grade); o texto inteiro fica no detalhe.
+        <span className="w-0 min-w-full truncate text-xs text-texto-2" title={motivo}>
+          {`Motivo: ${motivo}`}
+        </span>
+      )}
       <span className="flex flex-wrap gap-1.5">
         <Selo texto={ROTULO_STATUS[d.status]} tom={TOM_DO_STATUS[d.status]} />
         {d.selos.map((s) => (

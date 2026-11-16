@@ -36,6 +36,23 @@ describe('CartaoDevolucao', () => {
   });
 });
 
+describe('CartaoDevolucao: motivo do cliente (melhoria 1)', () => {
+  it('mostra o motivo numa linha só, com reticências, e o texto inteiro no title', () => {
+    render(<CartaoDevolucao devolucao={{ ...BASE, motivoCliente: 'Comprador se arrependeu' }} />);
+    const linha = screen.getByText('Motivo: Comprador se arrependeu');
+    expect(linha.className).toContain('truncate');
+    expect(linha.getAttribute('title')).toBe('Comprador se arrependeu');
+  });
+
+  it('sem motivo (nulo, ausente ou só espaços), não mostra a linha', () => {
+    for (const motivoCliente of [null, undefined, '   ']) {
+      const { unmount } = render(<CartaoDevolucao devolucao={{ ...BASE, motivoCliente }} />);
+      expect(screen.queryByText(/^Motivo:/)).toBeNull();
+      unmount();
+    }
+  });
+});
+
 describe('CartaoDevolucao na etapa 4', () => {
   it('mostra quantas unidades vão para Estoque Bom e Estoque Problema (spec §6.4)', () => {
     render(<CartaoDevolucao devolucao={{ ...BASE, status: 'AGUARDANDO_NF', selos: [], destinos: { bom: 2, problema: 1 } }} />);
