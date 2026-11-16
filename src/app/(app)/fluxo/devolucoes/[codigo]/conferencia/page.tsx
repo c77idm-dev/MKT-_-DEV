@@ -7,7 +7,7 @@ import { primeiroValor } from '@/lib/parametros';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { obterConferencia } from '@/modules/conferencia/leitura';
 import { linksDasEvidencias } from '@/modules/midia/links-evidencias';
-import { concluirAcao, desistirAcao, registrarEanAcao, salvarItemAcao } from './acoes';
+import { concluirAcao, desistirAcao, registrarEanAcao, removerFotoAvariaAcao, salvarItemAcao } from './acoes';
 
 type Props = { params: Promise<{ codigo: string }>; searchParams: Promise<{ passo?: string | string[] }> };
 
@@ -34,7 +34,7 @@ export default async function PaginaConferencia({ params, searchParams }: Props)
         evidencias={dados.evidencias.map((e) => ({ id: e.id, tipo: e.tipo, itemId: e.itemId, situacao: e.situacao, erro: e.erro, url: links.get(e.id) ?? null }))}
         videoObrigatorio={dados.videoObrigatorio}
         passoInicial={Number.isFinite(passo) ? passo : 0}
-        acoes={{ salvarItem: salvarItemAcao, registrarEan: registrarEanAcao, concluir: concluirAcao, desistir: desistirAcao }}
+        acoes={{ salvarItem: salvarItemAcao, registrarEan: registrarEanAcao, concluir: concluirAcao, desistir: desistirAcao, removerFotoAvaria: removerFotoAvariaAcao }}
       />
     </div>
   );

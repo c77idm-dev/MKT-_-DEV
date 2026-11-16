@@ -13,7 +13,7 @@ import type { ItemConferencia } from '@/modules/conferencia/leitura';
 import { colunasDaDecisao, entradaDoItem, pendenciasDaConclusao, videoExigido, type EntradaItem } from '@/modules/conferencia/regras';
 import type { VideoObrigatorio } from '@/modules/configuracoes/dominio';
 import { DESCRICAO_EVIDENCIA, LIMITE_VIDEO_BYTES, ROTULO_EVIDENCIA, ehFoto, type TipoEvidencia } from '@/modules/midia/dominio';
-import { estadoDoSlot, evidenciasQueContam, type EvidenciaServidor } from './estadoSlot';
+import { estadoDoSlot, evidenciasQueContam, fotosExtras, type EvidenciaServidor, type FotoExtra } from './estadoSlot';
 import { PassoDestino } from './PassoDestino';
 import { PassoItem } from './PassoItem';
 import { montarPassos, passoCompleto } from './passos';
@@ -26,6 +26,8 @@ export type AcoesConferencia = {
   registrarEan: (devolucaoId: string, itemId: string, lido: string | null) => Promise<RespostaAcao<{ resultado: ResultadoEan }>>;
   concluir: (devolucaoId: string, codigo: string) => Promise<RespostaAcao<{ destino: string }>>;
   desistir: (devolucaoId: string, codigo: string) => Promise<RespostaAcao<{ destino: string }>>;
+  /** Melhoria 2: remove uma foto da avaria (EXTRA) que já está no servidor. */
+  removerFotoAvaria: (evidenciaId: string) => Promise<{ ok: true } | { ok: false; mensagem: string }>;
 };
 
 type Props = {
@@ -65,12 +67,14 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [confirmarDesistencia, setConfirmarDesistencia] = useState(false);
+  // Fotos da avaria removidas nesta tela: somem na hora, antes de a página recarregar (melhoria 2).
+  const [removidas, setRemovidas] = useState<ReadonlySet<string>>(() => new Set());
 
   // Decisão 15: pede os dados de novo ao servidor depois de cada envio e enquanto há mídia processando (só com rede).
   const atualizar = useCallback(() => {
     if (navigator.onLine) router.refresh();
   }, [router]);
-  const { envios, concluidos, adicionar, tentarDeNovo } = useFilaEnvios(devolucao.id, atualizar);
+  const { envios, concluidos, adicionar, tentarDeNovo, remover } = useFilaEnvios(devolucao.id, atualizar);
   const processando = evidencias.some((e) => e.situacao === 'RECEBIDA' || e.situacao === 'PROCESSANDO');
   useEffect(() => {
     if (!processando) return;
@@ -122,8 +126,25 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
         arquivo: foto ? await comprimirFoto(arquivo) : arquivo,
       });
     } catch {
-      setErros([`Não foi possível ler este arquivo. Tire a ${ROTULO_EVIDENCIA[tipo]} de novo pela câmera.`]);
+      setErros([`Não foi possível ler este arquivo. Tire a ${tipo === 'EXTRA' ? 'foto da avaria' : ROTULO_EVIDENCIA[tipo]} de novo pela câmera.`]);
     }
+  }
+
+  /** Melhoria 2: da fila do aparelho (nunca sobe) ou do servidor. Devolve a mensagem de erro, ou null. */
+  async function removerFotoAvaria(foto: FotoExtra): Promise<string | null> {
+    if (foto.alvo.tipo === 'local') {
+      return (await remover(foto.alvo.idCliente)) ? null : 'Aguarde: a foto ainda está subindo. Remova quando terminar.';
+    }
+    const { evidenciaId } = foto.alvo;
+    try {
+      const r = await acoes.removerFotoAvaria(evidenciaId);
+      if (!r.ok) return r.mensagem;
+    } catch {
+      return 'Sem conexão: a remoção precisa de internet. Tente de novo quando a conexão voltar.';
+    }
+    setRemovidas((atual) => new Set([...atual, evidenciaId]));
+    atualizar();
+    return null;
   }
 
   async function salvar(itemId: string, entrada: EntradaItem): Promise<'ok' | 'sem_rede' | 'erro'> {
@@ -304,6 +325,9 @@ export function AssistenteConferencia({ devolucao, itens, evidencias, videoObrig
           aoConferirEan={(lido) => void conferirEan(itemDoPasso.id, lido)}
           aoEscolher={(tipo, a) => void escolher(tipo, itemDoPasso.id, a)}
           aoTentarDeNovo={(id) => void tentarDeNovo(id)}
+          fotosAvaria={fotosExtras(itemDoPasso.id, fonte, removidas)}
+          aoAdicionarAvaria={(a) => void escolher('EXTRA', itemDoPasso.id, a)}
+          aoRemoverAvaria={removerFotoAvaria}
         />
       )}
 
