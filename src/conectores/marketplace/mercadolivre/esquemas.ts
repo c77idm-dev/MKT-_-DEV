@@ -39,6 +39,8 @@ export const esquemaReclamacao = z.looseObject({
   status: textoOuNulo,
   type: textoOuNulo,
   stage: textoOuNulo,
+  /** Código do motivo da reclamação (ex.: "PDD9949"); o texto vem de /claims/reasons/{id} (melhoria 1). */
+  reason_id: idOuNulo,
   players: lista(
     z.looseObject({
       role: textoOuNulo,
@@ -113,6 +115,9 @@ export const esquemaBuscaReclamacoes = z.looseObject({
   paging: z.looseObject({ total: z.number().int().nonnegative() }),
   data: z.array(z.looseObject({ id, last_updated: dataOuNula, related_entities: z.array(z.string()).nullish() })),
 });
+
+/** Suposição A15: o texto em português vem em `detail` (ou `description`); `name` costuma ser um código. */
+export const esquemaMotivoReclamacao = z.looseObject({ detail: z.unknown().optional(), description: z.unknown().optional(), name: z.unknown().optional() });
 
 export const esquemaMotivos = z.array(z.looseObject({ id: z.string() }));
 export const esquemaArquivoEnviado = z.looseObject({ file_name: z.string().min(1) });

@@ -23,6 +23,8 @@ type CenarioFalso = {
   nome: string;
   semDevolucao?: boolean;
   recusarRevisao?: boolean;
+  /** reason_id da reclamação (padrão: o do exemplo da documentação, PDD9949). */
+  motivo?: string;
   devolucao?: { status: string; subtype: string };
   envio?: { status: string; type: string; destino: string } | null;
   itens?: { sku: string; quantidade: string }[];
@@ -30,6 +32,8 @@ type CenarioFalso = {
 type ArquivoCenarios = {
   vendedor: number;
   cenarios: Record<string, CenarioFalso>;
+  /** Textos da rota de motivos da reclamação (GET /post-purchase/v1/claims/reasons/{id}). */
+  motivosReclamacao: Record<string, string>;
   notaVenda: { cnpjEmitente: string; ncm: string; valorUnitario: string; ean: string; descricao: string };
 };
 
@@ -133,6 +137,7 @@ function reclamacaoFalsa(ids: IdsFalsos, c: CenarioFalso, agora: Date) {
     ...doc('reclamacao.json'),
     id: Number(ids.reclamacaoId),
     resource_id: Number(ids.pedidos[0]),
+    ...(c.motivo ? { reason_id: c.motivo } : {}),
     related_entities: c.semDevolucao ? [] : ['return'],
     players: [
       { role: 'complainant', type: 'buyer', user_id: 987654321, available_actions: [] },
@@ -296,6 +301,14 @@ const ROTAS: Rota[] = [
       const c = ids && cenario(ids.cenario);
       const envio = ids && c && envioFalso(ids, c, agora);
       return envio ? respostaJson(envio) : naoEncontrado();
+    },
+  },
+  {
+    metodo: 'GET',
+    padrao: /^\/post-purchase\/v1\/claims\/reasons\/([A-Z0-9]+)$/,
+    responder: (m) => {
+      const texto = arquivo().motivosReclamacao[m[1]];
+      return texto ? respostaJson({ ...doc('motivo-reclamacao.json'), id: m[1], detail: texto }) : naoEncontrado();
     },
   },
   { metodo: 'GET', padrao: /^\/post-purchase\/v1\/returns\/reasons$/, responder: () => respostaJson(docBruto('motivos.json')) },

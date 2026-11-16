@@ -69,6 +69,14 @@ describe('ML falso: o ConectorML real sobre as respostas da documentação', () 
     ]);
   });
 
+  it('motivo da reclamação: PDD9949 por padrão; o cenário 7 troca o reason_id; texto pela rota de motivos', async () => {
+    expect((await conector().obterReclamacao(novo(1).id)).motivoId).toBe('PDD9949');
+    expect((await conector().obterReclamacao(novo(7).id)).motivoId).toBe('PDD9939');
+    expect(await conector().obterMotivoReclamacao('PDD9949')).toBe('Comprador se arrependeu');
+    expect(await conector().obterMotivoReclamacao('PDD9939')).toBe('O produto tem defeito ou não funciona');
+    await expect(conector().obterMotivoReclamacao('PDD0000')).rejects.toMatchObject({ status: 404 });
+  });
+
   it('cenário 9: reclamação sem devolução', async () => {
     expect((await conector().obterReclamacao(novo(9).id)).devolucao).toBeNull();
   });

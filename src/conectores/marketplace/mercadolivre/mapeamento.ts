@@ -4,6 +4,7 @@ import {
   esquemaAnuncio,
   esquemaDevolucao,
   esquemaEnvio,
+  esquemaMotivoReclamacao,
   esquemaPedido,
   esquemaReclamacao,
   type AnuncioJson,
@@ -78,6 +79,26 @@ function ehTroca(r: ReclamacaoJson, d: DevolucaoJson): boolean {
   return r.type === 'change' || d.type === 'change' || r.related_entities.includes('change');
 }
 
+const CODIGO = /^[a-z0-9_]+$/;
+
+/**
+ * Função pura (suposição A15): o texto do motivo na resposta de GET /post-purchase/v1/claims/reasons/{id}.
+ * `detail`, depois `description`, depois `name` se não for um código ("repentant_buyer"). Sem texto: null.
+ */
+export function textoMotivoReclamacao(json: unknown): string | null {
+  const lido = esquemaMotivoReclamacao.safeParse(json);
+  if (!lido.success) return null;
+  for (const [valor, podeSerCodigo] of [
+    [lido.data.detail, true],
+    [lido.data.description, true],
+    [lido.data.name, false],
+  ] as const) {
+    const texto = typeof valor === 'string' ? valor.trim() : '';
+    if (texto && (podeSerCodigo || !CODIGO.test(texto))) return texto;
+  }
+  return null;
+}
+
 export type EntradaMapeamento = {
   reclamacao: unknown;
   devolucao: unknown | null;
@@ -93,7 +114,15 @@ export type EntradaMapeamento = {
 export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
   const r = analisar(esquemaReclamacao, e.reclamacao, 'reclamação');
   if (e.devolucao === null) {
-    return { reclamacaoId: r.id, statusReclamacao: r.status, subtipo: null, statusDevolucao: null, atualizadaEm: r.last_updated ?? r.date_created, devolucao: null };
+    return {
+      reclamacaoId: r.id,
+      statusReclamacao: r.status,
+      motivoId: r.reason_id,
+      subtipo: null,
+      statusDevolucao: null,
+      atualizadaEm: r.last_updated ?? r.date_created,
+      devolucao: null,
+    };
   }
   const d = analisar(esquemaDevolucao, e.devolucao, 'devolução');
   const pedidosJson = e.pedidos.map((p) => analisar(esquemaPedido, p, 'pedido'));
@@ -136,5 +165,5 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
       };
     }),
   };
-  return { reclamacaoId: r.id, statusReclamacao: r.status, subtipo: d.subtype, statusDevolucao: d.status, atualizadaEm, devolucao };
+  return { reclamacaoId: r.id, statusReclamacao: r.status, motivoId: r.reason_id, subtipo: d.subtype, statusDevolucao: d.status, atualizadaEm, devolucao };
 }
