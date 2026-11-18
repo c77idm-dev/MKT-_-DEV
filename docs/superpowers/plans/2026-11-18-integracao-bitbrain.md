@@ -2496,3 +2496,519 @@ git commit -m "feat(bitbrain): varredura conta por conta (a falha de uma nao par
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
+### Tarefa 9: Respostas à mão no modo `bitbrain` (servidor)
+
+**Objetivo:** no modo `bitbrain`, `ml.enviar-resultado` não chama o ML.
+- **Todos BOM:** grava `resposta_pendente = 'OK'` e o evento `ml_resposta_manual_pendente`, uma vez só.
+- **Algum problema:** cria a contestação como hoje.
+
+O Gestor marca a contestação como respondida (vai a `ENVIADA`, com evento e usuário) e marca o "OK" como respondido (limpa a pendência, com evento). O envio automático fica desligado nesse modo. No modo `api`, tudo segue igual.
+
+**Arquivos:**
+- Modificar: `src/modules/mercado-livre/resultado.ts`, `src/modules/mercado-livre/contestacoes.ts`
+- Criar: `src/modules/mercado-livre/respostas-manuais.ts`, `src/modules/mercado-livre/respostas-manuais.int.test.ts`
+
+**Interfaces:**
+- Consome: `reclamacoesMl.respostaPendente` e `conta`, e `contasBitbrain` (Tarefa 5); `MENSAGEM_RESPOSTA_MANUAL` e `ErroRespostaManual` (Tarefa 2); `configBitbrainTeste`, `contasFalsasTeste` e `usarModoBitbrain` (Tarefa 6); `ConfigML` e `configML`.
+- Produz (`resultado.ts`):
+  - `processarResultadoConferencia(db, devolucaoId, agora, config: ConfigML = configML())`;
+  - `ResultadoProcessamento` ganha `'ok_pendente_manual' | 'ok_pendente_ja_registrado'`;
+  - `registrarOkPendente(db: DbOuTx, dev: { id: string; reclamacaoId: string | null }, agora: Date): Promise<'ok_pendente_manual' | 'ok_pendente_ja_registrado' | 'sem_vinculo'>`.
+- Produz (`respostas-manuais.ts`):
+  - `type OkPendente = { devolucaoId: string; codigo: string; pedidos: string[]; reclamacaoId: string; conta: string | null; prazo: Date | null; selo: DadosSelo | null }`;
+  - `listarOkPendentes(db: DbOuTx, agora?: Date): Promise<OkPendente[]>`;
+  - `marcarOkRespondido(db: DbOuTx, devolucaoId: string, usuario: UsuarioSessao, agora: Date, config?: ConfigML): Promise<void>`;
+  - `marcarContestacaoRespondida(db: DbOuTx, id: string, usuario: UsuarioSessao, agora: Date, config?: ConfigML): Promise<void>`;
+  - `contarRespostasParaDarNoML(db: DbOuTx): Promise<number>`.
+
+  As duas funções de marcar lançam `ErroContestacao` (com a lista `erros`) para quem não é Gestor, fora do modo `bitbrain`, com id inválido ou quando já foi respondido.
+- Produz (`contestacoes.ts`):
+  - `revisarEEnviar(…, agora, config: ConfigML = configML())` recusa no modo `bitbrain`;
+  - `enviarContestacao(db, id, o: { agora; ultimaTentativa; config?: ConfigML })` no modo `bitbrain` leva a contestação a `FALHOU` com `MENSAGEM_RESPOSTA_MANUAL`, sem chamar o ML;
+  - `DetalheContestacao` ganha `conta: string | null` (o nome da conta do Bitbrain ou a empresa).
+
+- [ ] **Passo 1: Testes que falham** (`respostas-manuais.int.test.ts`)
+
+```ts
+import { eq } from 'drizzle-orm';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { definirConectorParaTestes } from '@/conectores/marketplace/registro';
+import { contestacoesCanal, reclamacoesMl } from '@/db/schema';
+import { FilaMemoria } from '@/modules/fila/fila';
+import { listarEventos } from '@/modules/historico/eventos';
+import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
+import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
+import { configBitbrainTeste, contasFalsasTeste } from '../../../tests/helpers/fabricas-bitbrain';
+import { ConectorMLMemoria, configMLTeste, devolucaoMLConferidaTeste } from '../../../tests/helpers/fabricas-ml';
+import { usarModoBitbrain } from '../../../tests/helpers/modo-bitbrain';
+import { enviarContestacao, ErroContestacao, obterContestacao, revisarEEnviar } from './contestacoes';
+import { contarRespostasParaDarNoML, listarOkPendentes, marcarContestacaoRespondida, marcarOkRespondido } from './respostas-manuais';
+import { processarResultadoConferencia } from './resultado';
+
+const { db, sql } = criarDbTeste();
+const AGORA = new Date('2026-11-18T15:00:00Z');
+const BB = configBitbrainTeste();
+let conector: ConectorMLMemoria;
+
+beforeEach(async () => {
+  await limparTabelas(sql);
+  conector = new ConectorMLMemoria();
+  definirConectorParaTestes('MERCADO_LIVRE', conector);
+});
+afterEach(() => {
+  definirConectorParaTestes('MERCADO_LIVRE', null);
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+afterAll(() => sql.end());
+
+const pendente = async (devolucaoId: string) =>
+  (await db.select({ r: reclamacoesMl.respostaPendente }).from(reclamacoesMl).where(eq(reclamacoesMl.devolucaoId, devolucaoId)))[0]?.r ?? null;
+const acoes = async (id: string) => (await listarEventos(db, 'devolucao', id)).map((e) => e.acao);
+const conferidaBom = () => devolucaoMLConferidaTeste(db, { itens: [{ destino: 'BOM' }] });
+const conferidaProblema = () => devolucaoMLConferidaTeste(db, { itens: [{ destino: 'PROBLEMA', motivo: 'AVARIADO' }] });
+async function contestacaoDe(devolucaoId: string) {
+  const [c] = await db.select().from(contestacoesCanal).where(eq(contestacoesCanal.devolucaoId, devolucaoId));
+  return c;
+}
+
+describe('ml.enviar-resultado no modo bitbrain (§4.6)', () => {
+  it('todos BOM: grava resposta_pendente OK e o evento, sem chamar o ML', async () => {
+    const d = await conferidaBom();
+    expect(await processarResultadoConferencia(db, d.id, AGORA, BB)).toBe('ok_pendente_manual');
+    expect(conector.enviados).toEqual([]);
+    expect(await pendente(d.id)).toBe('OK');
+    expect(await acoes(d.id)).toContain('ml_resposta_manual_pendente');
+  });
+
+  it('rodar de novo não repete; depois de respondido, a pendência não volta', async () => {
+    const d = await conferidaBom();
+    await processarResultadoConferencia(db, d.id, AGORA, BB);
+    await marcarOkRespondido(db, d.id, await criarUsuarioTeste(db, 'GESTOR'), AGORA, BB);
+    expect(await processarResultadoConferencia(db, d.id, AGORA, BB)).toBe('ok_pendente_ja_registrado');
+    expect(await pendente(d.id)).toBeNull();
+    expect((await acoes(d.id)).filter((a) => a === 'ml_resposta_manual_pendente')).toHaveLength(1);
+  });
+
+  it('algum problema: a contestação nasce AGUARDANDO_GESTOR, como hoje, e não há OK pendente', async () => {
+    const d = await conferidaProblema();
+    expect(await processarResultadoConferencia(db, d.id, AGORA, BB)).toBe('contestacao_criada');
+    expect((await contestacaoDe(d.id)).status).toBe('AGUARDANDO_GESTOR');
+    expect(await pendente(d.id)).toBeNull();
+  });
+
+  it('modo api: o OK vai ao ML como hoje (regressão)', async () => {
+    const d = await conferidaBom();
+    expect(await processarResultadoConferencia(db, d.id, AGORA, configMLTeste())).toBe('ok_enviado');
+    expect(conector.enviados).toHaveLength(1);
+    expect(await pendente(d.id)).toBeNull();
+  });
+});
+
+describe('contestação respondida à mão', () => {
+  it('Gestor leva a ENVIADA com a data e o usuário, e registra o evento; o ML não é chamado', async () => {
+    const d = await conferidaProblema();
+    await processarResultadoConferencia(db, d.id, AGORA, BB);
+    const gestor = await criarUsuarioTeste(db, 'GESTOR');
+    const c = await contestacaoDe(d.id);
+    await marcarContestacaoRespondida(db, c.id, gestor, AGORA, BB);
+    expect(await contestacaoDe(d.id)).toMatchObject({ status: 'ENVIADA', enviadaEm: AGORA, revisadoPor: gestor.id, erro: null });
+    const evento = (await listarEventos(db, 'devolucao', d.id)).find((e) => e.acao === 'ml_contestacao_respondida_a_mao');
+    expect(evento).toMatchObject({ usuarioNome: gestor.nome, dados: { contestacaoId: c.id, motivo: 'SRF2' } });
+    expect(conector.enviados).toEqual([]);
+  });
+
+  it('recusas: Operador, já respondida, id inválido e fora do modo bitbrain', async () => {
+    const d = await conferidaProblema();
+    await processarResultadoConferencia(db, d.id, AGORA, BB);
+    const c = await contestacaoDe(d.id);
+    const gestor = await criarUsuarioTeste(db, 'GESTOR');
+    await expect(marcarContestacaoRespondida(db, c.id, await criarUsuarioTeste(db, 'OPERADOR'), AGORA, BB)).rejects.toBeInstanceOf(ErroContestacao);
+    await expect(marcarContestacaoRespondida(db, c.id, gestor, AGORA, configMLTeste())).rejects.toThrow('só vale no modo Bitbrain');
+    await expect(marcarContestacaoRespondida(db, 'nao-e-uuid', gestor, AGORA, BB)).rejects.toThrow('Contestação não encontrada.');
+    await marcarContestacaoRespondida(db, c.id, gestor, AGORA, BB);
+    await expect(marcarContestacaoRespondida(db, c.id, gestor, AGORA, BB)).rejects.toThrow('já está marcada como respondida');
+  });
+
+  it('contestação com falha (FALHOU) também pode ser marcada como respondida', async () => {
+    const d = await conferidaProblema();
+    await processarResultadoConferencia(db, d.id, AGORA, BB);
+    const c = await contestacaoDe(d.id);
+    await db.update(contestacoesCanal).set({ status: 'FALHOU', erro: 'x' }).where(eq(contestacoesCanal.id, c.id));
+    await marcarContestacaoRespondida(db, c.id, await criarUsuarioTeste(db, 'GESTOR'), AGORA, BB);
+    expect((await contestacaoDe(d.id)).status).toBe('ENVIADA');
+  });
+
+  it('o detalhe da contestação traz a conta (nome do Bitbrain)', async () => {
+    await contasFalsasTeste(db);
+    const d = await conferidaProblema();
+    await db.insert(reclamacoesMl).values({ claimId: d.externa!.reclamacaoId, devolucaoId: d.id, conta: 'loja-falsa-1', sincronizadaEm: AGORA });
+    await processarResultadoConferencia(db, d.id, AGORA, BB);
+    expect((await obterContestacao(db, (await contestacaoDe(d.id)).id, AGORA))?.conta).toBe('Loja Falsa 1');
+  });
+});
+
+describe('"OK para responder no ML"', () => {
+  it('lista código, pedidos, reclamação e conta; marcar limpa a pendência e registra quem respondeu', async () => {
+    await contasFalsasTeste(db);
+    const d = await conferidaBom();
+    await db.insert(reclamacoesMl).values({ claimId: d.externa!.reclamacaoId, devolucaoId: d.id, conta: 'loja-falsa-1', sincronizadaEm: AGORA });
+    await processarResultadoConferencia(db, d.id, AGORA, BB);
+    expect(await listarOkPendentes(db, AGORA)).toEqual([
+      expect.objectContaining({ devolucaoId: d.id, codigo: d.codigo, reclamacaoId: d.externa!.reclamacaoId, conta: 'Loja Falsa 1', pedidos: d.externa!.pedidos }),
+    ]);
+    const gestor = await criarUsuarioTeste(db, 'GESTOR');
+    await marcarOkRespondido(db, d.id, gestor, AGORA, BB);
+    expect(await listarOkPendentes(db, AGORA)).toEqual([]);
+    expect((await listarEventos(db, 'devolucao', d.id)).find((e) => e.acao === 'ml_ok_respondido_a_mao')?.usuarioNome).toBe(gestor.nome);
+    await expect(marcarOkRespondido(db, d.id, gestor, AGORA, BB)).rejects.toThrow('não tem "OK" para responder');
+  });
+
+  it('contarRespostasParaDarNoML: OK pendentes + contestações AGUARDANDO_GESTOR ou FALHOU (ENVIADA não conta)', async () => {
+    const ok = await conferidaBom();
+    await processarResultadoConferencia(db, ok.id, AGORA, BB);
+    const aguardando = await conferidaProblema();
+    await processarResultadoConferencia(db, aguardando.id, AGORA, BB);
+    const respondida = await conferidaProblema();
+    await processarResultadoConferencia(db, respondida.id, AGORA, BB);
+    await marcarContestacaoRespondida(db, (await contestacaoDe(respondida.id)).id, await criarUsuarioTeste(db, 'GESTOR'), AGORA, BB);
+    expect(await contarRespostasParaDarNoML(db)).toBe(2);
+  });
+});
+
+describe('envio automático desligado no modo bitbrain', () => {
+  it('revisarEEnviar é recusado e nada entra na fila', async () => {
+    const d = await conferidaProblema();
+    await processarResultadoConferencia(db, d.id, AGORA, BB);
+    const fila = new FilaMemoria();
+    const c = await contestacaoDe(d.id);
+    const pedido = revisarEEnviar(db, fila, c.id, { motivo: 'SRF6', mensagem: 'Mensagem de teste longa.', evidencias: [] }, await criarUsuarioTeste(db, 'GESTOR'), AGORA, BB);
+    await expect(pedido).rejects.toThrow('Marcar como respondida');
+    expect(fila.enviadas).toEqual([]);
+  });
+
+  it('enviarContestacao: FALHOU com "responda no ML à mão", sem chamar o ML', async () => {
+    const d = await conferidaProblema();
+    await processarResultadoConferencia(db, d.id, AGORA, BB);
+    const c = await contestacaoDe(d.id);
+    const gestor = await criarUsuarioTeste(db, 'GESTOR');
+    await db.update(contestacoesCanal).set({ revisadoPor: gestor.id }).where(eq(contestacoesCanal.id, c.id));
+    expect(await enviarContestacao(db, c.id, { agora: AGORA, ultimaTentativa: false, config: BB })).toBe('falhou');
+    expect(await contestacaoDe(d.id)).toMatchObject({ status: 'FALHOU', erro: expect.stringContaining('responda no ML à mão') });
+    expect(conector.enviados).toEqual([]);
+  });
+
+  it('pelo manipulador do worker (configML do ambiente): o modo bitbrain também vale', async () => {
+    usarModoBitbrain();
+    const d = await conferidaBom();
+    expect(await processarResultadoConferencia(db, d.id, AGORA)).toBe('ok_pendente_manual');
+  });
+});
+```
+
+- [ ] **Passo 2:** `npm run test:int -- src/modules/mercado-livre/respostas-manuais.int.test.ts` → FAIL.
+
+- [ ] **Passo 3: Implementação**
+
+`resultado.ts`:
+- Imports: `reclamacoesMl` (schema), `configML` e `type ConfigML` (`./config`).
+- No `select` do `dev`, acrescente `reclamacaoId: devolucoes.reclamacaoId`.
+- `ResultadoProcessamento` ganha `| 'ok_pendente_manual' | 'ok_pendente_ja_registrado'`.
+- A assinatura passa a ser `processarResultadoConferencia(db: DbOuTx, devolucaoId: string, agora: Date, config: ConfigML = configML())`.
+- Logo depois do bloco `if (decisao.tipo === 'CONTESTAR') { … }`, e antes da transação do OK:
+
+```ts
+  // §4.6: no modo bitbrain o sistema não escreve no ML; o "OK" fica pendente para o Gestor responder à mão.
+  if (config.modo === 'bitbrain') return registrarOkPendente(db, { id: dev.id, reclamacaoId: dev.reclamacaoId }, agora);
+```
+
+- No fim do arquivo:
+
+```ts
+/**
+ * Modo bitbrain (§4.6): grava resposta_pendente = 'OK' na reclamação e o evento ml_resposta_manual_pendente.
+ * Idempotente pelo evento: rodar de novo (inclusive depois de "Marcar como respondido") não volta a pendência.
+ */
+export async function registrarOkPendente(
+  db: DbOuTx,
+  dev: { id: string; reclamacaoId: string | null },
+  agora: Date,
+): Promise<'ok_pendente_manual' | 'ok_pendente_ja_registrado' | 'sem_vinculo'> {
+  const reclamacaoId = dev.reclamacaoId;
+  if (!reclamacaoId) return 'sem_vinculo';
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(3, hashtext(${`resultado:${dev.id}`}))`);
+    if (await jaTemEvento(tx, dev.id, 'ml_resposta_manual_pendente')) return 'ok_pendente_ja_registrado';
+    await tx
+      .insert(reclamacoesMl)
+      .values({ claimId: reclamacaoId, devolucaoId: dev.id, sincronizadaEm: agora, respostaPendente: 'OK' })
+      .onConflictDoUpdate({ target: reclamacoesMl.claimId, set: { respostaPendente: 'OK' } });
+    await registrarEvento(tx, {
+      entidade: 'devolucao',
+      entidadeId: dev.id,
+      acao: 'ml_resposta_manual_pendente',
+      usuarioId: null,
+      dados: { resposta: 'OK' },
+      em: agora,
+    });
+    return 'ok_pendente_manual';
+  });
+}
+```
+
+`contestacoes.ts`:
+- Imports: `ErroRespostaManual` e `MENSAGEM_RESPOSTA_MANUAL` (`@/conectores/marketplace/bitbrain/cliente`); `configML` e `type ConfigML` (`./config`); `contasBitbrain` e `reclamacoesMl` (schema).
+- `revisarEEnviar(db, fila, id, e, usuario, agora, config: ConfigML = configML())`: logo depois da checagem do Gestor:
+
+```ts
+  if (config.modo === 'bitbrain') {
+    throw new ErroContestacao(['No modo Bitbrain a contestação é respondida à mão no ML: use "Marcar como respondida".']);
+  }
+```
+
+- `enviarContestacao(db, id, o: { agora: Date; ultimaTentativa: boolean; config?: ConfigML })`:
+  - logo depois de `if (!c || c.status !== 'AGUARDANDO_GESTOR' || !c.revisadoPor) return 'ignorada';` e da definição do `falhar`, acrescente `if ((o.config ?? configML()).modo === 'bitbrain') return falhar(MENSAGEM_RESPOSTA_MANUAL);`;
+  - no `catch` do envio, como primeira linha: `if (erro instanceof ErroRespostaManual) return falhar(erro.message);`.
+- `DetalheContestacao` ganha `conta: string | null`. Em `obterContestacao`:
+  - acrescente ao `select` `conta: sql<string | null>\`coalesce(${contasBitbrain.nome}, ${reclamacoesMl.conta})\``;
+  - acrescente os joins `.leftJoin(reclamacoesMl, eq(reclamacoesMl.claimId, devolucoes.reclamacaoId)).leftJoin(contasBitbrain, eq(contasBitbrain.empresa, reclamacoesMl.conta))`;
+  - devolva `conta: c.conta`.
+
+`respostas-manuais.ts`:
+
+```ts
+import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
+import type { DbOuTx } from '@/db/client';
+import { contasBitbrain, contestacoesCanal, devolucoes, reclamacoesMl } from '@/db/schema';
+import { ehUuid } from '@/lib/uuid';
+import { pode } from '@/modules/auth/permissoes';
+import type { UsuarioSessao } from '@/modules/auth/usuarios';
+import type { DadosSelo } from '@/modules/devolucoes/selos';
+import { registrarEvento } from '@/modules/historico/eventos';
+import { configML, type ConfigML } from './config';
+import { ErroContestacao } from './contestacoes';
+import { seloPrazoML } from './selos';
+
+const SO_NO_BITBRAIN = 'A resposta à mão só vale no modo Bitbrain (ML_CONECTOR=bitbrain).';
+
+function exigirGestorNoBitbrain(usuario: UsuarioSessao, config: ConfigML): void {
+  if (!pode(usuario.perfil, 'administrar')) throw new ErroContestacao(['Só o Gestor marca as respostas dadas no ML.']);
+  if (config.modo !== 'bitbrain') throw new ErroContestacao([SO_NO_BITBRAIN]);
+}
+
+export type OkPendente = {
+  devolucaoId: string;
+  codigo: string;
+  pedidos: string[];
+  reclamacaoId: string;
+  conta: string | null;
+  prazo: Date | null;
+  selo: DadosSelo | null;
+};
+
+/** "OK para responder no ML" (extra, §4.6): as devoluções conferidas sem problema que esperam o "OK" à mão. */
+export async function listarOkPendentes(db: DbOuTx, agora: Date = new Date()): Promise<OkPendente[]> {
+  const linhas = await db
+    .select({
+      devolucaoId: devolucoes.id,
+      codigo: devolucoes.codigo,
+      pedidos: devolucoes.pedidosExternos,
+      reclamacaoId: reclamacoesMl.claimId,
+      conta: sql<string | null>`coalesce(${contasBitbrain.nome}, ${reclamacoesMl.conta})`,
+      prazo: devolucoes.prazoConferenciaCanal,
+    })
+    .from(reclamacoesMl)
+    .innerJoin(devolucoes, eq(devolucoes.id, reclamacoesMl.devolucaoId))
+    .leftJoin(contasBitbrain, eq(contasBitbrain.empresa, reclamacoesMl.conta))
+    .where(eq(reclamacoesMl.respostaPendente, 'OK'))
+    .orderBy(sql`${devolucoes.prazoConferenciaCanal} asc nulls last`, asc(devolucoes.numero))
+    .limit(200);
+  return linhas.map((l) => ({ ...l, selo: seloPrazoML(l.prazo, agora) }));
+}
+
+/** "Marcar como respondido": limpa a pendência e registra quem respondeu (§4.6). */
+export async function marcarOkRespondido(db: DbOuTx, devolucaoId: string, usuario: UsuarioSessao, agora: Date, config: ConfigML = configML()): Promise<void> {
+  exigirGestorNoBitbrain(usuario, config);
+  if (!ehUuid(devolucaoId)) throw new ErroContestacao(['Devolução não encontrada.']);
+  await db.transaction(async (tx) => {
+    const limpas = await tx
+      .update(reclamacoesMl)
+      .set({ respostaPendente: null })
+      .where(and(eq(reclamacoesMl.devolucaoId, devolucaoId), eq(reclamacoesMl.respostaPendente, 'OK')))
+      .returning({ claimId: reclamacoesMl.claimId });
+    if (limpas.length === 0) throw new ErroContestacao(['Esta devolução não tem "OK" para responder no ML.']);
+    await registrarEvento(tx, { entidade: 'devolucao', entidadeId: devolucaoId, acao: 'ml_ok_respondido_a_mao', usuarioId: usuario.id, em: agora });
+  });
+}
+
+/** "Marcar como respondida" (extra, §4.6): a contestação vai a ENVIADA, com o evento e o usuário. */
+export async function marcarContestacaoRespondida(db: DbOuTx, id: string, usuario: UsuarioSessao, agora: Date, config: ConfigML = configML()): Promise<void> {
+  exigirGestorNoBitbrain(usuario, config);
+  if (!ehUuid(id)) throw new ErroContestacao(['Contestação não encontrada.']);
+  const [c] = await db
+    .select({ status: contestacoesCanal.status, devolucaoId: contestacoesCanal.devolucaoId, motivo: contestacoesCanal.motivoCanal })
+    .from(contestacoesCanal)
+    .where(eq(contestacoesCanal.id, id));
+  if (!c) throw new ErroContestacao(['Contestação não encontrada.']);
+  if (c.status === 'ENVIADA') throw new ErroContestacao(['Esta contestação já está marcada como respondida.']);
+  await db.transaction(async (tx) => {
+    const [mudou] = await tx
+      .update(contestacoesCanal)
+      .set({ status: 'ENVIADA', enviadaEm: agora, revisadoPor: usuario.id, erro: null, atualizadaEm: agora })
+      .where(and(eq(contestacoesCanal.id, id), eq(contestacoesCanal.status, c.status)))
+      .returning({ id: contestacoesCanal.id });
+    if (!mudou) throw new ErroContestacao(['Outra pessoa acabou de marcar esta contestação. Atualize a tela.']);
+    await registrarEvento(tx, {
+      entidade: 'devolucao',
+      entidadeId: c.devolucaoId,
+      acao: 'ml_contestacao_respondida_a_mao',
+      usuarioId: usuario.id,
+      dados: { contestacaoId: id, motivo: c.motivo },
+      em: agora,
+    });
+  });
+}
+
+/** Alerta "Respostas para dar no ML" (D10): os "OK" pendentes mais as contestações que esperam o Gestor ou falharam. */
+export async function contarRespostasParaDarNoML(db: DbOuTx): Promise<number> {
+  const [ok] = await db.select({ total: count() }).from(reclamacoesMl).where(eq(reclamacoesMl.respostaPendente, 'OK'));
+  const [contestacoes] = await db
+    .select({ total: count() })
+    .from(contestacoesCanal)
+    .where(inArray(contestacoesCanal.status, ['AGUARDANDO_GESTOR', 'FALHOU']));
+  return Number(ok?.total ?? 0) + Number(contestacoes?.total ?? 0);
+}
+```
+
+O `respostas-manuais.ts` importa `contestacoes.ts`, que importa `resultado.ts`. Por isso o `registrarOkPendente` mora no `resultado.ts`: assim não há ciclo.
+
+- [ ] **Passo 4:** `npm run test:int -- src/modules/mercado-livre && npm test && npm run typecheck && npm run lint` → PASS. O `resultado.int.test.ts` e o `contestacoes.int.test.ts` atuais (modo `api`) continuam iguais.
+
+- [ ] **Passo 5: Commit**
+
+```bash
+git add src/modules/mercado-livre/resultado.ts src/modules/mercado-livre/contestacoes.ts src/modules/mercado-livre/respostas-manuais.ts src/modules/mercado-livre/respostas-manuais.int.test.ts
+git commit -m "feat(bitbrain): respostas a mao (OK pendente, contestacao e OK marcados como respondidos, envio automatico desligado)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Tarefa 10: Alertas do modo `bitbrain` (respostas para dar, sincronização por conta, conta indisponível)
+
+**Objetivo:** o painel de alertas ganha, no modo `bitbrain` e só para o Gestor (D10):
+- "Respostas para dar no ML", com o número de "OK" pendentes mais as contestações aguardando ou com falha, e o link para `/contestacoes`;
+- "Conta do ML indisponível no Bitbrain";
+- o alerta de sincronização parada contado por conta marcada.
+
+No modo `api`, nada muda.
+
+**Arquivos:**
+- Modificar: `src/modules/acabamento/alertas-regras.ts`, `alertas-regras.test.ts`, `alertas.ts`, `alertas.int.test.ts`
+
+**Interfaces:**
+- Consome: `contarRespostasParaDarNoML` (Tarefa 9); `listarContasBitbrain`, `contaAtrasada` e `contarContasIndisponiveis` (Tarefa 6); `configML`.
+- Produz (`alertas-regras.ts`):
+  - `IDS_ALERTA` ganha `'respostas_ml'` (logo depois de `'prazo_ml'`) e `'conta_bitbrain_indisponivel'` (logo depois de `'conta_ml_reconectar'`);
+  - `DEFINICAO_ALERTA.respostas_ml = { titulo: 'Respostas para dar no ML', perfis: ['GESTOR'], tom: 'atencao', href: '/contestacoes' }`;
+  - `DEFINICAO_ALERTA.conta_bitbrain_indisponivel = { titulo: 'Conta do ML indisponível no Bitbrain', perfis: ['GESTOR'], tom: 'erro', href: '/configuracoes/mercado-livre' }`.
+
+- [ ] **Passo 1: Testes que falham**
+
+`alertas-regras.test.ts`:
+- No teste dos perfis, troque `toHaveLength(11)` por `toHaveLength(13)`.
+- Acrescente:
+
+```ts
+  it('alertas do modo Bitbrain (D10): títulos e links', () => {
+    expect(DEFINICAO_ALERTA.respostas_ml).toMatchObject({ titulo: 'Respostas para dar no ML', perfis: ['GESTOR'], href: '/contestacoes' });
+    expect(DEFINICAO_ALERTA.conta_bitbrain_indisponivel).toMatchObject({ titulo: 'Conta do ML indisponível no Bitbrain', perfis: ['GESTOR'] });
+    expect(alertasDoPerfil('GESTOR').slice(0, 2)).toEqual(['prazo_ml', 'respostas_ml']);
+  });
+```
+
+`alertas.int.test.ts`:
+- Imports novos: `afterEach` e `vi` de `vitest`; `contasBitbrain` de `@/db/schema`; `processarResultadoConferencia` de `@/modules/mercado-livre/resultado`; `configBitbrainTeste` e `contasFalsasTeste` de `../../../tests/helpers/fabricas-bitbrain`; `devolucaoMLConferidaTeste` de `../../../tests/helpers/fabricas-ml`; `usarModoBitbrain` de `../../../tests/helpers/modo-bitbrain`.
+- Os testes:
+
+```ts
+describe('modo bitbrain (integração de 18/11, D10)', () => {
+  beforeEach(() => usarModoBitbrain());
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('"Respostas para dar no ML": OK pendentes + contestações aguardando ou com falha; só o Gestor', async () => {
+    const d = await devolucaoMLConferidaTeste(db, { itens: [{ destino: 'BOM' }] });
+    await processarResultadoConferencia(db, d.id, AGORA, configBitbrainTeste());
+    const outra = await criarDevolucaoTeste(db, await criarUsuarioTeste(db), { canal: 'MERCADO_LIVRE' });
+    await criarContestacaoTeste(db, outra.id, { status: 'FALHOU', prazo: new Date('2026-12-30T12:00:00Z') });
+    const alerta = (await carregarAlertas(db, 'GESTOR', AGORA, semDisco)).find((a) => a.id === 'respostas_ml');
+    expect(alerta).toMatchObject({ titulo: 'Respostas para dar no ML', quantidade: 2, href: '/contestacoes' });
+    expect(await ids('OPERADOR')).not.toContain('respostas_ml');
+  });
+
+  it('sincronização parada contada por conta marcada; conta marcada indisponível tem alerta próprio', async () => {
+    await contasFalsasTeste(db, { recebe: ['loja-falsa-1', 'loja-falsa-2'] });
+    await db.update(contasBitbrain).set({ ultimaSincronizacaoEm: new Date('2026-11-20T10:00:00Z'), atualizadaEm: new Date('2026-11-20T09:00:00Z') });
+    await db.update(contasBitbrain).set({ disponivel: false }).where(eq(contasBitbrain.empresa, 'loja-falsa-2'));
+    const alertas = await carregarAlertas(db, 'GESTOR', AGORA, semDisco);
+    expect(alertas.find((a) => a.id === 'sincronizacao_ml')?.quantidade).toBe(1);
+    expect(alertas.find((a) => a.id === 'conta_bitbrain_indisponivel')).toMatchObject({ titulo: 'Conta do ML indisponível no Bitbrain', quantidade: 1 });
+  });
+
+  it('conta em dia: sem alerta de sincronização', async () => {
+    await contasFalsasTeste(db, { recebe: ['loja-falsa-1'] });
+    await db.update(contasBitbrain).set({ ultimaSincronizacaoEm: new Date('2026-11-20T11:50:00Z') });
+    expect(await ids('GESTOR')).not.toContain('sincronizacao_ml');
+  });
+});
+
+describe('modo api: nada do Bitbrain aparece (regressão)', () => {
+  it('OK pendente e conta indisponível não geram alerta fora do modo bitbrain', async () => {
+    const d = await devolucaoMLConferidaTeste(db, { itens: [{ destino: 'BOM' }] });
+    await processarResultadoConferencia(db, d.id, AGORA, configBitbrainTeste());
+    await contasFalsasTeste(db, { recebe: ['loja-falsa-1'] });
+    await db.update(contasBitbrain).set({ disponivel: false });
+    expect(await ids('GESTOR')).toEqual([]);
+  });
+});
+```
+
+- [ ] **Passo 2:** `npm test -- src/modules/acabamento && npm run test:int -- src/modules/acabamento/alertas.int.test.ts` → FAIL.
+
+- [ ] **Passo 3: Implementação**
+
+`alertas-regras.ts`: acrescente os 2 ids em `IDS_ALERTA` e as 2 definições em `DEFINICAO_ALERTA`, como em **Interfaces**.
+
+`alertas.ts`:
+- Imports novos:
+  - `configML`, de `@/modules/mercado-livre/config`;
+  - `contaAtrasada`, `contarContasIndisponiveis` e `listarContasBitbrain`, de `@/modules/mercado-livre/contas-bitbrain`;
+  - `contarRespostasParaDarNoML`, de `@/modules/mercado-livre/respostas-manuais`.
+- No `calcular`, acrescente os casos e troque o `sincronizacao_ml`:
+
+```ts
+    case 'respostas_ml':
+      // D10: só no modo bitbrain, onde as respostas ao ML são dadas à mão.
+      return configML().modo === 'bitbrain' ? contagem(await contarRespostasParaDarNoML(db)) : null;
+    case 'conta_bitbrain_indisponivel':
+      return configML().modo === 'bitbrain' ? contagem(await contarContasIndisponiveis(db)) : null;
+    case 'sincronizacao_ml': {
+      // Modo bitbrain (§4.4): uma conta marcada parada há mais de 1 h já conta; a quantidade é o número de contas.
+      if (configML().modo === 'bitbrain') return contagem((await listarContasBitbrain(db)).filter((c) => contaAtrasada(c, agora)).length);
+      const conta = await obterContaML(db);
+      return condicao(conta?.situacao === 'ATIVA' && sincronizacaoAtrasada(conta.ultimaSincronizacaoEm ?? conta.conectadaEm, agora));
+    }
+```
+
+O `detalhar` não muda: os dois alertas novos levam a uma tela própria, e o `default` devolve listas vazias.
+
+- [ ] **Passo 4:** `npm test && npm run test:int -- src/modules/acabamento && npm run typecheck && npm run lint` → PASS.
+
+- [ ] **Passo 5: Commit**
+
+```bash
+git add src/modules/acabamento/alertas-regras.ts src/modules/acabamento/alertas-regras.test.ts src/modules/acabamento/alertas.ts src/modules/acabamento/alertas.int.test.ts
+git commit -m "feat(bitbrain): alertas Respostas para dar no ML, conta indisponivel e sincronizacao parada por conta
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
