@@ -1,4 +1,5 @@
 import { redigir } from '@/lib/redigir';
+import { ErroBitbrain } from '../bitbrain/cliente';
 import { ErroML } from './cliente';
 
 /** Resume o corpo de um erro da API para logs e relatórios, sem dados pessoais (spec §10). */
@@ -49,8 +50,12 @@ export function ehRecusaDefinitiva(erro: unknown): erro is ErroML {
 export function logErroML(contexto: string, erro: unknown, extra: Record<string, unknown> = {}): void {
   const base =
     erro instanceof ErroML
-      ? { status: erro.status, caminho: erro.caminho, corpo: resumirCorpoErro(erro.corpo) }
-      : { mensagem: erro instanceof Error ? erro.message : String(erro) };
+      ? erro.empresa !== null
+        ? { status: erro.status, empresa: erro.empresa, caminho: erro.caminho }
+        : { status: erro.status, caminho: erro.caminho, corpo: resumirCorpoErro(erro.corpo) }
+      : erro instanceof ErroBitbrain
+        ? { status: erro.status, empresa: erro.empresa, mensagem: erro.message }
+        : { mensagem: erro instanceof Error ? erro.message : String(erro) };
   console.error(JSON.stringify({ nivel: 'erro', origem: 'mercado-livre', contexto, ...base, ...extra }));
 }
 
