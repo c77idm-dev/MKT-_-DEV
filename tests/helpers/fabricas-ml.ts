@@ -29,6 +29,9 @@ export function configMLTeste(mudancas: Partial<ConfigML> = {}): ConfigML {
     redirectUri: 'http://localhost/api/ml/retorno',
     usarPkce: false,
     chaveBase64: CHAVE_TESTE,
+    bitbrainUrl: '',
+    bitbrainToken: '',
+    permitirFalsos: false,
     ...mudancas,
   };
 }

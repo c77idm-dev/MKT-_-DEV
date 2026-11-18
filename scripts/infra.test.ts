@@ -46,7 +46,7 @@ describe('docker-compose.prod.yml (VPS compartilhada, spec §13)', () => {
     // O único arquivo de variáveis citado no serviço (chave e comentários) é o .env.backup, nunca o .env.producao.
     expect(new Set([...b.matchAll(/\.env[\w.]*/g)].map((m) => m[0]))).toEqual(new Set(['.env.backup']));
     const semBackup = b.replaceAll('BACKUP_S3_CHAVE', 'BACKUP_X');
-    for (const segredo of ['ML_', 'CHAVE_CRIPTOGRAFIA', 'FOCUS_', 'S3_CHAVE_', 'SEGREDO_LINKS', 'DATABASE_URL']) {
+    for (const segredo of ['ML_', 'CHAVE_CRIPTOGRAFIA', 'FOCUS_', 'S3_CHAVE_', 'BITBRAIN_', 'SEGREDO_LINKS', 'DATABASE_URL']) {
       expect(semBackup).not.toContain(segredo);
     }
   });
@@ -81,7 +81,7 @@ describe('.env.backup.example (E20)', () => {
 
   it('não traz nenhum segredo do sistema', () => {
     const semBackup = backupExemplo.replaceAll('BACKUP_S3_CHAVE', 'BACKUP_X');
-    for (const segredo of ['ML_', 'CHAVE_CRIPTOGRAFIA', 'FOCUS_', 'S3_CHAVE_', 'SEGREDO_LINKS', 'DATABASE_URL', 'POSTGRES_PASSWORD']) {
+    for (const segredo of ['ML_', 'CHAVE_CRIPTOGRAFIA', 'FOCUS_', 'S3_CHAVE_', 'BITBRAIN_', 'SEGREDO_LINKS', 'DATABASE_URL', 'POSTGRES_PASSWORD']) {
       expect(semBackup).not.toContain(segredo);
     }
   });

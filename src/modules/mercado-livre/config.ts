@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { ErroCifra, lerChave } from '@/lib/cifra';
 import { lerEnv } from '@/lib/env';
 
-export type ModoML = 'api' | 'falso';
+export type ModoML = 'api' | 'bitbrain' | 'falso';
 export type ConfigML = {
   modo: ModoML;
   clientId: string;
@@ -10,6 +10,12 @@ export type ConfigML = {
   redirectUri: string;
   usarPkce: boolean;
   chaveBase64: string;
+  /** Modo bitbrain: a base da rota do Bitbrain, sem a barra do fim. */
+  bitbrainUrl: string;
+  /** Modo bitbrain: o DEVOLUCOES_TOKEN do Bitbrain. Nunca vai para log. */
+  bitbrainToken: string;
+  /** PERMITIR_FALSOS=1 (só o e2e): libera o Bitbrain falso (D3). */
+  permitirFalsos: boolean;
 };
 
 export class ErroConfiguracaoML extends Error {
@@ -17,6 +23,10 @@ export class ErroConfiguracaoML extends Error {
     super(mensagem);
     this.name = 'ErroConfiguracaoML';
   }
+}
+
+function modoDe(valor: string): ModoML {
+  return valor === 'falso' || valor === 'bitbrain' ? valor : 'api';
 }
 
 function texto(valor: unknown): string {
@@ -30,12 +40,15 @@ function texto(valor: unknown): string {
 export function configML(env: Record<string, unknown> = lerEnv()): ConfigML {
   const pkce: unknown = env.ML_USAR_PKCE;
   return {
-    modo: texto(env.ML_CONECTOR) === 'falso' ? 'falso' : 'api',
+    modo: modoDe(texto(env.ML_CONECTOR)),
     clientId: texto(env.ML_CLIENT_ID),
     clientSecret: texto(env.ML_CLIENT_SECRET),
     redirectUri: texto(env.ML_REDIRECT_URI),
     usarPkce: pkce === true || texto(pkce) === 'true',
     chaveBase64: texto(env.CHAVE_CRIPTOGRAFIA),
+    bitbrainUrl: texto(env.BITBRAIN_URL).replace(/\/+$/, ''),
+    bitbrainToken: texto(env.BITBRAIN_TOKEN),
+    permitirFalsos: texto(env.PERMITIR_FALSOS) === '1',
   };
 }
 
@@ -58,6 +71,7 @@ export function chaveCriptografia(c: ConfigML): Buffer {
 /** O que falta no servidor para conectar a conta real (a tela mostra a lista). */
 export function faltasConfigML(c: ConfigML): string[] {
   if (c.modo === 'falso') return [];
+  if (c.modo === 'bitbrain') return [...(c.bitbrainUrl ? [] : ['BITBRAIN_URL']), ...(c.bitbrainToken ? [] : ['BITBRAIN_TOKEN'])];
   const faltas: string[] = [];
   if (!c.clientId) faltas.push('ML_CLIENT_ID');
   if (!c.clientSecret) faltas.push('ML_CLIENT_SECRET');
