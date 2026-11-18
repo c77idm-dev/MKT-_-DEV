@@ -3012,3 +3012,913 @@ git commit -m "feat(bitbrain): alertas Respostas para dar no ML, conta indisponi
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
+### Tarefa 11: Configurações › Mercado Livre no modo `bitbrain` e a segunda configuração do e2e
+
+**Objetivo:** no modo `bitbrain`, a tela mostra as contas do Bitbrain:
+- a lista se atualiza ao abrir a tela (D13);
+- cada conta tem nome, vendedor e selos ("Recebe devoluções", "Não recebe" e "Indisponível no Bitbrain");
+- o Gestor marca e desmarca cada conta ("Receber devoluções" e "Parar de receber");
+- no topo ficam "Atualizar contas" e "Sincronizar agora";
+- cada conta mostra a última sincronização ou o aviso de parada.
+
+Os blocos de OAuth somem nesse modo (D15). O e2e do modo `bitbrain` ganha a configuração própria (D4), nos projetos `computador` e `celular`.
+
+**Arquivos:**
+- Modificar: `playwright.config.ts`, `tests/e2e/dados.ts`, `tests/e2e/global-setup.ts`, `package.json` (só o script), `src/app/(app)/configuracoes/mercado-livre/page.tsx`, `src/app/(app)/configuracoes/mercado-livre/acoes.ts`
+- Criar: `playwright.bitbrain.config.ts`, `tests/e2e/apoio-bitbrain.ts`, `tests/e2e/bitbrain-configuracoes.spec.ts`, `src/app/(app)/configuracoes/mercado-livre/acoes-bitbrain.ts`, `src/app/(app)/configuracoes/mercado-livre/tipos-bitbrain.ts`, `src/app/(app)/configuracoes/mercado-livre/ContasBitbrain.tsx`, `src/app/(app)/configuracoes/mercado-livre/ContasBitbrain.test.tsx`
+
+**Interfaces:**
+- Consome:
+  - de `contas-bitbrain.ts` (Tarefa 6): `buscarEAtualizarContas`, `listarContasBitbrain`, `marcarContaBitbrain`, `contaAtrasada`, `mensagemFalhaBitbrain` e `ErroContaBitbrain`;
+  - `pedirSincronizacaoAgora` (Tarefa 8);
+  - `URL_BITBRAIN_FALSO` e `TOKEN_BITBRAIN_FALSO` (Tarefa 1);
+  - `EMPRESAS_FALSAS` (Tarefa 4) e `contasFalsasTeste` (Tarefa 6).
+- Produz (e2e):
+  - `type ModoE2E = 'falso' | 'bitbrain'` e `ambienteE2E(modo?: ModoE2E): Record<string, string>`, em `tests/e2e/dados.ts`. O `AMBIENTE_E2E` fica como está;
+  - `configE2E(modo: ModoE2E)` exportado pelo `playwright.config.ts`, cujo `default` é `configE2E('falso')`;
+  - `metadata.modoML` no config, lido pelo `global-setup`;
+  - script `"test:e2e:bitbrain": "playwright test -c playwright.bitbrain.config.ts"`.
+- Produz (`tests/e2e/apoio-bitbrain.ts`): `configBitbrainE2E(): ConfigML`, `semContasBitbrain(): Promise<void>` e `marcarContaFalsa(empresa: string): Promise<void>`.
+- Produz (tela):
+  - `type ContaVista = { empresa: string; nome: string; sellerId: string; recebeDevolucoes: boolean; disponivel: boolean; ultimaSincronizacao: string | null; atrasada: boolean }`;
+  - `type EstadoContasBitbrain = { erros: string[]; ok: string | null }` e `ESTADO_INICIAL_CONTAS` (em `tipos-bitbrain.ts`, porque um arquivo `'use server'` só exporta funções assíncronas);
+  - `acaoContasBitbrain(_anterior: EstadoContasBitbrain, dados: FormData): Promise<EstadoContasBitbrain>`, com o campo `operacao` igual a `atualizar`, `sincronizar` ou `marcar` (este com `empresa` e `recebe=sim|nao`), validado com zod;
+  - `ContasBitbrain({ contas, acao })` (componente de cliente).
+
+- [ ] **Passo 1: e2e com duas configurações (D4)**
+
+`tests/e2e/dados.ts` (no fim; o `AMBIENTE_E2E` não muda):
+
+```ts
+import { TOKEN_BITBRAIN_FALSO, URL_BITBRAIN_FALSO } from '../../src/lib/env';
+
+export type ModoE2E = 'falso' | 'bitbrain';
+
+/** O ambiente do servidor e do worker do e2e. No modo bitbrain, o ML chega pelo Bitbrain falso (D3, só com PERMITIR_FALSOS=1). */
+export function ambienteE2E(modo: ModoE2E = 'falso'): Record<string, string> {
+  if (modo === 'falso') return { ...AMBIENTE_E2E };
+  return { ...AMBIENTE_E2E, ML_CONECTOR: 'bitbrain', BITBRAIN_URL: URL_BITBRAIN_FALSO, BITBRAIN_TOKEN: TOKEN_BITBRAIN_FALSO };
+}
+```
+
+`playwright.config.ts`: troque `import { AMBIENTE_E2E, … }` por `import { ambienteE2E, PORTA_E2E as PORTA, URL_E2E, type ModoE2E } from './tests/e2e/dados';` e embrulhe o `defineConfig` numa função:
+
+```ts
+/** Os e2e do modo Bitbrain rodam só na configuração própria (playwright.bitbrain.config.ts, D4). */
+const SPECS_BITBRAIN = /bitbrain-.*\.spec\.ts$/;
+
+export function configE2E(modo: ModoE2E) {
+  return defineConfig({
+    testDir: 'tests/e2e',
+    ...(modo === 'bitbrain' ? { testMatch: SPECS_BITBRAIN } : { testIgnore: SPECS_BITBRAIN }),
+    metadata: { modoML: modo },
+    // (fullyParallel, workers, globalSetup, expect, use e projects: iguais a hoje)
+    webServer: {
+      // (command, url, reuseExistingServer e timeout: iguais a hoje)
+      env: {
+        DATABASE_URL: process.env.DATABASE_URL_TEST ?? '',
+        ...ambienteE2E(modo),
+        ...(MODO_DEV ? {} : { NEXT_DIST_DIR: '.next-e2e' }),
+      },
+    },
+  });
+}
+
+export default configE2E('falso');
+```
+
+`playwright.bitbrain.config.ts`:
+
+```ts
+import { configE2E } from './playwright.config';
+
+/** e2e do modo Bitbrain (D4): o servidor e o worker sobem com ML_CONECTOR=bitbrain e o Bitbrain falso. `npm run test:e2e:bitbrain`. */
+export default configE2E('bitbrain');
+```
+
+`tests/e2e/global-setup.ts`:
+- `export default async function globalSetup(config: FullConfig)`, com `import type { FullConfig } from '@playwright/test'`;
+- `const modo: ModoE2E = config.metadata?.modoML === 'bitbrain' ? 'bitbrain' : 'falso';`;
+- o worker sobe com `env: { ...process.env, ...ambienteE2E(modo), DATABASE_URL: url }`.
+
+`package.json`: acrescente `"test:e2e:bitbrain": "playwright test -c playwright.bitbrain.config.ts"`, logo depois de `test:e2e`. Não rode `npm install`.
+
+`tests/e2e/apoio-bitbrain.ts`:
+
+```ts
+import { contasBitbrain } from '../../src/db/schema';
+import { configML, type ConfigML } from '../../src/modules/mercado-livre/config';
+import { contasFalsasTeste } from '../helpers/fabricas-bitbrain';
+import { comBanco } from './apoio';
+import { ambienteE2E } from './dados';
+
+/** O config do servidor do e2e no modo bitbrain (o processo dos testes lê o .env, que está em ML_CONECTOR=falso). */
+export function configBitbrainE2E(): ConfigML {
+  return configML({ ...process.env, ...ambienteE2E('bitbrain') });
+}
+
+/** Começa sem contas: a tela recria a lista pelo /empresas do Bitbrain falso, todas desmarcadas. */
+export async function semContasBitbrain(): Promise<void> {
+  await comBanco(async (db) => {
+    await db.delete(contasBitbrain);
+  });
+}
+
+/** As contas do Bitbrain falso no banco, com só esta marcada. */
+export async function marcarContaFalsa(empresa: string): Promise<void> {
+  await comBanco((db) => contasFalsasTeste(db, { recebe: [empresa] }));
+}
+```
+
+- [ ] **Passo 2: Testes que falham**
+
+`ContasBitbrain.test.tsx`:
+
+```tsx
+// @vitest-environment jsdom
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { ContasBitbrain } from './ContasBitbrain';
+import type { ContaVista, EstadoContasBitbrain } from './tipos-bitbrain';
+
+const CONTAS: ContaVista[] = [
+  { empresa: 'loja-1', nome: 'Loja 1', sellerId: '123', recebeDevolucoes: false, disponivel: true, ultimaSincronizacao: null, atrasada: false },
+  { empresa: 'loja-2', nome: 'Loja 2', sellerId: '223', recebeDevolucoes: true, disponivel: false, ultimaSincronizacao: '18/11/2026 10:00', atrasada: false },
+  { empresa: 'loja-3', nome: 'Loja 3', sellerId: '323', recebeDevolucoes: true, disponivel: true, ultimaSincronizacao: '18/11/2026 08:00', atrasada: true },
+];
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = () => undefined;
+});
+
+describe('ContasBitbrain (§4.3)', () => {
+  it('um cartão por conta, com os selos e o botão certo', () => {
+    render(<ContasBitbrain contas={CONTAS} acao={vi.fn()} />);
+    const loja1 = screen.getByRole('article', { name: 'Loja 1' });
+    expect(loja1.textContent).toContain('Não recebe');
+    expect(screen.getByRole('button', { name: 'Receber devoluções' })).toBeTruthy();
+    const loja2 = screen.getByRole('article', { name: 'Loja 2' });
+    expect(loja2.textContent).toContain('Indisponível no Bitbrain');
+    expect(loja2.textContent).toContain('Recebe devoluções');
+    expect(screen.getByRole('article', { name: 'Loja 3' }).textContent).toContain('Sincronização parada há mais de 1 hora');
+    expect(screen.getAllByRole('button', { name: 'Parar de receber' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Sincronizar agora' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Atualizar contas' })).toBeTruthy();
+  });
+
+  it('marcar manda operacao, empresa e recebe; a resposta aparece em role=status', async () => {
+    const acao = vi.fn(async (): Promise<EstadoContasBitbrain> => ({ erros: [], ok: 'A conta passa a mandar devoluções para a bancada.' }));
+    render(<ContasBitbrain contas={CONTAS} acao={acao} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Receber devoluções' }));
+    expect((await screen.findByRole('status')).textContent).toBe('A conta passa a mandar devoluções para a bancada.');
+    const dados = (acao.mock.calls[0] as unknown as [EstadoContasBitbrain, FormData])[1];
+    expect([dados.get('operacao'), dados.get('empresa'), dados.get('recebe')]).toEqual(['marcar', 'loja-1', 'sim']);
+  });
+
+  it('erro aparece em role=alert e recebe o foco', async () => {
+    const acao = vi.fn(async (): Promise<EstadoContasBitbrain> => ({ erros: ['Bitbrain recusou: confira o BITBRAIN_TOKEN (HTTP 401).'], ok: null }));
+    render(<ContasBitbrain contas={[]} acao={acao} />);
+    expect(screen.getByText('Nenhuma conta do Bitbrain ainda. Toque em "Atualizar contas".')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar contas' }));
+    const alerta = await screen.findByRole('alert');
+    expect(alerta.textContent).toContain('BITBRAIN_TOKEN');
+    await waitFor(() => expect(document.activeElement).toBe(alerta));
+  });
+});
+```
+
+`tests/e2e/bitbrain-configuracoes.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { contasBitbrain } from '../../src/db/schema';
+import { comBanco, entrarComo, semRolagemLateral } from './apoio';
+import { semContasBitbrain } from './apoio-bitbrain';
+import { alvosDeToque44 } from './apoio-ml';
+import { USUARIOS_E2E } from './dados';
+
+test.beforeEach(async () => {
+  await semContasBitbrain();
+});
+
+test('gestor vê as contas do Bitbrain, marca uma e pede "Sincronizar agora"', async ({ page }) => {
+  await entrarComo(page, USUARIOS_E2E.gestor);
+  await page.goto('/configuracoes/mercado-livre');
+  await expect(page.getByRole('heading', { level: 1, name: 'Mercado Livre' })).toBeVisible();
+  await expect(page.getByText('Modo de teste: o sistema usa um Bitbrain falso.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Conectar conta do Mercado Livre/ })).toHaveCount(0);
+  const loja1 = page.getByRole('article', { name: 'Loja Falsa 1' });
+  const loja2 = page.getByRole('article', { name: 'Loja Falsa 2' });
+  await expect(loja1.getByText('Não recebe', { exact: true })).toBeVisible();
+  await expect(loja2.getByText('Não recebe', { exact: true })).toBeVisible();
+  await semRolagemLateral(page);
+  await alvosDeToque44(page.locator('main'));
+
+  await loja1.getByRole('button', { name: 'Receber devoluções' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'A conta passa a mandar devoluções para a bancada.' })).toBeVisible();
+  await expect(loja1.getByText('Recebe devoluções', { exact: true })).toBeVisible();
+  await expect(loja1.getByText('Ainda não sincronizou')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Sincronizar agora' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Sincronização pedida.' })).toBeVisible();
+  // O worker do e2e (modo bitbrain) varre a conta marcada e grava a última sincronização.
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        return loja1.getByText('Ainda não sincronizou').count();
+      },
+      { timeout: 30_000, intervals: [1000, 2000] },
+    )
+    .toBe(0);
+  await expect(loja2.getByText('Não recebe', { exact: true })).toBeVisible();
+  await semRolagemLateral(page);
+});
+
+test('conta que sumiu do Bitbrain fica "Indisponível no Bitbrain"; "Atualizar contas" responde', async ({ page }) => {
+  await comBanco(async (db) => {
+    await db.insert(contasBitbrain).values({ empresa: 'loja-antiga', nome: 'Loja Antiga', sellerId: '999', recebeDevolucoes: true });
+  });
+  await entrarComo(page, USUARIOS_E2E.gestor);
+  await page.goto('/configuracoes/mercado-livre');
+  await expect(page.getByRole('article', { name: 'Loja Antiga' }).getByText('Indisponível no Bitbrain')).toBeVisible();
+  await page.getByRole('button', { name: 'Atualizar contas' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Lista de contas atualizada: 2 contas no Bitbrain.' })).toBeVisible();
+  await semRolagemLateral(page);
+  await alvosDeToque44(page.locator('main'));
+});
+```
+
+- [ ] **Passo 3:** `npm test -- "src/app/(app)/configuracoes/mercado-livre"` → FAIL (os componentes não existem).
+
+- [ ] **Passo 4: Implementação**
+
+`tipos-bitbrain.ts`:
+
+```ts
+export type ContaVista = {
+  empresa: string;
+  nome: string;
+  sellerId: string;
+  recebeDevolucoes: boolean;
+  disponivel: boolean;
+  /** Já formatada no servidor (horário de Brasília); null = ainda não sincronizou. */
+  ultimaSincronizacao: string | null;
+  atrasada: boolean;
+};
+export type EstadoContasBitbrain = { erros: string[]; ok: string | null };
+export const ESTADO_INICIAL_CONTAS: EstadoContasBitbrain = { erros: [], ok: null };
+```
+
+`acoes-bitbrain.ts`:
+
+```ts
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { logErroML } from '@/conectores/marketplace/mercadolivre/erros';
+import { obterDb } from '@/db';
+import { exigirPermissao } from '@/modules/auth/servidor';
+import { obterFila } from '@/modules/fila/fila';
+import { configML } from '@/modules/mercado-livre/config';
+import { buscarEAtualizarContas, ErroContaBitbrain, marcarContaBitbrain, mensagemFalhaBitbrain } from '@/modules/mercado-livre/contas-bitbrain';
+import { pedirSincronizacaoAgora } from '@/modules/mercado-livre/tarefas';
+import type { EstadoContasBitbrain } from './tipos-bitbrain';
+
+const esquema = z.discriminatedUnion('operacao', [
+  z.object({ operacao: z.literal('atualizar') }),
+  z.object({ operacao: z.literal('sincronizar') }),
+  z.object({ operacao: z.literal('marcar'), empresa: z.string().trim().min(1).max(100), recebe: z.enum(['sim', 'nao']) }),
+]);
+
+/** "Atualizar contas", "Sincronizar agora" e marcar/desmarcar a conta (§4.3 e §4.4). Só o Gestor. */
+export async function acaoContasBitbrain(_anterior: EstadoContasBitbrain, dados: FormData): Promise<EstadoContasBitbrain> {
+  const usuario = await exigirPermissao('administrar');
+  const config = configML();
+  if (config.modo !== 'bitbrain') return { erros: ['Esta ação só vale com ML_CONECTOR=bitbrain.'], ok: null };
+  const lido = esquema.safeParse(Object.fromEntries(dados));
+  if (!lido.success) return { erros: ['Pedido inválido.'], ok: null };
+  const db = obterDb();
+  const agora = new Date();
+  let ok: string;
+  switch (lido.data.operacao) {
+    case 'atualizar': {
+      try {
+        const r = await buscarEAtualizarContas(db, config, agora);
+        ok = `Lista de contas atualizada: ${r.total} ${r.total === 1 ? 'conta' : 'contas'} no Bitbrain.`;
+      } catch (erro) {
+        logErroML('atualizar as contas do Bitbrain', erro);
+        return { erros: [mensagemFalhaBitbrain(erro)], ok: null };
+      }
+      break;
+    }
+    case 'sincronizar':
+      await pedirSincronizacaoAgora(obterFila());
+      ok = 'Sincronização pedida. As devoluções novas aparecem em instantes.';
+      break;
+    case 'marcar':
+      try {
+        await marcarContaBitbrain(db, { empresa: lido.data.empresa, recebe: lido.data.recebe === 'sim' }, usuario, agora);
+      } catch (erro) {
+        if (erro instanceof ErroContaBitbrain) return { erros: [erro.message], ok: null };
+        throw erro;
+      }
+      ok = lido.data.recebe === 'sim' ? 'A conta passa a mandar devoluções para a bancada.' : 'A conta não manda mais devoluções para a bancada.';
+      break;
+  }
+  revalidatePath('/configuracoes/mercado-livre');
+  return { erros: [], ok };
+}
+```
+
+`ContasBitbrain.tsx`:
+
+```tsx
+'use client';
+
+import { useState, type FormEvent } from 'react';
+import { ListaErros } from '@/components/ListaErros';
+import { Selo } from '@/components/Selo';
+import { ALERTA_OK, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CARTAO, VAZIO } from '@/components/estilos';
+import { useEnvioFormulario } from '@/components/useEnvioFormulario';
+import { ESTADO_INICIAL_CONTAS, type ContaVista, type EstadoContasBitbrain } from './tipos-bitbrain';
+
+type Props = { contas: ContaVista[]; acao: (anterior: EstadoContasBitbrain, dados: FormData) => Promise<EstadoContasBitbrain> };
+
+/** §4.3: as contas do Bitbrain; o Gestor marca as que mandam devoluções. Um estado só para a tela (como ListaFalhas). */
+export function ContasBitbrain({ contas, acao }: Props) {
+  const [estado, enviar, pendente] = useEnvioFormulario(acao, ESTADO_INICIAL_CONTAS, 'erros-contas-bitbrain');
+  const [chave, setChave] = useState<string | null>(null);
+  function aoEnviar(evento: FormEvent<HTMLFormElement>) {
+    setChave(String(new FormData(evento.currentTarget).get('chave')));
+    enviar(evento);
+  }
+  const ocupado = (c: string) => pendente && chave === c;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 gap-2 sm:flex">
+        <form onSubmit={aoEnviar}>
+          <input type="hidden" name="operacao" value="sincronizar" />
+          <input type="hidden" name="chave" value="sincronizar" />
+          <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} w-full sm:w-auto`}>
+            {ocupado('sincronizar') ? 'Pedindo…' : 'Sincronizar agora'}
+          </button>
+        </form>
+        <form onSubmit={aoEnviar}>
+          <input type="hidden" name="operacao" value="atualizar" />
+          <input type="hidden" name="chave" value="atualizar" />
+          <button type="submit" disabled={pendente} className={`${BOTAO_SECUNDARIO} w-full sm:w-auto`}>
+            {ocupado('atualizar') ? 'Atualizando…' : 'Atualizar contas'}
+          </button>
+        </form>
+      </div>
+      <div aria-live="polite" className="flex flex-col gap-2">
+        {estado.ok ? (
+          <p role="status" className={ALERTA_OK}>
+            {estado.ok}
+          </p>
+        ) : null}
+        <ListaErros erros={estado.erros} id="erros-contas-bitbrain" />
+      </div>
+      {contas.length === 0 ? (
+        <p className={VAZIO}>Nenhuma conta do Bitbrain ainda. Toque em &quot;Atualizar contas&quot;.</p>
+      ) : (
+        <ul className="grid gap-2 md:grid-cols-2">
+          {contas.map((c) => (
+            <li key={c.empresa}>
+              <article aria-labelledby={`conta-${c.empresa}`} className={`${CARTAO} flex flex-col gap-2 p-3`}>
+                <h3 id={`conta-${c.empresa}`} className="text-[15px] font-bold [overflow-wrap:anywhere]">
+                  {c.nome}
+                </h3>
+                <span className="break-all font-mono text-xs text-texto-2">
+                  Vendedor {c.sellerId} · {c.empresa}
+                </span>
+                <span className="flex flex-wrap gap-1.5">
+                  {!c.disponivel && <Selo texto="Indisponível no Bitbrain" tom="erro" />}
+                  <Selo texto={c.recebeDevolucoes ? 'Recebe devoluções' : 'Não recebe'} tom={c.recebeDevolucoes ? 'bom' : 'neutro'} />
+                  {c.atrasada && <Selo texto="Sincronização parada há mais de 1 hora" tom="atencao" />}
+                </span>
+                {c.recebeDevolucoes && (
+                  <span className="text-xs text-texto-2">{c.ultimaSincronizacao ? `Última sincronização: ${c.ultimaSincronizacao}` : 'Ainda não sincronizou'}</span>
+                )}
+                <form onSubmit={aoEnviar}>
+                  <input type="hidden" name="operacao" value="marcar" />
+                  <input type="hidden" name="empresa" value={c.empresa} />
+                  <input type="hidden" name="recebe" value={c.recebeDevolucoes ? 'nao' : 'sim'} />
+                  <input type="hidden" name="chave" value={`marcar:${c.empresa}`} />
+                  <button type="submit" disabled={pendente} className={`${BOTAO_SECUNDARIO} w-full sm:w-auto`}>
+                    {ocupado(`marcar:${c.empresa}`) ? 'Salvando…' : c.recebeDevolucoes ? 'Parar de receber' : 'Receber devoluções'}
+                  </button>
+                </form>
+              </article>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+```
+
+`acoes.ts` (OAuth): no `conectarAcao`, logo depois de `const config = configML();`: `if (config.modo === 'bitbrain') return { erros: ['No modo Bitbrain não há conexão direta com o Mercado Livre.'] };` (D15).
+
+`page.tsx`:
+- Imports novos:
+  - `URL_BITBRAIN_FALSO`, de `@/lib/env`;
+  - `logErroML`, de `@/conectores/marketplace/mercadolivre/erros`;
+  - `configML`, de `@/modules/mercado-livre/config`;
+  - de `@/modules/mercado-livre/contas-bitbrain`: `buscarEAtualizarContas`, `contaAtrasada`, `listarContasBitbrain` e `mensagemFalhaBitbrain`;
+  - `acaoContasBitbrain`, de `./acoes-bitbrain`;
+  - `ContasBitbrain`, de `./ContasBitbrain`;
+  - o tipo `ContaVista`, de `./tipos-bitbrain`.
+- Depois do `exigirPermissao` e da leitura dos parâmetros:
+
+```tsx
+  const config = configML();
+  const db = obterDb();
+  const bitbrain = config.modo === 'bitbrain';
+  let erroBitbrain: string | null = null;
+  if (bitbrain) {
+    // D13: a lista se atualiza ao abrir; se o Bitbrain falhar, a tela mostra a lista guardada e o motivo (sem o token).
+    try {
+      await buscarEAtualizarContas(db, config, new Date());
+    } catch (falha) {
+      logErroML('atualizar as contas do Bitbrain', falha);
+      erroBitbrain = mensagemFalhaBitbrain(falha);
+    }
+  }
+  const agora = new Date();
+  const [resumo, semEnvio, contas] = await Promise.all([
+    resumoContaML(db, config),
+    listarSemEnvioFisico(db),
+    bitbrain ? listarContasBitbrain(db) : Promise.resolve([]),
+  ]);
+  const contasVista: ContaVista[] = contas.map((c) => ({
+    empresa: c.empresa,
+    nome: c.nome,
+    sellerId: c.sellerId,
+    recebeDevolucoes: c.recebeDevolucoes,
+    disponivel: c.disponivel,
+    ultimaSincronizacao: c.ultimaSincronizacaoEm ? formatarDataHora(c.ultimaSincronizacaoEm) : null,
+    atrasada: contaAtrasada(c, agora),
+  }));
+```
+
+- Na renderização, embrulhe as seções "Conta" e "App no ML Developers" em `{!bitbrain && (<>…</>)}` e acrescente, no lugar delas:
+
+```tsx
+      {bitbrain && (
+        <section aria-labelledby="titulo-contas-bitbrain" className={`${CARTAO} flex flex-col gap-3`}>
+          <h2 id="titulo-contas-bitbrain" className="text-base font-bold">
+            Contas do Mercado Livre (pelo Bitbrain)
+          </h2>
+          <p className="text-sm text-texto-2">
+            As devoluções do ML chegam pelo Bitbrain. Marque as contas que mandam devoluções para a bancada. As respostas ao ML (o
+            &quot;OK&quot; e a contestação) são dadas à mão, em Contestações ML.
+          </p>
+          {config.bitbrainUrl === URL_BITBRAIN_FALSO && <p className={ALERTA_ATENCAO}>Modo de teste: o sistema usa um Bitbrain falso.</p>}
+          {erroBitbrain && (
+            <p role="alert" className={`${ALERTA_ERRO} [overflow-wrap:anywhere]`}>
+              {erroBitbrain}
+            </p>
+          )}
+          {resumo.faltas.length > 0 && <p className={ALERTA_ERRO}>Faltam no servidor: {resumo.faltas.join(', ')}.</p>}
+          <ContasBitbrain contas={contasVista} acao={acaoContasBitbrain} />
+        </section>
+      )}
+```
+
+- A seção "Devoluções sem envio físico (low_cost)" fica nos dois modos.
+
+- [ ] **Passo 5:** `npm test && npm run typecheck && npm run lint` → PASS. Depois rode `npm run test:e2e -- tests/e2e/mercado-livre.spec.ts tests/e2e/configuracoes.spec.ts` (modo `api`/falso igual, nos dois projetos) e `npm run test:e2e:bitbrain` (os 2 testes novos, no `computador` e no `celular`) → PASS. Tire prints em 390×844 da tela, com as contas e com o erro do Bitbrain.
+
+- [ ] **Passo 6: Commit**
+
+```bash
+git add playwright.config.ts playwright.bitbrain.config.ts package.json tests/e2e/dados.ts tests/e2e/global-setup.ts tests/e2e/apoio-bitbrain.ts tests/e2e/bitbrain-configuracoes.spec.ts "src/app/(app)/configuracoes/mercado-livre"
+git commit -m "feat(bitbrain): Configuracoes > Mercado Livre com as contas do Bitbrain (marcar, Atualizar contas, Sincronizar agora) e e2e do modo bitbrain
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Tarefa 12: Selos e conta nos cartões, urgentes primeiro nas etapas 2 e 3, e os extras no detalhe
+
+**Objetivo:**
+- o cartão do Quadro, das listas das etapas, da Busca Avançada e dos Alertas mostra a conta ("Mercado Livre · <conta>", D18) e os selos "Urgente · até dd/mm", "Afeta reputação" e "Full";
+- nas etapas 2 e 3 (quadro e lista), as urgentes vêm primeiro (extra);
+- a seção Mercado Livre do detalhe mostra a conta e todos os extras, em "Mais do Mercado Livre (extra)", e os resultados das respostas à mão.
+
+Vale nos dois modos.
+
+**Arquivos:**
+- Modificar:
+  - `src/modules/mercado-livre/selos.ts`, `selos.test.ts`, `consultas.ts`, `consultas.int.test.ts`;
+  - `src/modules/devolucoes/selos.ts`, `selos.test.ts`, `busca.ts`, `busca.int.test.ts`, `quadro.ts`;
+  - `src/app/(app)/fluxo/etapa/[numero]/page.tsx`;
+  - `src/components/CartaoDevolucao.tsx`, `CartaoDevolucao.test.tsx`;
+  - `src/app/(app)/fluxo/devolucoes/[codigo]/secoes/SecaoMercadoLivre.tsx`;
+  - `tests/e2e/mercado-livre.spec.ts`.
+- Criar: `tests/e2e/bitbrain-devolucoes.spec.ts`
+
+**Interfaces:**
+- Consome:
+  - as colunas de `reclamacoes_ml` (Tarefa 5) e os rótulos de `dominio.ts` (Tarefa 3);
+  - os eventos `ml_resposta_manual_pendente` e `ml_ok_respondido_a_mao` (Tarefa 9);
+  - `marcarContaFalsa` (Tarefa 11) e `esperarDevolucaoDaReclamacao` e `alvosDeToque44` (`apoio-ml.ts`).
+- Produz (`mercado-livre/selos.ts`): `type EntradaSelosML = { urgente: boolean | null; afetaReputacao: AfetaReputacao | null; ehFull: boolean | null }` e `selosExtrasML(e: EntradaSelosML, prazo: Date | null): DadosSelo[]`.
+- Produz (`devolucoes/selos.ts`): a `Entrada` do `selosDaDevolucao` ganha `ml?: EntradaSelosML | null`. Com `ml.urgente`, o selo "Prazo dd/mm" não aparece (D7).
+- Produz (`busca.ts`): `ResumoDevolucao.contaML?: string | null` e `OpcoesBusca.urgentesPrimeiro?: boolean`.
+- Produz (`consultas.ts`):
+  - `ResumoMLDevolucao` ganha `conta: string | null` e `extras: ExtrasML | null`;
+  - `ResultadoNoML` ganha `{ tipo: 'ok_pendente_manual'; em: Date }` e `{ tipo: 'ok_respondido_a_mao'; em: Date }`.
+
+- [ ] **Passo 1: Testes que falham**
+
+`src/modules/mercado-livre/selos.test.ts`:
+
+```ts
+describe('selosExtrasML (§4.5)', () => {
+  const prazo = new Date('2026-11-20T15:00:00Z');
+  it('Urgente com o prazo, Afeta reputação e Full; nada quando o ML não informou ou disse não', () => {
+    expect(selosExtrasML({ urgente: true, afetaReputacao: 'AFETA', ehFull: true }, prazo)).toEqual([
+      { texto: 'Urgente · até 20/11', tom: 'erro' },
+      { texto: 'Afeta reputação', tom: 'atencao' },
+      { texto: 'Full', tom: 'destaque' },
+    ]);
+    expect(selosExtrasML({ urgente: true, afetaReputacao: null, ehFull: null }, null)).toEqual([{ texto: 'Urgente', tom: 'erro' }]);
+    expect(selosExtrasML({ urgente: false, afetaReputacao: 'NAO_AFETA', ehFull: false }, prazo)).toEqual([]);
+    expect(selosExtrasML({ urgente: null, afetaReputacao: 'NAO_SE_APLICA', ehFull: null }, prazo)).toEqual([]);
+  });
+});
+```
+
+`src/modules/devolucoes/selos.test.ts`:
+
+```ts
+it('urgente do ML: o selo "Urgente · até dd/mm" substitui o "Prazo dd/mm" (D7)', () => {
+  const base = {
+    canal: 'MERCADO_LIVRE' as const,
+    status: 'PENDENTE_CHEGADA' as const,
+    naoIdentificada: false,
+    entregueSegundoCanalEm: null,
+    prazoConferenciaCanal: new Date('2026-11-25T15:00:00Z'),
+  };
+  const agora = new Date('2026-11-18T15:00:00Z');
+  expect(selosDaDevolucao(base, agora).map((s) => s.texto)).toEqual(['Prazo 25/11']);
+  expect(selosDaDevolucao({ ...base, ml: { urgente: true, afetaReputacao: 'AFETA', ehFull: true } }, agora).map((s) => s.texto)).toEqual([
+    'Urgente · até 25/11',
+    'Afeta reputação',
+    'Full',
+  ]);
+});
+```
+
+`busca.int.test.ts` (importe `contasBitbrain` e `reclamacoesMl` de `@/db/schema`):
+
+```ts
+describe('extras do ML e conta no resumo (integração Bitbrain)', () => {
+  it('selos Urgente, Afeta reputação e Full, e a conta pelo nome do Bitbrain', async () => {
+    const operador = await criarUsuarioTeste(db);
+    const d = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    await db.insert(contasBitbrain).values({ empresa: 'megadino', nome: 'IDM Shop', sellerId: '1' });
+    await db.insert(reclamacoesMl).values({ claimId: '5000000201', devolucaoId: d.id, conta: 'megadino', urgente: true, afetaReputacao: 'AFETA', ehFull: true, sincronizadaEm: new Date() });
+    const [r] = (await buscarDevolucoes(db, {}, { ids: [d.id] })).devolucoes;
+    expect(r.contaML).toBe('IDM Shop');
+    expect(r.selos.map((s) => s.texto)).toEqual(expect.arrayContaining(['Afeta reputação', 'Full', expect.stringMatching(/^Urgente/)]));
+  });
+
+  it('urgentesPrimeiro: a urgente vem antes, mesmo tendo chegado depois (extra)', async () => {
+    const operador = await criarUsuarioTeste(db);
+    const antiga = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    const urgente = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    await db.update(devolucoes).set({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: new Date('2026-11-18T10:00:00Z') }).where(eq(devolucoes.id, antiga.id));
+    await db.update(devolucoes).set({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: new Date('2026-11-18T11:00:00Z') }).where(eq(devolucoes.id, urgente.id));
+    await db.insert(reclamacoesMl).values({ claimId: '5000000202', devolucaoId: urgente.id, urgente: true, sincronizadaEm: new Date() });
+    const ordem = async (urgentesPrimeiro: boolean) =>
+      (await buscarDevolucoes(db, {}, { status: ['AGUARDANDO_CONFERENCIA'], ordem: 'chegada', urgentesPrimeiro })).devolucoes.map((x) => x.id);
+    expect(await ordem(false)).toEqual([antiga.id, urgente.id]);
+    expect(await ordem(true)).toEqual([urgente.id, antiga.id]);
+  });
+});
+```
+
+`CartaoDevolucao.test.tsx`:
+
+```tsx
+describe('CartaoDevolucao: conta do Bitbrain (D18)', () => {
+  it('mostra "Mercado Livre · <conta>" numa linha com reticências; sem conta, só o canal', () => {
+    const { unmount } = render(<CartaoDevolucao devolucao={{ ...BASE, canal: 'MERCADO_LIVRE', contaML: 'IDM Shop' }} />);
+    const linha = screen.getByText('Mercado Livre · IDM Shop');
+    expect(linha.className).toContain('truncate');
+    unmount();
+    render(<CartaoDevolucao devolucao={{ ...BASE, canal: 'MERCADO_LIVRE' }} />);
+    expect(screen.getByText('Mercado Livre')).toBeTruthy();
+  });
+});
+```
+
+`consultas.int.test.ts`:
+
+```ts
+describe('resumoMLDaDevolucao: conta, extras e respostas à mão (integração Bitbrain)', () => {
+  it('traz a conta pelo nome, os extras da última reclamação e o OK pendente e depois respondido', async () => {
+    const d = await devolucaoMLConferidaTeste(db, { itens: [{ destino: 'BOM' }] });
+    await db.insert(contasBitbrain).values({ empresa: 'megadino', nome: 'IDM Shop', sellerId: '1' });
+    await db.insert(reclamacoesMl).values({
+      claimId: d.externa!.reclamacaoId,
+      devolucaoId: d.id,
+      conta: 'megadino',
+      urgente: false,
+      afetaReputacao: 'NAO_AFETA',
+      ehFull: true,
+      triagemCondicao: 'VENDAVEL',
+      triagemEtapa: 'closed',
+      dinheiro: 'DEVOLVIDO',
+      sincronizadaEm: AGORA,
+    });
+    await processarResultadoConferencia(db, d.id, AGORA, configBitbrainTeste());
+    const r = await resumoMLDaDevolucao(db, d.id);
+    expect(r).toMatchObject({
+      conta: 'IDM Shop',
+      extras: { urgente: false, afetaReputacao: 'NAO_AFETA', ehFull: true, triagemCondicao: 'VENDAVEL', triagemEtapa: 'closed', dinheiro: 'DEVOLVIDO' },
+      resultado: { tipo: 'ok_pendente_manual' },
+    });
+    await marcarOkRespondido(db, d.id, await criarUsuarioTeste(db, 'GESTOR'), AGORA, configBitbrainTeste());
+    expect((await resumoMLDaDevolucao(db, d.id))?.resultado).toMatchObject({ tipo: 'ok_respondido_a_mao' });
+  });
+
+  it('modo api, sem reclamação gravada: conta e extras nulos', async () => {
+    const d = await devolucaoMLConferidaTeste(db, { itens: [{ destino: 'BOM' }] });
+    expect(await resumoMLDaDevolucao(db, d.id)).toMatchObject({ conta: null, extras: null });
+  });
+});
+```
+
+(Importe `configBitbrainTeste` de `../../../tests/helpers/fabricas-bitbrain`, `processarResultadoConferencia` de `./resultado` e `marcarOkRespondido` de `./respostas-manuais`, além de `contasBitbrain`, `reclamacoesMl`, `devolucaoMLConferidaTeste` e `criarUsuarioTeste`, se ainda não estiverem importados. Use o `AGORA` que o arquivo já define.)
+
+`tests/e2e/mercado-livre.spec.ts` (modo `api`/falso):
+- Imports novos: `reclamacoesMl` (`../../src/db/schema`); `criarDevolucaoTeste` (`../helpers/fabricas`); `codigoUnico` e `usuarioPorEmail` (`./apoio`).
+- Os testes:
+
+```ts
+test('extras do ML (cenário 2): Urgente, Afeta reputação e Full no cartão; os extras no detalhe', async ({ page, request }) => {
+  await garantirContaFalsa();
+  const reclamacaoId = idReclamacaoFalsa(2);
+  await avisarML(request, reclamacaoId);
+  const codigo = await esperarDevolucaoDaReclamacao(reclamacaoId);
+
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto(`/fluxo/busca?reclamacao=${reclamacaoId}`);
+  const cartao = page.getByRole('link', { name: new RegExp(codigo) });
+  await expect(cartao).toContainText('Urgente · até');
+  await expect(cartao).toContainText('Afeta reputação');
+  await expect(cartao).toContainText('Full');
+  await expect(cartao).not.toContainText('Mercado Livre ·');
+  await semRolagemLateral(page);
+
+  await page.goto(`/fluxo/devolucoes/${codigo}`);
+  const secao = page.locator('section[aria-labelledby="titulo-ml"]');
+  await expect(secao.getByText('Mais do Mercado Livre')).toBeVisible();
+  await expect(secao.getByText('Afeta a reputação')).toBeVisible();
+  await expect(secao.getByText('Revisar a devolução')).toBeVisible();
+  await expect(secao.getByText('retido')).toBeVisible();
+  await semRolagemLateral(page);
+  await alvosDeToque44(secao);
+});
+
+test('nas etapas 2 e 3 as urgentes vêm primeiro (extra)', async ({ page }) => {
+  const urgente = await comBanco(async (db) => {
+    // Só esta fica urgente (o banco do e2e é o mesmo no computador e no celular).
+    await db.update(reclamacoesMl).set({ urgente: false }).where(eq(reclamacoesMl.urgente, true));
+    const operador = await usuarioPorEmail(db, USUARIOS_E2E.operador);
+    const comum = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    const nova = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    await db.update(devolucoes).set({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: new Date(Date.now() - 3_600_000) }).where(eq(devolucoes.id, comum.id));
+    await db.update(devolucoes).set({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: new Date() }).where(eq(devolucoes.id, nova.id));
+    await db.insert(reclamacoesMl).values({ claimId: codigoUnico('CLM'), devolucaoId: nova.id, urgente: true, sincronizadaEm: new Date() });
+    return nova;
+  });
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto('/fluxo/etapa/2');
+  const primeiro = page.locator('main a[href^="/fluxo/devolucoes/DEV-"]').first();
+  await expect(primeiro).toHaveAttribute('href', `/fluxo/devolucoes/${urgente.codigo}`);
+  await expect(primeiro).toContainText('Urgente');
+  await semRolagemLateral(page);
+});
+```
+
+`tests/e2e/bitbrain-devolucoes.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { RECLAMACOES_FALSAS_POR_EMPRESA } from '../../src/conectores/marketplace/bitbrain/falso';
+import { entrarComo, semRolagemLateral } from './apoio';
+import { marcarContaFalsa } from './apoio-bitbrain';
+import { alvosDeToque44, esperarDevolucaoDaReclamacao } from './apoio-ml';
+import { USUARIOS_E2E } from './dados';
+
+test('a varredura pela conta cria a devolução com a conta e os selos; o detalhe mostra a conta e os extras', async ({ page }) => {
+  const [reclamacaoId] = RECLAMACOES_FALSAS_POR_EMPRESA['loja-falsa-1'];
+  await marcarContaFalsa('loja-falsa-1');
+  await entrarComo(page, USUARIOS_E2E.gestor);
+  await page.goto('/configuracoes/mercado-livre');
+  await page.getByRole('button', { name: 'Sincronizar agora' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Sincronização pedida.' })).toBeVisible();
+  const codigo = await esperarDevolucaoDaReclamacao(reclamacaoId);
+
+  await page.goto(`/fluxo/busca?reclamacao=${reclamacaoId}`);
+  const cartao = page.getByRole('link', { name: new RegExp(codigo) });
+  await expect(cartao).toContainText('Mercado Livre · Loja Falsa 1');
+  await expect(cartao).toContainText('Urgente · até');
+  await expect(cartao).toContainText('Afeta reputação');
+  await expect(cartao).toContainText('Full');
+  await semRolagemLateral(page);
+
+  await page.goto(`/fluxo/devolucoes/${codigo}`);
+  const secao = page.locator('section[aria-labelledby="titulo-ml"]');
+  await expect(secao.getByText('Loja Falsa 1')).toBeVisible();
+  await expect(secao.getByText('Afeta a reputação')).toBeVisible();
+  await expect(secao.getByText('retido')).toBeVisible();
+  await semRolagemLateral(page);
+  await alvosDeToque44(secao);
+});
+```
+
+- [ ] **Passo 2:** `npm test -- src/modules src/components && npm run test:int -- src/modules/devolucoes/busca.int.test.ts src/modules/mercado-livre/consultas.int.test.ts` → FAIL.
+
+- [ ] **Passo 3: Implementação**
+
+`src/modules/mercado-livre/selos.ts`:
+- Imports: `formatarDiaMes`, junto do `formatarDataHora`; `SELO_AFETA_REPUTACAO`, `SELO_FULL`, `SELO_URGENTE` e `type AfetaReputacao`, de `./dominio`.
+- Acrescente:
+
+```ts
+export type EntradaSelosML = { urgente: boolean | null; afetaReputacao: AfetaReputacao | null; ehFull: boolean | null };
+
+/** §4.5: no cartão, nas listas das etapas e na Busca, só os extras que importam: Urgente, Afeta reputação e Full. */
+export function selosExtrasML(e: EntradaSelosML, prazo: Date | null): DadosSelo[] {
+  const selos: DadosSelo[] = [];
+  if (e.urgente) selos.push({ texto: prazo ? `${SELO_URGENTE} · até ${formatarDiaMes(prazo)}` : SELO_URGENTE, tom: 'erro' });
+  if (e.afetaReputacao === 'AFETA') selos.push({ texto: SELO_AFETA_REPUTACAO, tom: 'atencao' });
+  if (e.ehFull) selos.push({ texto: SELO_FULL, tom: 'destaque' });
+  return selos;
+}
+```
+
+`src/modules/devolucoes/selos.ts`:
+- Importe `selosExtrasML` e `type EntradaSelosML` de `@/modules/mercado-livre/selos`. O `mercado-livre/selos.ts` só importa *tipos* deste arquivo, então não há ciclo em tempo de execução.
+- A `Entrada` ganha `/** Extras do ML (integração Bitbrain §4.5). */ ml?: EntradaSelosML | null;`.
+- Em `selosDaDevolucao`:
+  - logo depois do selo "Não identificada": `if (d.ml) selos.push(...selosExtrasML(d.ml, d.prazoConferenciaCanal));`;
+  - a condição do selo de prazo ganha `&& !d.ml?.urgente`.
+
+`busca.ts`:
+- Imports: `type AfetaReputacao`, de `@/modules/mercado-livre/dominio`.
+- Acima da função:
+
+```ts
+/** A reclamação do ML mais recente da devolução (extras e conta; integração Bitbrain). Colunas qualificadas à mão, como as outras subconsultas. */
+const DA_ULTIMA_RECLAMACAO = sql`from "reclamacoes_ml" where "reclamacoes_ml"."devolucao_id" = "devolucoes"."id" order by "reclamacoes_ml"."sincronizada_em" desc limit 1`;
+```
+
+- `ResumoDevolucao` ganha `/** Nome da conta do Bitbrain (D18); null no modo api. */ contaML?: string | null;`. `OpcoesBusca` ganha `/** Etapas 2 e 3 (extra): urgentes do ML primeiro. */ urgentesPrimeiro?: boolean;`.
+- No `select`:
+
+```ts
+      mlUrgente: sql<boolean | null>`(select "reclamacoes_ml"."urgente" ${DA_ULTIMA_RECLAMACAO})`,
+      mlAfetaReputacao: sql<AfetaReputacao | null>`(select "reclamacoes_ml"."afeta_reputacao" ${DA_ULTIMA_RECLAMACAO})`,
+      mlFull: sql<boolean | null>`(select "reclamacoes_ml"."eh_full" ${DA_ULTIMA_RECLAMACAO})`,
+      contaML: sql<string | null>`(
+        select coalesce("contas_bitbrain"."nome", "reclamacoes_ml"."conta")
+        from "reclamacoes_ml"
+        left join "contas_bitbrain" on "contas_bitbrain"."empresa" = "reclamacoes_ml"."conta"
+        where "reclamacoes_ml"."devolucao_id" = "devolucoes"."id" and "reclamacoes_ml"."conta" is not null
+        order by "reclamacoes_ml"."sincronizada_em" desc
+        limit 1
+      )`,
+```
+
+- Na ordem:
+
+```ts
+  const base =
+    opcoes.ordem === 'chegada'
+      ? [asc(devolucoes.recebidaEm), asc(devolucoes.numero)]
+      : [sql`${devolucoes.entregueSegundoCanalEm} is null`, desc(devolucoes.numero)];
+  const ordem = opcoes.urgentesPrimeiro ? [sql`coalesce((select "reclamacoes_ml"."urgente" ${DA_ULTIMA_RECLAMACAO}), false) desc`, ...base] : base;
+```
+
+- No `map`: desestruture também `mlUrgente`, `mlAfetaReputacao` e `mlFull`, e passe `ml: { urgente: mlUrgente, afetaReputacao: mlAfetaReputacao, ehFull: mlFull }` ao `selosDaDevolucao`. O `contaML` segue no `...resto`.
+
+`quadro.ts`: no `buscarDevolucoes` da coluna, acrescente `urgentesPrimeiro: etapa.numero === 2 || etapa.numero === 3`. A página `fluxo/etapa/[numero]/page.tsx` faz o mesmo com `etapa.numero`.
+
+`CartaoDevolucao.tsx`: a 1ª linha passa a ser:
+
+```tsx
+      <span className="flex items-center justify-between gap-2">
+        <span className="shrink-0 font-mono text-[13px] font-semibold">{d.codigo}</span>
+        <span className="min-w-0 truncate text-xs font-semibold text-texto-2" title={canal}>
+          {canal}
+        </span>
+      </span>
+```
+
+com `const canal = \`${d.canal ? ROTULO_CANAL[d.canal] : 'Canal a identificar'}${d.contaML ? \` · ${d.contaML}\` : ''}\`;` no começo do componente.
+
+`consultas.ts`:
+- Imports: `contasBitbrain` (schema), `sql` (drizzle) e `type ExtrasML`.
+- Tipos:
+  - `ResultadoNoML` ganha `| { tipo: 'ok_pendente_manual'; em: Date } | { tipo: 'ok_respondido_a_mao'; em: Date }`;
+  - `ResumoMLDevolucao` ganha `/** Nome da conta do Bitbrain (ou a empresa); null no modo api. */ conta: string | null;` e `/** Os 5 extras (§4.5); null sem reclamação gravada. */ extras: ExtrasML | null;`.
+- `ACOES_RESULTADO` ganha `'ml_resposta_manual_pendente'` e `'ml_ok_respondido_a_mao'`.
+- A consulta da reclamação passa a ser:
+
+```ts
+  const [reclamacao] = await db
+    .select({
+      sincronizadaEm: reclamacoesMl.sincronizadaEm,
+      conta: sql<string | null>`coalesce(${contasBitbrain.nome}, ${reclamacoesMl.conta})`,
+      acaoPendente: reclamacoesMl.acaoPendente,
+      urgente: reclamacoesMl.urgente,
+      afetaReputacao: reclamacoesMl.afetaReputacao,
+      ehFull: reclamacoesMl.ehFull,
+      triagemCondicao: reclamacoesMl.triagemCondicao,
+      triagemEtapa: reclamacoesMl.triagemEtapa,
+      dinheiro: reclamacoesMl.dinheiro,
+    })
+    .from(reclamacoesMl)
+    .leftJoin(contasBitbrain, eq(contasBitbrain.empresa, reclamacoesMl.conta))
+    .where(eq(reclamacoesMl.devolucaoId, devolucaoId))
+    .orderBy(desc(reclamacoesMl.sincronizadaEm))
+    .limit(1);
+```
+
+- Na escolha do `resultado`, depois do caso `ml_resultado_sem_vinculo`:
+
+```ts
+  } else if (evento?.acao === 'ml_resposta_manual_pendente') {
+    resultado = { tipo: 'ok_pendente_manual', em: evento.em };
+  } else if (evento?.acao === 'ml_ok_respondido_a_mao') {
+    resultado = { tipo: 'ok_respondido_a_mao', em: evento.em };
+  }
+```
+
+- No retorno: `conta: reclamacao?.conta ?? null` e `extras: reclamacao ? { acaoPendente, urgente, afetaReputacao, ehFull, triagemCondicao, triagemEtapa, dinheiro } : null` (com os valores tirados de `reclamacao`).
+
+`SecaoMercadoLivre.tsx`:
+- Imports: `ALERTA_OK` (já está); de `@/modules/mercado-livre/dominio`: `ROTULO_AFETA_REPUTACAO`, `ROTULO_CONDICAO_TRIAGEM`, `ROTULO_DINHEIRO`, `rotuloAcaoML` e `rotuloEtapaTriagem`.
+- No `Resultado`, dois casos novos:
+
+```tsx
+    case 'ok_pendente_manual':
+      return (
+        <div className="flex flex-col gap-2">
+          <p className={ALERTA_ATENCAO}>Conferência sem problema: falta responder &quot;OK&quot; no ML, à mão.</p>
+          {ehGestor && (
+            <Link href="/contestacoes" className={`${BOTAO_SECUNDARIO} w-full md:w-auto`}>
+              Ir para Contestações ML
+            </Link>
+          )}
+        </div>
+      );
+    case 'ok_respondido_a_mao':
+      return <p className={ALERTA_OK}>&quot;OK&quot; respondido à mão no ML em {formatarDataHora(resultado.em)}.</p>;
+```
+
+- No `dl` da devolução vinculada, acrescente `{r.conta && <Dado rotulo="Conta">{r.conta}</Dado>}` logo no começo.
+- Depois do `dl` (ainda dentro do `r.vinculada`):
+
+```tsx
+          {r.extras && (
+            <div className="flex flex-col gap-2 border-t border-borda pt-3">
+              <h3 className="text-sm font-bold">
+                Mais do Mercado Livre <span className="font-normal text-texto-2">(extra)</span>
+              </h3>
+              <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                <Dado rotulo="Urgente">{r.extras.urgente === null ? 'Não informado' : r.extras.urgente ? 'Sim' : 'Não'}</Dado>
+                <Dado rotulo="Ação pendente no ML">{rotuloAcaoML(r.extras.acaoPendente)}</Dado>
+                <Dado rotulo="Reputação">{r.extras.afetaReputacao ? ROTULO_AFETA_REPUTACAO[r.extras.afetaReputacao] : 'Não informado'}</Dado>
+                <Dado rotulo="Full">{r.extras.ehFull === null ? 'Não informado' : r.extras.ehFull ? 'Sim' : 'Não'}</Dado>
+                <Dado rotulo="Triagem do ML">
+                  {r.extras.triagemCondicao
+                    ? `${ROTULO_CONDICAO_TRIAGEM[r.extras.triagemCondicao]}${r.extras.triagemEtapa ? ` (${rotuloEtapaTriagem(r.extras.triagemEtapa)})` : ''}`
+                    : 'Não informado'}
+                </Dado>
+                <Dado rotulo="Dinheiro">{r.extras.dinheiro ? ROTULO_DINHEIRO[r.extras.dinheiro] : 'Não informado'}</Dado>
+              </dl>
+            </div>
+          )}
+```
+
+- [ ] **Passo 4:** `npm test && npm run test:int && npm run typecheck && npm run lint` → PASS. Depois rode `npm run test:e2e -- tests/e2e/mercado-livre.spec.ts tests/e2e/fluxo.spec.ts tests/e2e/devolucoes.spec.ts` e `npm run test:e2e:bitbrain` → PASS nos dois projetos. Tire prints em 390×844 do cartão com conta longa e 3 selos e da seção Mercado Livre.
+
+- [ ] **Passo 5: Commit**
+
+```bash
+git add src/modules/mercado-livre/selos.ts src/modules/mercado-livre/selos.test.ts src/modules/mercado-livre/consultas.ts src/modules/mercado-livre/consultas.int.test.ts src/modules/devolucoes src/components/CartaoDevolucao.tsx src/components/CartaoDevolucao.test.tsx "src/app/(app)/fluxo" tests/e2e/mercado-livre.spec.ts tests/e2e/bitbrain-devolucoes.spec.ts
+git commit -m "feat(ml): selos Urgente, Afeta reputacao e Full, conta no cartao, urgentes primeiro nas etapas 2 e 3 e extras no detalhe
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
