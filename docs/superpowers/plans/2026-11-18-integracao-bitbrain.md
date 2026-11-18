@@ -1497,3 +1497,1002 @@ git commit -m "test(bitbrain): Bitbrain falso com lista fechada, filtro de dados
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
+### Tarefa 5: Banco: `contas_bitbrain`, colunas novas em `reclamacoes_ml` e gravação dos extras e da conta
+
+**Objetivo:** a tabela das contas e as colunas da conta, dos extras e da resposta pendente, com a migração gerada. O `aplicarReclamacao` passa a gravar os extras e a conta (D8).
+
+**Arquivos:**
+- Modificar: `src/db/schema/mercado-livre.ts`, `src/modules/mercado-livre/sincronizar.ts`, `src/modules/mercado-livre/tabelas.int.test.ts`, `src/modules/mercado-livre/sincronizar.int.test.ts`
+- Criar (gerado): `drizzle/0014_bitbrain_contas_extras.sql`, `drizzle/meta/0014_snapshot.json`, `drizzle/meta/_journal.json` (atualizado)
+
+**Interfaces:**
+- Consome: `ExtrasML`, `DadosDevolucaoML.extras` e os tipos de `dominio.ts` (Tarefa 3).
+- Produz (schema):
+  - `contasBitbrain` com `empresa` (PK), `nome`, `sellerId`, `recebeDevolucoes` (padrão `false`), `disponivel` (padrão `true`, D2), `ultimaSincronizacaoEm`, `atualizadaEm` e `atualizadaPor`;
+  - `reclamacoesMl` ganha `conta`, `acaoPendente`, `urgente`, `afetaReputacao`, `ehFull`, `triagemCondicao`, `triagemEtapa`, `dinheiro` e `respostaPendente`, todas anuláveis.
+- Produz (`sincronizar.ts`): `aplicarReclamacao(db, dados, agora, fila?: Fila, conta: string | null = null)`. A lógica não muda; só a gravação em `reclamacoes_ml` muda.
+
+- [ ] **Passo 1: Testes que falham**
+
+`tabelas.int.test.ts` (importe `contasBitbrain` de `@/db/schema`):
+
+```ts
+  it('conta do Bitbrain: nasce sem receber devoluções e disponível', async () => {
+    const [conta] = await db.insert(contasBitbrain).values({ empresa: 'megadino', nome: 'IDM Shop', sellerId: '25255785' }).returning();
+    expect(conta).toMatchObject({ recebeDevolucoes: false, disponivel: true, ultimaSincronizacaoEm: null, atualizadaPor: null });
+  });
+
+  it('reclamacoes_ml: extras anuláveis; valores fora da lista são recusados pelo banco', async () => {
+    await db.insert(reclamacoesMl).values({ claimId: '5000000101', sincronizadaEm: new Date() });
+    const [r] = await db.select().from(reclamacoesMl).where(eq(reclamacoesMl.claimId, '5000000101'));
+    expect(r).toMatchObject({ conta: null, urgente: null, afetaReputacao: null, ehFull: null, dinheiro: null, respostaPendente: null });
+    const casos = [
+      ['5000000102', { afetaReputacao: 'X' }, 'reclamacoes_ml_afeta_reputacao'],
+      ['5000000103', { triagemCondicao: 'X' }, 'reclamacoes_ml_triagem_condicao'],
+      ['5000000104', { dinheiro: 'X' }, 'reclamacoes_ml_dinheiro'],
+      ['5000000105', { respostaPendente: 'X' }, 'reclamacoes_ml_resposta_pendente'],
+    ] as const;
+    for (const [claimId, valores, nome] of casos) {
+      const erro = await db
+        .insert(reclamacoesMl)
+        .values({ claimId, sincronizadaEm: new Date(), ...(valores as Record<string, never>) })
+        .catch((e: unknown) => e);
+      expect(restricao(erro)).toBe(nome);
+    }
+  });
+```
+
+`sincronizar.int.test.ts` (importe `EXTRAS_VAZIOS` de `@/conectores/marketplace/mercadolivre/mapeamento` e `reclamacoesMl` de `@/db/schema`, se ainda não estiverem importados):
+
+```ts
+describe('extras e conta em reclamacoes_ml (integração Bitbrain, D8)', () => {
+  const EXTRAS = {
+    acaoPendente: 'return_review_ok',
+    urgente: true,
+    afetaReputacao: 'AFETA',
+    ehFull: true,
+    triagemCondicao: 'NAO_VENDAVEL',
+    triagemEtapa: 'closed',
+    dinheiro: 'RETIDO',
+  } as const;
+  const linha = async (claimId: string) => (await db.select().from(reclamacoesMl).where(eq(reclamacoesMl.claimId, claimId)))[0];
+
+  it('grava os extras e a conta', async () => {
+    const dados = dadosDevolucaoMLTeste(devolucaoExternaTeste(), { extras: EXTRAS });
+    await aplicarReclamacao(db, dados, AGORA, undefined, 'loja-falsa-1');
+    expect(await linha(dados.reclamacaoId)).toMatchObject({ ...EXTRAS, conta: 'loja-falsa-1', respostaPendente: null });
+  });
+
+  it('de novo: urgente e ação acompanham o ML; os outros extras nulos não apagam o que já se sabia; sem conta, a conta fica', async () => {
+    const externa = devolucaoExternaTeste();
+    await aplicarReclamacao(db, dadosDevolucaoMLTeste(externa, { extras: EXTRAS }), AGORA, undefined, 'loja-falsa-1');
+    const depois = dadosDevolucaoMLTeste(externa, { extras: { ...EXTRAS_VAZIOS, urgente: false } });
+    await aplicarReclamacao(db, depois, AGORA, undefined, null);
+    expect(await linha(depois.reclamacaoId)).toMatchObject({
+      urgente: false,
+      acaoPendente: null,
+      afetaReputacao: 'AFETA',
+      ehFull: true,
+      triagemCondicao: 'NAO_VENDAVEL',
+      triagemEtapa: 'closed',
+      dinheiro: 'RETIDO',
+      conta: 'loja-falsa-1',
+    });
+  });
+
+  it('modo api (sem conta): a conta fica nula; reclamação sem devolução também guarda os extras', async () => {
+    const dados = dadosDevolucaoMLTeste(null, { extras: { ...EXTRAS_VAZIOS, urgente: true, acaoPendente: 'return_review_ok' } });
+    await aplicarReclamacao(db, dados, AGORA);
+    expect(await linha(dados.reclamacaoId)).toMatchObject({ conta: null, urgente: true, acaoPendente: 'return_review_ok' });
+  });
+});
+```
+
+- [ ] **Passo 2:** `npm run test:int -- src/modules/mercado-livre/tabelas.int.test.ts src/modules/mercado-livre/sincronizar.int.test.ts` → FAIL (a tabela e as colunas não existem).
+
+- [ ] **Passo 3: Schema** (`src/db/schema/mercado-livre.ts`)
+- Imports: acrescente `boolean` ao import de `drizzle-orm/pg-core`, e `import type { AfetaReputacao, CondicaoTriagem, RespostaPendente, SituacaoDinheiro } from '../../modules/mercado-livre/dominio';`.
+- Nas colunas de `reclamacoesMl`, depois de `sincronizadaEm`:
+
+```ts
+    /** Empresa do Bitbrain (contas_bitbrain.empresa); nula no modo api e nas antigas (§4.3). */
+    conta: text('conta'),
+    /** Extras (§4.5): nulo = o ML não informou. */
+    acaoPendente: text('acao_pendente'),
+    urgente: boolean('urgente'),
+    afetaReputacao: text('afeta_reputacao').$type<AfetaReputacao>(),
+    ehFull: boolean('eh_full'),
+    triagemCondicao: text('triagem_condicao').$type<CondicaoTriagem>(),
+    triagemEtapa: text('triagem_etapa'),
+    dinheiro: text('dinheiro').$type<SituacaoDinheiro>(),
+    /** Modo bitbrain (§4.6): 'OK' = falta responder "OK" no ML, à mão. */
+    respostaPendente: text('resposta_pendente').$type<RespostaPendente>(),
+```
+
+- No `(t) => [...]` de `reclamacoesMl`:
+
+```ts
+    index('reclamacoes_ml_resposta_pendente_idx').on(t.respostaPendente),
+    check('reclamacoes_ml_afeta_reputacao', sql`"afeta_reputacao" in ('AFETA', 'NAO_AFETA', 'NAO_SE_APLICA')`),
+    check('reclamacoes_ml_triagem_condicao', sql`"triagem_condicao" in ('VENDAVEL', 'NAO_VENDAVEL', 'DESCARTE', 'FALTANDO')`),
+    check('reclamacoes_ml_dinheiro', sql`"dinheiro" in ('RETIDO', 'DEVOLVIDO', 'LIBERADO')`),
+    check('reclamacoes_ml_resposta_pendente', sql`"resposta_pendente" in ('OK')`),
+```
+
+- Tabela nova (no fim do arquivo):
+
+```ts
+/** Contas do ML que o Bitbrain tem (integração de 18/11, §4.3). O Gestor marca as que mandam devoluções para a bancada. */
+export const contasBitbrain = pgTable('contas_bitbrain', {
+  /** O account_key do Bitbrain (ex.: "megadino"). */
+  empresa: text('empresa').primaryKey(),
+  nome: text('nome').notNull(),
+  sellerId: text('seller_id').notNull(),
+  /** Nenhuma vem marcada (B3). */
+  recebeDevolucoes: boolean('recebe_devolucoes').notNull().default(false),
+  /** D2: false = sumiu da lista do Bitbrain (ou ele disse "empresa sem conta do ML"). Nunca é apagada. */
+  disponivel: boolean('disponivel').notNull().default(true),
+  /** Última varredura bem-sucedida desta conta: alerta "sincronização parada" por conta (spec §11). */
+  ultimaSincronizacaoEm: timestamp('ultima_sincronizacao_em', { withTimezone: true }),
+  /** Quando e por quem a marcação mudou. */
+  atualizadaEm: timestamp('atualizada_em', { withTimezone: true }).notNull().defaultNow(),
+  atualizadaPor: uuid('atualizada_por').references(() => usuarios.id, { onDelete: 'set null' }),
+});
+```
+
+- [ ] **Passo 4: Migração.** Rode `npm run db:gerar -- --name bitbrain_contas_extras`. Confira que `drizzle/0014_bitbrain_contas_extras.sql` só tem:
+  - `CREATE TABLE "contas_bitbrain"`, com a FK de `atualizada_por`;
+  - 9 `ALTER TABLE "reclamacoes_ml" ADD COLUMN`;
+  - 4 `ADD CONSTRAINT ... CHECK`;
+  - 1 `CREATE INDEX`.
+
+  Nada pode ser apagado nem renomeado. Depois rode `npm run db:migrar`, no banco de dev `devolucoes_f7`. O banco de testes é migrado sozinho pelo `test:int`.
+
+- [ ] **Passo 5: Gravação** (`sincronizar.ts`). Troque o `gravarReclamacao` por:
+
+```ts
+async function gravarReclamacao(tx: DbOuTx, dados: DadosDevolucaoML, devolucaoId: string | null, agora: Date, conta: string | null): Promise<void> {
+  const x = dados.extras;
+  const valores = {
+    returnId: dados.devolucao?.devolucaoExternaId ?? null,
+    motivoId: dados.motivoId,
+    subtipo: dados.subtipo,
+    statusReclamacao: dados.statusReclamacao,
+    statusDevolucao: dados.statusDevolucao,
+    devolucaoId,
+    atualizadaNoMlEm: dados.atualizadaEm,
+    sincronizadaEm: agora,
+    acaoPendente: x.acaoPendente,
+    urgente: x.urgente,
+    afetaReputacao: x.afetaReputacao,
+    ehFull: x.ehFull,
+    triagemCondicao: x.triagemCondicao,
+    triagemEtapa: x.triagemEtapa,
+    dinheiro: x.dinheiro,
+    ...(conta ? { conta } : {}),
+  };
+  await tx
+    .insert(reclamacoesMl)
+    .values({ claimId: dados.reclamacaoId, ...valores })
+    .onConflictDoUpdate({
+      target: reclamacoesMl.claimId,
+      set: {
+        ...valores,
+        // D8: uma leitura opcional recusada (nulo) não apaga o que o ML já tinha dito. Urgente e ação seguem o ML.
+        afetaReputacao: sql`coalesce(excluded."afeta_reputacao", ${reclamacoesMl.afetaReputacao})`,
+        ehFull: sql`coalesce(excluded."eh_full", ${reclamacoesMl.ehFull})`,
+        triagemCondicao: sql`coalesce(excluded."triagem_condicao", ${reclamacoesMl.triagemCondicao})`,
+        triagemEtapa: sql`coalesce(excluded."triagem_etapa", ${reclamacoesMl.triagemEtapa})`,
+        dinheiro: sql`coalesce(excluded."dinheiro", ${reclamacoesMl.dinheiro})`,
+      },
+    });
+}
+```
+
+Mude `aplicarReclamacao` para `(db: DbOuTx, dados: DadosDevolucaoML, agora: Date, fila?: Fila, conta: string | null = null)` e passe `conta` às 3 chamadas de `gravarReclamacao`. O resto da função fica igual. A `resposta_pendente` nunca é tocada aqui.
+
+- [ ] **Passo 6:** `npm run test:int -- src/modules/mercado-livre && npm run typecheck` → PASS.
+
+- [ ] **Passo 7: Commit**
+
+```bash
+git add src/db/schema/mercado-livre.ts drizzle/0014_bitbrain_contas_extras.sql drizzle/meta src/modules/mercado-livre/sincronizar.ts src/modules/mercado-livre/tabelas.int.test.ts src/modules/mercado-livre/sincronizar.int.test.ts
+git commit -m "feat(ml): tabela contas_bitbrain e conta, extras e resposta pendente em reclamacoes_ml (migracao 0014)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Tarefa 6: Contas do Bitbrain (atualizar pela lista, marcar e indisponível)
+
+**Objetivo:** o módulo das contas. Ele atualiza a lista pelo `/empresas`: conta nova entra desmarcada, e a que sumiu fica indisponível. O Gestor marca e desmarca, e cada mudança gera evento com o usuário. O módulo também diz quais contas a varredura usa e quais estão atrasadas.
+
+**Arquivos:**
+- Criar: `src/modules/mercado-livre/contas-bitbrain.ts`, `src/modules/mercado-livre/contas-bitbrain.int.test.ts`, `tests/helpers/fabricas-bitbrain.ts`, `tests/helpers/modo-bitbrain.ts`
+- Modificar: `src/modules/mercado-livre/fabrica-conector.ts` (só `fetchDoBitbrain`), `src/modules/historico/eventos.ts` (`EntidadeHistorico`), `src/modules/historico/rotulos/mercado-livre.ts`, `src/modules/historico/eventos.test.ts`
+
+**Interfaces:**
+- Consome: `listarEmpresasBitbrain`, `TIMEOUT_EMPRESAS_MS`, `ErroBitbrain` e `EmpresaBitbrain` (Tarefa 2); `fetchBitbrainFalso` e `EMPRESAS_FALSAS` (Tarefa 4); `contasBitbrain` (Tarefa 5); `ConfigML` (Tarefa 1); `sincronizacaoAtrasada` (`dominio.ts`).
+- Produz (`fabrica-conector.ts`): `fetchDoBitbrain(config: ConfigML): typeof fetch`, que devolve o `fetchBitbrainFalso` só quando `config.bitbrainUrl === URL_BITBRAIN_FALSO && config.permitirFalsos` (D3); senão, o `fetch`.
+- Produz (`contas-bitbrain.ts`):
+  - `class ErroContaBitbrain extends Error`;
+  - `type ContaBitbrain = { empresa: string; nome: string; sellerId: string; recebeDevolucoes: boolean; disponivel: boolean; ultimaSincronizacaoEm: Date | null; atualizadaEm: Date; atualizadaPorNome: string | null }`;
+  - `listarContasBitbrain(db: DbOuTx): Promise<ContaBitbrain[]>` (por nome);
+  - `atualizarContasBitbrain(db: DbOuTx, empresas: EmpresaBitbrain[], agora: Date): Promise<{ total: number; novas: number; indisponiveis: number }>`;
+  - `buscarEAtualizarContas(db: DbOuTx, config: ConfigML, agora: Date, timeoutMs?: number)`, que devolve o mesmo do `atualizarContasBitbrain`;
+  - `marcarContaBitbrain(db: DbOuTx, p: { empresa: string; recebe: boolean }, usuario: UsuarioSessao, agora: Date): Promise<void>`;
+  - `contasParaVarrer(db: DbOuTx): Promise<{ empresa: string; ultimaSincronizacaoEm: Date | null }[]>` (marcadas e disponíveis);
+  - `marcarSincronizacaoBitbrain(db: DbOuTx, empresa: string, agora: Date): Promise<void>`;
+  - `marcarContaIndisponivel(db: DbOuTx, empresa: string): Promise<void>`;
+  - `contaAtrasada(c: Pick<ContaBitbrain, 'recebeDevolucoes' | 'disponivel' | 'ultimaSincronizacaoEm' | 'atualizadaEm'>, agora: Date): boolean`;
+  - `contarContasIndisponiveis(db: DbOuTx): Promise<number>` (marcadas e indisponíveis);
+  - `mensagemFalhaBitbrain(erro: unknown): string`.
+- Produz (histórico): `EntidadeHistorico` ganha `'conta_bitbrain'`. Os rótulos novos (D11) entram todos aqui, para o arquivo ser editado uma vez só:
+
+| Chave | Rótulo |
+|---|---|
+| `ml_conta_bitbrain_marcada` | Conta do Bitbrain passou a mandar devoluções |
+| `ml_conta_bitbrain_desmarcada` | Conta do Bitbrain deixou de mandar devoluções |
+| `ml_resposta_manual_pendente` | Falta responder "OK" no Mercado Livre (à mão) |
+| `ml_ok_respondido_a_mao` | "OK" respondido à mão no Mercado Livre |
+| `ml_contestacao_respondida_a_mao` | Contestação respondida à mão no Mercado Livre |
+
+- Produz (testes):
+  - `tests/helpers/fabricas-bitbrain.ts` (sem `vitest`: o e2e também importa):
+    - `configBitbrainTeste(mudancas?: Partial<ConfigML>): ConfigML`, com `modo: 'bitbrain'`, a URL e o token falsos e `permitirFalsos: true`;
+    - `contasFalsasTeste(db, p?: { recebe?: string[] }): Promise<void>`, que grava as `EMPRESAS_FALSAS` e marca as de `recebe`.
+  - `tests/helpers/modo-bitbrain.ts`: `usarModoBitbrain(): void`, que faz `vi.stubEnv` de `ML_CONECTOR`, `BITBRAIN_URL`, `BITBRAIN_TOKEN` e `PERMITIR_FALSOS`. Quem usa chama `vi.unstubAllEnvs()` no `afterEach`.
+
+- [ ] **Passo 1: Ajudantes de teste**
+
+`tests/helpers/fabricas-bitbrain.ts`:
+
+```ts
+import { EMPRESAS_FALSAS } from '@/conectores/marketplace/bitbrain/falso';
+import type { DbOuTx } from '@/db/client';
+import { contasBitbrain } from '@/db/schema';
+import { TOKEN_BITBRAIN_FALSO, URL_BITBRAIN_FALSO } from '@/lib/env';
+import type { ConfigML } from '@/modules/mercado-livre/config';
+import { configMLTeste } from './fabricas-ml';
+
+/** Config do modo bitbrain com o Bitbrain falso (D3). Sem vitest: o e2e também importa este arquivo. */
+export function configBitbrainTeste(mudancas: Partial<ConfigML> = {}): ConfigML {
+  return configMLTeste({ modo: 'bitbrain', bitbrainUrl: URL_BITBRAIN_FALSO, bitbrainToken: TOKEN_BITBRAIN_FALSO, permitirFalsos: true, ...mudancas });
+}
+
+/** As contas do Bitbrain falso no banco; as de `recebe` já marcadas. */
+export async function contasFalsasTeste(db: DbOuTx, p: { recebe?: string[] } = {}): Promise<void> {
+  for (const e of EMPRESAS_FALSAS) {
+    const recebeDevolucoes = (p.recebe ?? []).includes(e.empresa);
+    await db
+      .insert(contasBitbrain)
+      .values({ empresa: e.empresa, nome: e.nome, sellerId: e.seller_id, recebeDevolucoes })
+      .onConflictDoUpdate({ target: contasBitbrain.empresa, set: { recebeDevolucoes, disponivel: true } });
+  }
+}
+```
+
+Os testes de integração importam esses ajudantes por caminho relativo (`../../../tests/helpers/...`), como os atuais. O `fabricas-ml.ts` já usa imports com `@/` e é importado pelo e2e (`apoio-ml.ts`), então o alias funciona nos dois lados.
+
+`tests/helpers/modo-bitbrain.ts`:
+
+```ts
+import { vi } from 'vitest';
+import { TOKEN_BITBRAIN_FALSO, URL_BITBRAIN_FALSO } from '@/lib/env';
+
+/** Liga o modo bitbrain com o Bitbrain falso no process.env (o configML() lê a cada chamada). Use vi.unstubAllEnvs() no afterEach. */
+export function usarModoBitbrain(): void {
+  vi.stubEnv('ML_CONECTOR', 'bitbrain');
+  vi.stubEnv('BITBRAIN_URL', URL_BITBRAIN_FALSO);
+  vi.stubEnv('BITBRAIN_TOKEN', TOKEN_BITBRAIN_FALSO);
+  vi.stubEnv('PERMITIR_FALSOS', '1');
+}
+```
+
+- [ ] **Passo 2: Testes que falham** (`contas-bitbrain.int.test.ts`)
+
+```ts
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { ErroBitbrain } from '@/conectores/marketplace/bitbrain/cliente';
+import { contasBitbrain } from '@/db/schema';
+import { listarEventos } from '@/modules/historico/eventos';
+import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
+import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
+import { configBitbrainTeste, contasFalsasTeste } from '../../../tests/helpers/fabricas-bitbrain';
+import {
+  atualizarContasBitbrain,
+  buscarEAtualizarContas,
+  contaAtrasada,
+  contarContasIndisponiveis,
+  contasParaVarrer,
+  ErroContaBitbrain,
+  listarContasBitbrain,
+  marcarContaBitbrain,
+  mensagemFalhaBitbrain,
+} from './contas-bitbrain';
+
+const { db, sql } = criarDbTeste();
+const AGORA = new Date('2026-11-18T15:00:00Z');
+beforeEach(() => limparTabelas(sql));
+afterAll(() => sql.end());
+
+describe('lista de contas pelo Bitbrain (§4.3)', () => {
+  it('conta nova entra desmarcada e disponível; a que sumiu fica indisponível; a que volta fica disponível e mantém a marcação', async () => {
+    await db.insert(contasBitbrain).values({ empresa: 'antiga', nome: 'Antiga', sellerId: '9', recebeDevolucoes: true });
+    const r = await atualizarContasBitbrain(db, [{ empresa: 'megadino', nome: 'IDM Shop', sellerId: '25255785' }], AGORA);
+    expect(r).toEqual({ total: 1, novas: 1, indisponiveis: 1 });
+    expect((await listarContasBitbrain(db)).map((c) => [c.empresa, c.recebeDevolucoes, c.disponivel])).toEqual([
+      ['antiga', true, false],
+      ['megadino', false, true],
+    ]);
+    await atualizarContasBitbrain(
+      db,
+      [
+        { empresa: 'antiga', nome: 'Antiga Nova', sellerId: '9' },
+        { empresa: 'megadino', nome: 'IDM Shop', sellerId: '25255785' },
+      ],
+      AGORA,
+    );
+    const [antiga] = await db.select().from(contasBitbrain).where(eq(contasBitbrain.empresa, 'antiga'));
+    expect(antiga).toMatchObject({ nome: 'Antiga Nova', recebeDevolucoes: true, disponivel: true });
+  });
+
+  it('buscarEAtualizarContas lê o /empresas do Bitbrain falso', async () => {
+    expect(await buscarEAtualizarContas(db, configBitbrainTeste(), AGORA)).toMatchObject({ total: 2, novas: 2 });
+    expect((await listarContasBitbrain(db)).map((c) => c.nome)).toEqual(['Loja Falsa 1', 'Loja Falsa 2']);
+  });
+
+  it('token errado: ErroBitbrain com a mensagem do token e sem o valor dele; erro de rede: mensagem genérica', async () => {
+    const erro = await buscarEAtualizarContas(db, configBitbrainTeste({ bitbrainToken: 'token-errado-secreto' }), AGORA).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroBitbrain);
+    expect(mensagemFalhaBitbrain(erro)).toContain('Bitbrain recusou: confira o BITBRAIN_TOKEN');
+    expect(mensagemFalhaBitbrain(erro)).not.toContain('token-errado-secreto');
+    expect(mensagemFalhaBitbrain(new TypeError('fetch failed'))).toBe('O Bitbrain não respondeu agora. Toque em "Atualizar contas" em alguns minutos.');
+  });
+});
+
+describe('marcar a conta (só o Gestor, com evento)', () => {
+  it('Gestor marca e desmarca; cada mudança gera um evento com o usuário; repetir não gera outro', async () => {
+    await contasFalsasTeste(db);
+    const gestor = await criarUsuarioTeste(db, 'GESTOR');
+    await marcarContaBitbrain(db, { empresa: 'loja-falsa-1', recebe: true }, gestor, AGORA);
+    await marcarContaBitbrain(db, { empresa: 'loja-falsa-1', recebe: true }, gestor, AGORA);
+    await marcarContaBitbrain(db, { empresa: 'loja-falsa-1', recebe: false }, gestor, AGORA);
+    const eventos = await listarEventos(db, 'conta_bitbrain', 'loja-falsa-1');
+    expect(eventos.map((e) => [e.acao, e.usuarioNome])).toEqual([
+      ['ml_conta_bitbrain_marcada', gestor.nome],
+      ['ml_conta_bitbrain_desmarcada', gestor.nome],
+    ]);
+    const [conta] = await db.select().from(contasBitbrain).where(eq(contasBitbrain.empresa, 'loja-falsa-1'));
+    expect(conta).toMatchObject({ recebeDevolucoes: false, atualizadaPor: gestor.id, atualizadaEm: AGORA });
+  });
+
+  it('Operador é recusado; conta que não existe é recusada', async () => {
+    await contasFalsasTeste(db);
+    const operador = await criarUsuarioTeste(db, 'OPERADOR');
+    await expect(marcarContaBitbrain(db, { empresa: 'loja-falsa-1', recebe: true }, operador, AGORA)).rejects.toBeInstanceOf(ErroContaBitbrain);
+    const gestor = await criarUsuarioTeste(db, 'GESTOR');
+    await expect(marcarContaBitbrain(db, { empresa: 'nao-existe', recebe: true }, gestor, AGORA)).rejects.toThrow('Conta não encontrada');
+  });
+});
+
+describe('o que a varredura e os alertas usam', () => {
+  it('contasParaVarrer: só marcadas e disponíveis; contarContasIndisponiveis: marcadas e indisponíveis', async () => {
+    await contasFalsasTeste(db, { recebe: ['loja-falsa-1', 'loja-falsa-2'] });
+    await db.update(contasBitbrain).set({ disponivel: false }).where(eq(contasBitbrain.empresa, 'loja-falsa-2'));
+    expect((await contasParaVarrer(db)).map((c) => c.empresa)).toEqual(['loja-falsa-1']);
+    expect(await contarContasIndisponiveis(db)).toBe(1);
+  });
+
+  it('contaAtrasada: marcada e disponível, mais de 1 h desde a última varredura (ou desde a marcação)', () => {
+    const base = { recebeDevolucoes: true, disponivel: true, atualizadaEm: new Date('2026-11-18T14:30:00Z') };
+    expect(contaAtrasada({ ...base, ultimaSincronizacaoEm: null }, AGORA)).toBe(false);
+    expect(contaAtrasada({ ...base, ultimaSincronizacaoEm: new Date('2026-11-18T13:00:00Z') }, AGORA)).toBe(true);
+    expect(contaAtrasada({ ...base, recebeDevolucoes: false, ultimaSincronizacaoEm: null, atualizadaEm: new Date('2026-11-18T10:00:00Z') }, AGORA)).toBe(false);
+  });
+});
+```
+
+`eventos.test.ts`: acrescente as 5 chaves novas à lista `RESERVADAS['mercado-livre']`.
+
+- [ ] **Passo 3:** `npm run test:int -- src/modules/mercado-livre/contas-bitbrain.int.test.ts` → FAIL.
+
+- [ ] **Passo 4: Implementação**
+
+`fabrica-conector.ts`: acrescente os imports de `fetchBitbrainFalso` (`@/conectores/marketplace/bitbrain/falso`) e de `URL_BITBRAIN_FALSO` (`@/lib/env`), e:
+
+```ts
+/** D3: o Bitbrain falso só com a URL de testes E PERMITIR_FALSOS=1; fora disso, o fetch de verdade (a URL .invalid não resolve). */
+export function fetchDoBitbrain(config: ConfigML): typeof fetch {
+  return config.bitbrainUrl === URL_BITBRAIN_FALSO && config.permitirFalsos ? fetchBitbrainFalso : fetch;
+}
+```
+
+`contas-bitbrain.ts`:
+
+```ts
+import { and, asc, count, eq, notInArray } from 'drizzle-orm';
+import { ErroBitbrain, listarEmpresasBitbrain, TIMEOUT_EMPRESAS_MS, type EmpresaBitbrain } from '@/conectores/marketplace/bitbrain/cliente';
+import type { DbOuTx } from '@/db/client';
+import { contasBitbrain, usuarios } from '@/db/schema';
+import { pode } from '@/modules/auth/permissoes';
+import type { UsuarioSessao } from '@/modules/auth/usuarios';
+import { registrarEvento } from '@/modules/historico/eventos';
+import type { ConfigML } from './config';
+import { sincronizacaoAtrasada } from './dominio';
+import { fetchDoBitbrain } from './fabrica-conector';
+
+export class ErroContaBitbrain extends Error {
+  constructor(mensagem: string) {
+    super(mensagem);
+    this.name = 'ErroContaBitbrain';
+  }
+}
+
+export type ContaBitbrain = {
+  empresa: string;
+  nome: string;
+  sellerId: string;
+  recebeDevolucoes: boolean;
+  disponivel: boolean;
+  ultimaSincronizacaoEm: Date | null;
+  atualizadaEm: Date;
+  atualizadaPorNome: string | null;
+};
+
+export async function listarContasBitbrain(db: DbOuTx): Promise<ContaBitbrain[]> {
+  return db
+    .select({
+      empresa: contasBitbrain.empresa,
+      nome: contasBitbrain.nome,
+      sellerId: contasBitbrain.sellerId,
+      recebeDevolucoes: contasBitbrain.recebeDevolucoes,
+      disponivel: contasBitbrain.disponivel,
+      ultimaSincronizacaoEm: contasBitbrain.ultimaSincronizacaoEm,
+      atualizadaEm: contasBitbrain.atualizadaEm,
+      atualizadaPorNome: usuarios.nome,
+    })
+    .from(contasBitbrain)
+    .leftJoin(usuarios, eq(usuarios.id, contasBitbrain.atualizadaPor))
+    .orderBy(asc(contasBitbrain.nome), asc(contasBitbrain.empresa));
+}
+
+/** §4.3: conta nova entra desmarcada; a que sumiu fica indisponível, nunca apagada (D2); a que voltou fica disponível. */
+export async function atualizarContasBitbrain(
+  db: DbOuTx,
+  empresas: EmpresaBitbrain[],
+  agora: Date,
+): Promise<{ total: number; novas: number; indisponiveis: number }> {
+  return db.transaction(async (tx) => {
+    const antes = new Set((await tx.select({ empresa: contasBitbrain.empresa }).from(contasBitbrain)).map((c) => c.empresa));
+    for (const e of empresas) {
+      await tx
+        .insert(contasBitbrain)
+        .values({ empresa: e.empresa, nome: e.nome, sellerId: e.sellerId, disponivel: true, atualizadaEm: agora })
+        .onConflictDoUpdate({ target: contasBitbrain.empresa, set: { nome: e.nome, sellerId: e.sellerId, disponivel: true } });
+    }
+    const presentes = empresas.map((e) => e.empresa);
+    const sumiram = await tx
+      .update(contasBitbrain)
+      .set({ disponivel: false })
+      .where(and(eq(contasBitbrain.disponivel, true), presentes.length > 0 ? notInArray(contasBitbrain.empresa, presentes) : undefined))
+      .returning({ empresa: contasBitbrain.empresa });
+    return { total: empresas.length, novas: presentes.filter((p) => !antes.has(p)).length, indisponiveis: sumiram.length };
+  });
+}
+
+/** "Atualizar contas" e a abertura da tela (D13). Erro do Bitbrain ou da rede lança: quem chama mostra a mensagem. */
+export async function buscarEAtualizarContas(db: DbOuTx, config: ConfigML, agora: Date, timeoutMs: number = TIMEOUT_EMPRESAS_MS) {
+  const empresas = await listarEmpresasBitbrain({ url: config.bitbrainUrl, token: config.bitbrainToken, fetchFn: fetchDoBitbrain(config), timeoutMs });
+  return atualizarContasBitbrain(db, empresas, agora);
+}
+
+/** Texto para a tela. Nunca traz o token (o ErroBitbrain não o conhece). */
+export function mensagemFalhaBitbrain(erro: unknown): string {
+  if (erro instanceof ErroBitbrain) return erro.message;
+  return 'O Bitbrain não respondeu agora. Toque em "Atualizar contas" em alguns minutos.';
+}
+
+/** Só o Gestor marca; cada mudança gera evento (§4.3). Marcar o que já está marcado não muda nada. */
+export async function marcarContaBitbrain(db: DbOuTx, p: { empresa: string; recebe: boolean }, usuario: UsuarioSessao, agora: Date): Promise<void> {
+  if (!pode(usuario.perfil, 'administrar')) throw new ErroContaBitbrain('Só o Gestor escolhe as contas que mandam devoluções.');
+  await db.transaction(async (tx) => {
+    const [mudou] = await tx
+      .update(contasBitbrain)
+      .set({ recebeDevolucoes: p.recebe, atualizadaEm: agora, atualizadaPor: usuario.id })
+      .where(and(eq(contasBitbrain.empresa, p.empresa), eq(contasBitbrain.recebeDevolucoes, !p.recebe)))
+      .returning({ empresa: contasBitbrain.empresa });
+    if (!mudou) {
+      const [existe] = await tx.select({ empresa: contasBitbrain.empresa }).from(contasBitbrain).where(eq(contasBitbrain.empresa, p.empresa));
+      if (!existe) throw new ErroContaBitbrain('Conta não encontrada. Toque em "Atualizar contas".');
+      return;
+    }
+    await registrarEvento(tx, {
+      entidade: 'conta_bitbrain',
+      entidadeId: p.empresa,
+      acao: p.recebe ? 'ml_conta_bitbrain_marcada' : 'ml_conta_bitbrain_desmarcada',
+      usuarioId: usuario.id,
+      em: agora,
+    });
+  });
+}
+
+export async function contasParaVarrer(db: DbOuTx): Promise<{ empresa: string; ultimaSincronizacaoEm: Date | null }[]> {
+  return db
+    .select({ empresa: contasBitbrain.empresa, ultimaSincronizacaoEm: contasBitbrain.ultimaSincronizacaoEm })
+    .from(contasBitbrain)
+    .where(and(eq(contasBitbrain.recebeDevolucoes, true), eq(contasBitbrain.disponivel, true)))
+    .orderBy(asc(contasBitbrain.empresa));
+}
+
+export async function marcarSincronizacaoBitbrain(db: DbOuTx, empresa: string, agora: Date): Promise<void> {
+  await db.update(contasBitbrain).set({ ultimaSincronizacaoEm: agora }).where(eq(contasBitbrain.empresa, empresa));
+}
+
+export async function marcarContaIndisponivel(db: DbOuTx, empresa: string): Promise<void> {
+  await db.update(contasBitbrain).set({ disponivel: false }).where(eq(contasBitbrain.empresa, empresa));
+}
+
+/** Alerta de sincronização parada (spec §11) por conta marcada: desde a última varredura, ou desde que foi marcada. */
+export function contaAtrasada(
+  c: Pick<ContaBitbrain, 'recebeDevolucoes' | 'disponivel' | 'ultimaSincronizacaoEm' | 'atualizadaEm'>,
+  agora: Date,
+): boolean {
+  return c.recebeDevolucoes && c.disponivel && sincronizacaoAtrasada(c.ultimaSincronizacaoEm ?? c.atualizadaEm, agora);
+}
+
+/** "Conta indisponível no Bitbrain: a varredura pula essa conta e avisa no Painel" (§5): só as marcadas. */
+export async function contarContasIndisponiveis(db: DbOuTx): Promise<number> {
+  const [linha] = await db
+    .select({ total: count() })
+    .from(contasBitbrain)
+    .where(and(eq(contasBitbrain.recebeDevolucoes, true), eq(contasBitbrain.disponivel, false)));
+  return Number(linha?.total ?? 0);
+}
+```
+
+`eventos.ts`: acrescente ao tipo a linha `/** Integração Bitbrain: a conta (id = empresa do Bitbrain). */ | 'conta_bitbrain'`.
+
+`rotulos/mercado-livre.ts`: acrescente as 5 chaves da tabela acima, com o comentário "Integração Bitbrain (emenda E21)".
+
+- [ ] **Passo 5:** `npm test -- src/modules/historico && npm run test:int -- src/modules/mercado-livre && npm run typecheck && npm run lint` → PASS.
+
+- [ ] **Passo 6: Commit**
+
+```bash
+git add src/modules/mercado-livre/contas-bitbrain.ts src/modules/mercado-livre/contas-bitbrain.int.test.ts src/modules/mercado-livre/fabrica-conector.ts src/modules/historico tests/helpers/fabricas-bitbrain.ts tests/helpers/modo-bitbrain.ts
+git commit -m "feat(bitbrain): contas do Bitbrain (lista pelo /empresas, marcar com evento, indisponivel)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Tarefa 7: Conector por conta, sincronização com a conta e NF de venda pela devolução
+
+**Objetivo:** no modo `bitbrain`, `obterConector` monta o `ConectorML` da conta. A tarefa `ml.sincronizar-reclamacao` usa a conta da tarefa (ou a de `reclamacoes_ml`) e a grava. A NF de venda é buscada pela conta da devolução. O modo `api` não muda.
+
+**Arquivos:**
+- Modificar: `src/modules/mercado-livre/fabrica-conector.ts`, `src/conectores/marketplace/registro.ts`, `src/modules/mercado-livre/conector.ts`, `src/modules/mercado-livre/tarefas.ts`, `src/modules/fila/tarefas.ts`, `src/worker/manipuladores/mercado-livre.ts`, `src/modules/fiscal/nota-venda.ts`
+- Criar: `src/modules/mercado-livre/bitbrain.int.test.ts`
+
+**Interfaces:**
+- Consome: `criarClienteViaBitbrain` e `ErroBitbrain` (Tarefa 2); `fetchDoBitbrain` (Tarefa 6); `contasBitbrain` e `reclamacoesMl.conta` (Tarefa 5); `aplicarReclamacao(…, conta)` (Tarefa 5); `usarModoBitbrain` e `contasFalsasTeste` (Tarefa 6).
+- Produz (`fabrica-conector.ts`):
+  - `type ContextoConectorML = { conta?: string | null; devolucaoId?: string | null }`;
+  - `obterConectorDaConta(db: DbOuTx, empresa: string, o?: { config?: ConfigML; fetchFn?: typeof fetch }): Promise<ConectorMercadoLivre | null>`, que devolve null se a conta não existe em `contas_bitbrain`;
+  - `contaDaDevolucao(db: DbOuTx, devolucaoId: string): Promise<string | null>` e `contaDaReclamacao(db: DbOuTx, claimId: string): Promise<string | null>`;
+  - `criarConectorML(db: DbOuTx, contexto?: ContextoConectorML, o?: { config?: ConfigML; fetchFn?: typeof fetch; agora?: () => Date }): Promise<ConectorMercadoLivre | null>`: no modo `api` ou `falso`, chama o `criarConectorMLDaConta` de hoje; no modo `bitbrain`, usa a conta do contexto (ou a da devolução).
+- Produz:
+  - `obterConector(db, canal, contexto: ContextoConectorML = {})` (`registro.ts`, D19);
+  - `obterConectorML(db, contexto: ContextoConectorML = {})` (`modules/mercado-livre/conector.ts`).
+- Produz (`tarefas.ts`): `sincronizarReclamacao(db, fila, reclamacaoId, agora, conta: string | null = null)`.
+- Produz (fila): `DadosTarefa['ml.sincronizar-reclamacao'] = { claimId: string; conta?: string }` (D1).
+
+- [ ] **Passo 1: Testes que falham** (`src/modules/mercado-livre/bitbrain.int.test.ts`)
+
+```ts
+import { eq } from 'drizzle-orm';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConectorML } from '@/conectores/marketplace/mercadolivre/conector';
+import { contasBitbrain, devolucoes, reclamacoesMl } from '@/db/schema';
+import { FilaMemoria } from '@/modules/fila/fila';
+import { buscarNotaVendaNoCanal } from '@/modules/fiscal/nota-venda';
+import { manipuladoresMercadoLivre } from '@/worker/manipuladores/mercado-livre';
+import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
+import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
+import { contasFalsasTeste } from '../../../tests/helpers/fabricas-bitbrain';
+import { contaMLTeste } from '../../../tests/helpers/fabricas-ml';
+import { usarModoBitbrain } from '../../../tests/helpers/modo-bitbrain';
+import { obterConectorML } from './conector';
+import { sincronizarReclamacao } from './tarefas';
+
+const { db, sql } = criarDbTeste();
+const AGORA = new Date('2026-11-18T15:00:00Z');
+let fila: FilaMemoria;
+
+beforeEach(async () => {
+  await limparTabelas(sql);
+  fila = new FilaMemoria();
+  usarModoBitbrain();
+  await contasFalsasTeste(db, { recebe: ['loja-falsa-1'] });
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+afterAll(() => sql.end());
+
+const linha = async (claimId: string) => (await db.select().from(reclamacoesMl).where(eq(reclamacoesMl.claimId, claimId)))[0];
+const devolucaoDa = async (claimId: string) => (await db.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.reclamacaoId, claimId)))[0];
+
+describe('conector por conta (modo bitbrain, §4.4)', () => {
+  it('com a conta: ConectorML com o vendedor da conta; sem conta ou conta desconhecida: null', async () => {
+    const c = await obterConectorML(db, { conta: 'loja-falsa-2' });
+    expect(c).toBeInstanceOf(ConectorML);
+    expect(c?.sellerId).toBe('223456789');
+    expect(await obterConectorML(db)).toBeNull();
+    expect(await obterConectorML(db, { conta: 'nao-existe' })).toBeNull();
+  });
+});
+
+describe('ml.sincronizar-reclamacao com a conta (D1)', () => {
+  it('pela conta da tarefa: cria a devolução e grava a conta e os extras', async () => {
+    await manipuladoresMercadoLivre['ml.sincronizar-reclamacao']!({ claimId: '5200000001', conta: 'loja-falsa-1' }, { db, fila, agora: AGORA, tentativa: 1 });
+    const r = await linha('5200000001');
+    expect(r).toMatchObject({ conta: 'loja-falsa-1', urgente: true, afetaReputacao: 'AFETA', ehFull: true, dinheiro: 'RETIDO' });
+    expect(r.devolucaoId).not.toBeNull();
+  });
+
+  it('sem conta na tarefa: usa a conta gravada em reclamacoes_ml', async () => {
+    await sincronizarReclamacao(db, fila, '5200000001', AGORA, 'loja-falsa-1');
+    expect(await sincronizarReclamacao(db, fila, '5200000001', AGORA)).toMatchObject({ acao: 'atualizada' });
+    expect((await linha('5200000001')).conta).toBe('loja-falsa-1');
+  });
+
+  it('sem conta nenhuma: não faz nada (null)', async () => {
+    expect(await sincronizarReclamacao(db, fila, '5200000001', AGORA)).toBeNull();
+    expect(await db.select().from(devolucoes)).toEqual([]);
+  });
+
+  it('o Bitbrain recusa o token: lança ErroBitbrain (5 tentativas e Falhas), sem vazar o token', async () => {
+    vi.stubEnv('BITBRAIN_TOKEN', 'token-errado-secreto');
+    const erro = await sincronizarReclamacao(db, fila, '5200000001', AGORA, 'loja-falsa-1').catch((e: unknown) => e);
+    expect((erro as Error).message).toContain('Bitbrain recusou: confira o BITBRAIN_TOKEN');
+    expect(JSON.stringify(erro)).not.toContain('token-errado-secreto');
+    expect((erro as Error).message).not.toContain('token-errado-secreto');
+  });
+});
+
+describe('NF de venda pela conta da devolução (§4.4)', () => {
+  it('busca o XML pela conta gravada em reclamacoes_ml', async () => {
+    await sincronizarReclamacao(db, fila, '5200000001', AGORA, 'loja-falsa-1');
+    const d = await devolucaoDa('5200000001');
+    expect(await buscarNotaVendaNoCanal(db, d.id, await criarUsuarioTeste(db, 'FISCAL'))).toEqual({ consultou: true, encontradas: 1 });
+  });
+
+  it('devolução do ML sem conta conhecida: não consulta', async () => {
+    await sincronizarReclamacao(db, fila, '5200000001', AGORA, 'loja-falsa-1');
+    await db.update(reclamacoesMl).set({ conta: null });
+    const d = await devolucaoDa('5200000001');
+    expect(await buscarNotaVendaNoCanal(db, d.id, await criarUsuarioTeste(db, 'FISCAL'))).toEqual({ consultou: false, encontradas: 0 });
+  });
+});
+
+describe('modo api continua igual (regressão)', () => {
+  it('sem o modo bitbrain: o conector da conta ATIVA do ML, como hoje; o contexto é ignorado', async () => {
+    vi.unstubAllEnvs();
+    await contaMLTeste(db);
+    expect(await obterConectorML(db)).toBeInstanceOf(ConectorML);
+    expect((await obterConectorML(db, { conta: 'loja-falsa-2' }))?.sellerId).toBe('123456789');
+    expect(await db.select().from(contasBitbrain)).toHaveLength(2);
+  });
+});
+```
+
+Se o `registrarNotaVenda` exigir algo a mais para aceitar o XML do falso (por exemplo, a configuração fiscal), prepare como o `src/modules/fiscal/nota-venda.int.test.ts` faz, sem mudar o código fiscal.
+
+- [ ] **Passo 2:** `npm run test:int -- src/modules/mercado-livre/bitbrain.int.test.ts` → FAIL.
+
+- [ ] **Passo 3: Implementação**
+
+`fabrica-conector.ts` (acrescente os imports de `criarClienteViaBitbrain`, `contasBitbrain`, `reclamacoesMl`, `ehUuid` de `@/lib/uuid`, e `desc`, `isNotNull` e `type SQL` de `drizzle-orm`):
+
+```ts
+/** D19: o contexto que escolhe a conta no modo bitbrain. No modo api ele é ignorado. */
+export type ContextoConectorML = { conta?: string | null; devolucaoId?: string | null };
+
+/** §4.4: o ConectorML da conta do Bitbrain (vendedor da conta, transporte pela rota). Null se a conta não existe. */
+export async function obterConectorDaConta(
+  db: DbOuTx,
+  empresa: string,
+  o: { config?: ConfigML; fetchFn?: typeof fetch } = {},
+): Promise<ConectorMercadoLivre | null> {
+  const config = o.config ?? configML();
+  const [conta] = await db.select({ sellerId: contasBitbrain.sellerId }).from(contasBitbrain).where(eq(contasBitbrain.empresa, empresa));
+  if (!conta) return null;
+  const cliente = criarClienteViaBitbrain({ url: config.bitbrainUrl, token: config.bitbrainToken, empresa, fetchFn: o.fetchFn ?? fetchDoBitbrain(config) });
+  return new ConectorML({ sellerId: conta.sellerId, cliente });
+}
+
+async function contaPor(db: DbOuTx, onde: SQL): Promise<string | null> {
+  const [r] = await db
+    .select({ conta: reclamacoesMl.conta })
+    .from(reclamacoesMl)
+    .where(and(onde, isNotNull(reclamacoesMl.conta)))
+    .orderBy(desc(reclamacoesMl.sincronizadaEm))
+    .limit(1);
+  return r?.conta ?? null;
+}
+
+export async function contaDaDevolucao(db: DbOuTx, devolucaoId: string): Promise<string | null> {
+  return ehUuid(devolucaoId) ? contaPor(db, eq(reclamacoesMl.devolucaoId, devolucaoId)) : null;
+}
+
+export async function contaDaReclamacao(db: DbOuTx, claimId: string): Promise<string | null> {
+  return contaPor(db, eq(reclamacoesMl.claimId, claimId));
+}
+
+/** obterConector do canal ML: modo api (ou falso) igual a hoje; modo bitbrain pela conta do contexto ou da devolução. */
+export async function criarConectorML(
+  db: DbOuTx,
+  contexto: ContextoConectorML = {},
+  o: { config?: ConfigML; fetchFn?: typeof fetch; agora?: () => Date } = {},
+): Promise<ConectorMercadoLivre | null> {
+  const config = o.config ?? configML();
+  if (config.modo !== 'bitbrain') return criarConectorMLDaConta(db, { ...o, config });
+  const conta = contexto.conta ?? (contexto.devolucaoId ? await contaDaDevolucao(db, contexto.devolucaoId) : null);
+  return conta ? obterConectorDaConta(db, conta, { config, fetchFn: o.fetchFn }) : null;
+}
+```
+
+`registro.ts`:
+
+```ts
+import { criarConectorML, type ContextoConectorML } from '@/modules/mercado-livre/fabrica-conector';
+
+/** Contrato §5.3. No modo bitbrain, o contexto diz a conta (ou a devolução de onde ela sai); no modo api ele é ignorado. */
+export async function obterConector(db: DbOuTx, canal: Canal, contexto: ContextoConectorML = {}): Promise<MarketplaceConnector | null> {
+  const substituto = substitutos.get(canal);
+  if (substituto) return substituto;
+  if (canal === 'MERCADO_LIVRE') return criarConectorML(db, contexto);
+  return null;
+}
+```
+
+- `modules/mercado-livre/conector.ts`: `obterConectorML(db: DbOuTx, contexto: ContextoConectorML = {})` repassa o `contexto` ao `obterConector`.
+- `modules/fila/tarefas.ts`: `'ml.sincronizar-reclamacao': { claimId: string; conta?: string }; // 3 (conta: empresa do Bitbrain no modo bitbrain, D1)`.
+- `worker/manipuladores/mercado-livre.ts`:
+
+```ts
+  'ml.sincronizar-reclamacao': async ({ claimId, conta }, ctx) => {
+    await sincronizarReclamacao(ctx.db, ctx.fila, claimId, ctx.agora, conta ?? null);
+  },
+```
+
+- `tarefas.ts`: no `sincronizarReclamacao`, só o começo e a chamada do `aplicarReclamacao` mudam:
+
+```ts
+/** Tarefa ml.sincronizar-reclamacao. No modo bitbrain, pela conta da tarefa ou da reclamação já gravada (§4.4); sem conta, nada. */
+export async function sincronizarReclamacao(
+  db: DbOuTx,
+  fila: Fila,
+  reclamacaoId: string,
+  agora: Date,
+  conta: string | null = null,
+): Promise<ResultadoAplicacao | null> {
+  const bitbrain = configML().modo === 'bitbrain';
+  const contaUsada = bitbrain ? (conta ?? (await contaDaReclamacao(db, reclamacaoId))) : null;
+  if (bitbrain && !contaUsada) return null;
+  const conector = await obterConectorML(db, { conta: contaUsada });
+  if (!conector) return null;
+  // (o try/catch, o garantirTextoMotivo e o marcarNotificacoesProcessadas de hoje, sem mudança)
+  const resultado = await aplicarReclamacao(db, dados, agora, fila, contaUsada);
+```
+
+- `fiscal/nota-venda.ts`, no `buscarNotaVendaNoCanal`: `const conector = await obterConector(db, 'MERCADO_LIVRE', { devolucaoId });`.
+
+- [ ] **Passo 4:** `npm run test:int && npm test && npm run typecheck && npm run lint && npm run build:scripts` → PASS. A suíte inteira de integração prova o modo `api` (registro, tarefas, fiscal).
+
+- [ ] **Passo 5: Commit**
+
+```bash
+git add src/modules/mercado-livre/fabrica-conector.ts src/conectores/marketplace/registro.ts src/modules/mercado-livre/conector.ts src/modules/mercado-livre/tarefas.ts src/modules/fila/tarefas.ts src/worker/manipuladores/mercado-livre.ts src/modules/fiscal/nota-venda.ts src/modules/mercado-livre/bitbrain.int.test.ts
+git commit -m "feat(bitbrain): conector por conta, sincronizacao com a conta e NF de venda pela conta da devolucao
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Tarefa 8: Varredura conta por conta, "Sincronizar agora" e `ml.renovar-token` sem efeito
+
+**Objetivo:** no modo `bitbrain`, `ml.varredura` percorre as contas marcadas e disponíveis. Cada conta enfileira `ml.sincronizar-reclamacao` com `{ claimId, conta }` e grava a sua `ultima_sincronizacao_em`. Uma conta que falha não para as outras; se todas falharem, a tarefa lança (D6). Também entram o "Sincronizar agora" (do lado do servidor) e o `ml.renovar-token` sem efeito no modo `bitbrain`.
+
+**Arquivos:**
+- Modificar: `src/modules/mercado-livre/tarefas.ts`
+- Criar: `src/modules/mercado-livre/varredura-bitbrain.int.test.ts`
+
+**Interfaces:**
+- Consome: `contasParaVarrer`, `marcarSincronizacaoBitbrain` e `marcarContaIndisponivel` (Tarefa 6); `obterConectorML(db, { conta })` (Tarefa 7); `ErroBitbrain` (Tarefa 2); `chaveTarefaReclamacao`; `JANELA_INICIAL_MS` e `SOBREPOSICAO_MS`.
+- Produz:
+  - `type ResultadoVarreduraConta = { empresa: string; enfileiradas: number } | { empresa: string; erro: string }`;
+  - `varrerContasBitbrain(db: DbOuTx, fila: Fila, agora: Date): Promise<{ enfileiradas: number; contas: ResultadoVarreduraConta[] }>`;
+  - `varrerReclamacoes`, que no modo `bitbrain` delega a `varrerContasBitbrain`;
+  - `pedirSincronizacaoAgora(fila: Fila): Promise<void>` (D12);
+  - `renovarTokensML`, que no modo `bitbrain` devolve `{ renovadas: 0, reconectar: 0 }` sem ler nada (D15).
+
+- [ ] **Passo 1: Testes que falham** (`varredura-bitbrain.int.test.ts`)
+
+```ts
+import { eq } from 'drizzle-orm';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EMPRESA_FALSA_FORA_DO_AR } from '@/conectores/marketplace/bitbrain/falso';
+import { ErroML } from '@/conectores/marketplace/mercadolivre/cliente';
+import { ConectorML } from '@/conectores/marketplace/mercadolivre/conector';
+import { contasBitbrain, contasMarketplace } from '@/db/schema';
+import { FilaMemoria } from '@/modules/fila/fila';
+import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
+import { contasFalsasTeste } from '../../../tests/helpers/fabricas-bitbrain';
+import { contaMLTeste, tokensTeste } from '../../../tests/helpers/fabricas-ml';
+import { usarModoBitbrain } from '../../../tests/helpers/modo-bitbrain';
+import { JANELA_INICIAL_MS, pedirSincronizacaoAgora, renovarTokensML, SOBREPOSICAO_MS, varrerReclamacoes } from './tarefas';
+
+const { db, sql } = criarDbTeste();
+const AGORA = new Date('2026-11-18T15:00:00Z');
+let fila: FilaMemoria;
+
+beforeEach(async () => {
+  await limparTabelas(sql);
+  fila = new FilaMemoria();
+  usarModoBitbrain();
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+afterAll(() => sql.end());
+
+const conta = async (empresa: string) => (await db.select().from(contasBitbrain).where(eq(contasBitbrain.empresa, empresa)))[0];
+const contaForaDoAr = () =>
+  db.insert(contasBitbrain).values({ empresa: EMPRESA_FALSA_FORA_DO_AR, nome: 'Loja Fora', sellerId: '323456789', recebeDevolucoes: true });
+
+describe('ml.varredura no modo bitbrain (§4.4, B6)', () => {
+  it('varre só as contas marcadas e disponíveis, enfileira com a conta e grava a última sincronização de cada uma', async () => {
+    await contasFalsasTeste(db, { recebe: ['loja-falsa-1'] });
+    expect(await varrerReclamacoes(db, fila, AGORA)).toMatchObject({ enfileiradas: 1, contas: [{ empresa: 'loja-falsa-1', enfileiradas: 1 }] });
+    expect(fila.enviadas.map((e) => [e.nome, e.dados])).toEqual([['ml.sincronizar-reclamacao', { claimId: '5200000001', conta: 'loja-falsa-1' }]]);
+    expect((await conta('loja-falsa-1')).ultimaSincronizacaoEm).toEqual(AGORA);
+    expect((await conta('loja-falsa-2')).ultimaSincronizacaoEm).toBeNull();
+  });
+
+  it('duas contas marcadas: cada uma enfileira as suas', async () => {
+    await contasFalsasTeste(db, { recebe: ['loja-falsa-1', 'loja-falsa-2'] });
+    await varrerReclamacoes(db, fila, AGORA);
+    expect(fila.enviadas.map((e) => e.dados)).toEqual([
+      { claimId: '5200000001', conta: 'loja-falsa-1' },
+      { claimId: '5500000002', conta: 'loja-falsa-2' },
+    ]);
+  });
+
+  it('a conta que falha não para a outra (D6); a que falhou não anda a última sincronização', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await contasFalsasTeste(db, { recebe: ['loja-falsa-1'] });
+    await contaForaDoAr();
+    const r = await varrerReclamacoes(db, fila, AGORA);
+    expect(r).toMatchObject({ enfileiradas: 1 });
+    expect(r?.contas).toEqual(
+      expect.arrayContaining([
+        { empresa: 'loja-falsa-1', enfileiradas: 1 },
+        expect.objectContaining({ empresa: EMPRESA_FALSA_FORA_DO_AR, erro: expect.any(String) }),
+      ]),
+    );
+    expect((await conta(EMPRESA_FALSA_FORA_DO_AR)).ultimaSincronizacaoEm).toBeNull();
+  });
+
+  it('todas as contas falham: a tarefa lança (nova tentativa e depois Falhas)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await contaForaDoAr();
+    await expect(varrerReclamacoes(db, fila, AGORA)).rejects.toBeInstanceOf(ErroML);
+  });
+
+  it('empresa que o Bitbrain não tem (404 da rota): fica indisponível e a varredura não lança', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await db.insert(contasBitbrain).values({ empresa: 'loja-sumida', nome: 'Loja Sumida', sellerId: '423456789', recebeDevolucoes: true });
+    await expect(varrerReclamacoes(db, fila, AGORA)).resolves.toMatchObject({ enfileiradas: 0 });
+    expect((await conta('loja-sumida')).disponivel).toBe(false);
+  });
+
+  it('primeira varredura olha 30 dias; depois, desde a última menos 10 min', async () => {
+    const espiao = vi.spyOn(ConectorML.prototype, 'reclamacoesAtualizadasDesde');
+    await contasFalsasTeste(db, { recebe: ['loja-falsa-1'] });
+    await varrerReclamacoes(db, fila, AGORA);
+    await varrerReclamacoes(db, fila, new Date(AGORA.getTime() + 15 * 60 * 1000));
+    expect(espiao.mock.calls.map(([desde]) => desde)).toEqual([new Date(AGORA.getTime() - JANELA_INICIAL_MS), new Date(AGORA.getTime() - SOBREPOSICAO_MS)]);
+  });
+
+  it('sem conta marcada: nada a fazer', async () => {
+    await contasFalsasTeste(db);
+    expect(await varrerReclamacoes(db, fila, AGORA)).toEqual({ enfileiradas: 0, contas: [] });
+  });
+});
+
+describe('"Sincronizar agora" e ml.renovar-token no modo bitbrain', () => {
+  it('pedirSincronizacaoAgora enfileira ml.varredura sem chave única (D12)', async () => {
+    await pedirSincronizacaoAgora(fila);
+    await pedirSincronizacaoAgora(fila);
+    expect(fila.enviadas).toEqual([
+      { nome: 'ml.varredura', dados: {} },
+      { nome: 'ml.varredura', dados: {} },
+    ]);
+  });
+
+  it('renovarTokensML não faz nada (não há token do ML deste lado, §4.2)', async () => {
+    await contaMLTeste(db, { tokens: tokensTeste({ expiraEm: new Date(AGORA.getTime() + 60_000).toISOString() }) });
+    expect(await renovarTokensML(db, AGORA)).toEqual({ renovadas: 0, reconectar: 0 });
+    expect(await db.select().from(contasMarketplace)).toHaveLength(1);
+  });
+});
+```
+
+- [ ] **Passo 2:** `npm run test:int -- src/modules/mercado-livre/varredura-bitbrain.int.test.ts` → FAIL.
+
+- [ ] **Passo 3: Implementação** (`tarefas.ts`; acrescente os imports de `ErroBitbrain` e de `contasParaVarrer`, `marcarContaIndisponivel` e `marcarSincronizacaoBitbrain`, de `./contas-bitbrain`)
+
+```ts
+export type ResultadoVarreduraConta = { empresa: string; enfileiradas: number } | { empresa: string; erro: string };
+
+/**
+ * ml.varredura no modo bitbrain (§4.4, D6): conta por conta. A que falha vai para o log e não para as outras;
+ * a "empresa sem conta do ML" fica indisponível; se nenhuma deu certo, lança (nova tentativa e depois Falhas).
+ */
+export async function varrerContasBitbrain(db: DbOuTx, fila: Fila, agora: Date): Promise<{ enfileiradas: number; contas: ResultadoVarreduraConta[] }> {
+  const resultados: ResultadoVarreduraConta[] = [];
+  let enfileiradas = 0;
+  let falha: unknown = null;
+  for (const conta of await contasParaVarrer(db)) {
+    const conector = await obterConectorML(db, { conta: conta.empresa });
+    if (!conector) continue;
+    const desde = conta.ultimaSincronizacaoEm
+      ? new Date(conta.ultimaSincronizacaoEm.getTime() - SOBREPOSICAO_MS)
+      : new Date(agora.getTime() - JANELA_INICIAL_MS);
+    try {
+      let n = 0;
+      for await (const r of conector.reclamacoesAtualizadasDesde(desde)) {
+        await fila.enviar(
+          'ml.sincronizar-reclamacao',
+          { claimId: r.reclamacaoId, conta: conta.empresa },
+          { chaveUnica: chaveTarefaReclamacao(r.reclamacaoId, agora) },
+        );
+        n += 1;
+      }
+      await marcarSincronizacaoBitbrain(db, conta.empresa, agora);
+      enfileiradas += n;
+      resultados.push({ empresa: conta.empresa, enfileiradas: n });
+    } catch (erro) {
+      logErroML('varredura da conta', erro, { empresa: conta.empresa });
+      resultados.push({ empresa: conta.empresa, erro: erro instanceof Error ? erro.message : String(erro) });
+      if (erro instanceof ErroBitbrain && erro.motivo === 'empresa') await marcarContaIndisponivel(db, conta.empresa);
+      else falha ??= erro;
+    }
+  }
+  if (falha && !resultados.some((r) => 'enfileiradas' in r)) throw falha;
+  return { enfileiradas, contas: resultados };
+}
+
+/** "Sincronizar agora" (Configurações › Mercado Livre): a varredura entra na fila na hora (D12: sem chave única). */
+export async function pedirSincronizacaoAgora(fila: Fila): Promise<void> {
+  await fila.enviar('ml.varredura', {});
+}
+```
+
+- Em `varrerReclamacoes`, na 1ª linha: `if (configML().modo === 'bitbrain') return varrerContasBitbrain(db, fila, agora);`. Ajuste o tipo de retorno para `Promise<{ enfileiradas: number; contas?: ResultadoVarreduraConta[] } | null>`.
+- Em `renovarTokensML`, depois de `const config = configML();`: `if (config.modo === 'bitbrain') return { renovadas: 0, reconectar: 0 };`.
+
+- [ ] **Passo 4:** `npm run test:int -- src/modules/mercado-livre && npm run typecheck && npm run lint` → PASS. O `tarefas.int.test.ts` atual (modo `api`) continua igual.
+
+- [ ] **Passo 5: Commit**
+
+```bash
+git add src/modules/mercado-livre/tarefas.ts src/modules/mercado-livre/varredura-bitbrain.int.test.ts
+git commit -m "feat(bitbrain): varredura conta por conta (a falha de uma nao para as outras), Sincronizar agora e renovar-token sem efeito
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
