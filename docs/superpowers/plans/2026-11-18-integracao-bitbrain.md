@@ -35,6 +35,13 @@
 - **Commits:** terminam com a linha `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Não faça push (o controlador faz).
 - **Comandos de conferência:** `npm test`, `npm run test:int`, `npm run typecheck`, `npm run lint`, `npm run build:scripts`, `npm run test:e2e`. A partir da Tarefa 11, também `npm run test:e2e:bitbrain`.
 - **Next 16:** antes de usar uma API do Next que não aparece no código atual, leia o guia em `node_modules/next/dist/docs/`. Siga os padrões que já existem: Server Action com `useEnvioFormulario`, `revalidatePath` e `redirect`.
+- **Rota do Bitbrain já construída (fatos de 18/11; conferem com o contrato):**
+  - URL de produção: `BITBRAIN_URL=https://app.bitbrain.com.br`.
+  - Falha de rede entre o Bitbrain e o ML → 504. JSON 2xx que não é objeto em `/orders`, `/shipments` e na v2 de `returns` → 502. Para o sistema, os dois são 5xx passageiros: `ErroML` e nova tentativa.
+  - Limite por empresa (`DEVOLUCOES_RPM`, padrão 120/min): acima dele, 429 com `Retry-After: 60`, sem chamar o ML (D20).
+  - As respostas vêm com `Cache-Control: no-store`. Não há nada a fazer: o servidor não guarda cache do `fetch`.
+  - O `/empresas` lista só as empresas do grupo dono com conta do ML conectada. Empresa desconhecida → 404 `{"erro":"empresa sem conta do ML"}`, que para o sistema é "conta indisponível", nunca erro a repetir (D21).
+  - A busca também aceita `player_user_id`/`player_role`, mas o sistema continua mandando `players.user_id`/`players.role`.
 
 ## Decisões do plano
 Onde a spec é omissa ou o código a contradiz, este plano escolhe a menor mudança que mantém a intenção:
@@ -42,7 +49,7 @@ Onde a spec é omissa ou o código a contradiz, este plano escolhe a menor mudan
 - **D2. Disponibilidade.** `contas_bitbrain` ganha a coluna `disponivel boolean not null default true`. A spec só diz "fica marcada como indisponível". A conta nunca é apagada.
 - **D3. Bitbrain falso sem variável nova.** Ele é escolhido por `BITBRAIN_URL=http://bitbrain-falso.invalid` (a constante `URL_BITBRAIN_FALSO`, em `src/lib/env.ts`). O `lerEnv` só aceita essa URL com `PERMITIR_FALSOS=1` (regra E1, em qualquer `NODE_ENV`). O `fetchDoBitbrain` confere de novo com `config.permitirFalsos`.
 - **D4. e2e do modo Bitbrain numa segunda configuração.** O e2e do modo Bitbrain roda no `playwright.bitbrain.config.ts` (`npm run test:e2e:bitbrain`), com os mesmos projetos `computador` e `celular`. Ele roda só os arquivos `tests/e2e/bitbrain-*.spec.ts`, e a configuração normal ignora esses arquivos. Motivo: o servidor e o worker leem o `ML_CONECTOR` ao subir, e o e2e do modo `api` precisa continuar rodando como hoje. As duas configurações são rodadas uma depois da outra, no mesmo banco de testes, que o `global-setup` limpa.
-- **D5. Recusa da rota ≠ recusa do ML.** Uma resposta do Bitbrain com corpo `{"erro": …}` vira `ErroBitbrain`, e nunca `ErroML`: 401 é `token`, 403 é `caminho` e 404 é `empresa`. Assim ela nunca cai na "recusa definitiva" silenciosa do ML. A tarefa lança, tenta 5 vezes e vai para Falhas com "Bitbrain recusou: confira o BITBRAIN_TOKEN". Os erros do ML repassados continuam `ErroML`, com as regras de hoje. Não existe adivinhação para "rota desligada" no `/ml`: isso aparece como erro da varredura, no alerta de sincronização parada e na mensagem do "Atualizar contas".
+- **D5. Recusa da rota ≠ recusa do ML.** Uma resposta do Bitbrain com corpo `{"erro": …}` vira `ErroBitbrain`, e nunca `ErroML`: 401 é `token`, 403 é `caminho` e 404 é `empresa`. Assim ela nunca cai na "recusa definitiva" silenciosa do ML. Com 401 ou 403, a tarefa lança, tenta 5 vezes e vai para Falhas com "Bitbrain recusou: confira o BITBRAIN_TOKEN". O 404 segue a D21. Os erros do ML repassados continuam `ErroML`, com as regras de hoje. Não existe adivinhação para "rota desligada" no `/ml`: isso aparece como erro da varredura, no alerta de sincronização parada e na mensagem do "Atualizar contas".
 - **D6. Varredura com várias contas.** A conta que falha vai para o log e é pulada. A `ultima_sincronizacao_em` dela não anda, e o alerta por conta aparece depois de 1 h. Se **todas** as contas marcadas falharem (Bitbrain fora do ar, token errado), a tarefa lança: tenta de novo e depois vai para Falhas. O 404 "empresa sem conta do ML" marca a conta como indisponível e não conta como falha.
 - **D7. Urgente.** `urgente` = alguma ação da loja com `mandatory: true` (A19). `acao_pendente` = essa ação (a de prazo mais curto) ou, sem ação obrigatória, a revisão `return_review_*` com prazo; nesse caso `urgente` é `false`. Sem a loja entre os `players`, os dois ficam nulos. O selo "Urgente · até dd/mm" usa `devolucoes.prazo_conferencia_canal`; sem prazo, o selo é só "Urgente". No cartão urgente, ele substitui o selo "Prazo dd/mm".
 - **D8. Gravação dos extras.**
@@ -78,6 +85,12 @@ Onde a spec é omissa ou o código a contradiz, este plano escolhe a menor mudan
   - Nenhum e2e atual usa os cenários 2 e 5.
 - **D18. Conta no cartão.** O cartão mostra a conta na linha de cima: "Mercado Livre · <nome da conta>", com reticências.
 - **D19. Interface congelada intacta.** `src/conectores/marketplace/tipos.ts` (E9) não muda. O contexto da conta entra pelo `registro.ts` e pelo `obterConectorML`.
+- **D20. `Retry-After` do Bitbrain até 60 s.** O limite da rota responde 429 com `Retry-After: 60`. O cliente do ML para de esperar em 30 s; o `criarClienteViaBitbrain` respeita até 60 s.
+  - O `esperaDo429` ganha o 4º argumento `maximoMs` (padrão 30 000), e o cliente do ML não muda.
+  - Continuam até 3 novas tentativas, como hoje. Na carga inicial (30 dias, várias contas), isso só deixa a fila mais lenta.
+- **D21. "Empresa sem conta do ML" nunca é repetida.** O 404 `{"erro": "empresa sem conta do ML"}` vira `ErroBitbrain` com o motivo `empresa`.
+  - Na varredura (D6) e na `ml.sincronizar-reclamacao`, a conta é marcada como indisponível e a tarefa termina sem erro, sem nova tentativa.
+  - O alerta "Conta do ML indisponível no Bitbrain" avisa o Gestor.
 
 ## Foco da revisão
 1. **Token nunca vaza:** nem no log, nem no `ErroML`/`ErroBitbrain`, nem no `job.output`, nem na mensagem do `lerEnv`. Testes nas Tarefas 1 e 2.
@@ -290,6 +303,7 @@ function modoDe(valor: string): ModoML {
 
 ```
 # Bitbrain (integração de 18/11): com ML_CONECTOR=bitbrain, as devoluções do ML chegam pelo Bitbrain (várias contas).
+# Produção: BITBRAIN_URL=https://app.bitbrain.com.br (o token é o DEVOLUCOES_TOKEN do Bitbrain).
 # O Bitbrain falso (BITBRAIN_URL=http://bitbrain-falso.invalid) só vale no e2e, com PERMITIR_FALSOS=1.
 BITBRAIN_URL=
 BITBRAIN_TOKEN=
@@ -300,7 +314,7 @@ BITBRAIN_TOKEN=
 ```
 # Bitbrain: ML_CONECTOR=bitbrain liga as devoluções pelo Bitbrain. BITBRAIN_URL começa com https://.
 # BITBRAIN_TOKEN = o mesmo DEVOLUCOES_TOKEN do .env do Bitbrain (openssl rand -hex 32). Nunca vai para o git.
-BITBRAIN_URL=
+BITBRAIN_URL=https://app.bitbrain.com.br
 BITBRAIN_TOKEN=
 ```
 
@@ -323,7 +337,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Arquivos:**
 - Criar: `src/conectores/marketplace/bitbrain/cliente.ts`, `src/conectores/marketplace/bitbrain/cliente.test.ts`
-- Modificar: `src/conectores/marketplace/mercadolivre/cliente.ts` (`ErroML.empresa`), `src/conectores/marketplace/mercadolivre/erros.ts` (`logErroML`), `src/conectores/marketplace/mercadolivre/erros.test.ts`
+- Modificar: `src/conectores/marketplace/mercadolivre/cliente.ts` (`ErroML.empresa` e o teto do `esperaDo429`), `src/conectores/marketplace/mercadolivre/cliente.test.ts`, `src/conectores/marketplace/mercadolivre/erros.ts` (`logErroML`), `src/conectores/marketplace/mercadolivre/erros.test.ts`
 
 **Interfaces:**
 - Consome: `ClienteML`, `ErroML`, `esperaDo429`, `NOVAS_TENTATIVAS_429` e `analisarJson`, de `mercadolivre/cliente.ts`.
@@ -338,12 +352,15 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `type EmpresaBitbrain = { empresa: string; nome: string; sellerId: string }`;
   - `listarEmpresasBitbrain(o: OpcoesBitbrain): Promise<EmpresaBitbrain[]>`.
 - Produz (`mercadolivre/cliente.ts`): `new ErroML(status, corpo, caminho, empresa: string | null = null)` e `readonly empresa: string | null`.
+- Produz (`mercadolivre/cliente.ts`, D20): `esperaDo429(tentativa, retryAfter, aleatorio, maximoMs = 30_000)`. O cliente do ML continua chamando sem o 4º argumento.
+- Produz (`bitbrain/cliente.ts`, D20): `ESPERA_MAXIMA_BITBRAIN_MS = 60_000`.
 
 - [ ] **Passo 1: Testes que falham** (`src/conectores/marketplace/bitbrain/cliente.test.ts`)
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
 import { ErroML } from '../mercadolivre/cliente';
+import { ehRecusaDefinitiva } from '../mercadolivre/erros';
 import { CAMINHO_EMPRESAS, CAMINHO_ML, criarClienteViaBitbrain, ErroBitbrain, ErroRespostaManual, listarEmpresasBitbrain } from './cliente';
 
 const URL_BB = 'https://bitbrain.exemplo.com.br/';
@@ -400,10 +417,20 @@ describe('criarClienteViaBitbrain (ClienteML pela rota do Bitbrain)', () => {
     expect(fetchFn).toHaveBeenCalledTimes(4);
   });
 
-  it('5xx do ML vira ErroML (a tarefa tenta de novo)', async () => {
-    const erro = await cliente(emSequencia(resposta({ message: 'internal' }, 500))).get('/x').catch((e: unknown) => e);
-    expect(erro).toBeInstanceOf(ErroML);
-    expect(erro).toMatchObject({ status: 500 });
+  it('5xx vira ErroML passageiro (a tarefa tenta de novo): 500, o 502 do JSON fora do formato e o 504 da rede do ML', async () => {
+    for (const status of [500, 502, 504]) {
+      const erro = await cliente(emSequencia(resposta({ message: 'falha' }, status))).get('/orders/1').catch((e: unknown) => e);
+      expect(erro).toBeInstanceOf(ErroML);
+      expect(erro).toMatchObject({ status });
+      expect(ehRecusaDefinitiva(erro)).toBe(false);
+    }
+  });
+
+  it('o limite da rota (429 com Retry-After: 60) espera os 60 s inteiros (D20)', async () => {
+    const fetchFn = emSequencia(resposta({ erro: 'limite de requisições' }, 429, { 'retry-after': '60' }), resposta({ ok: true }));
+    const esperar = vi.fn(async () => {});
+    expect(await cliente(fetchFn, { esperar }).get('/x')).toEqual({ ok: true });
+    expect(esperar.mock.calls).toEqual([[60_000]]);
   });
 
   it('recusa da própria rota ({"erro": ...}) vira ErroBitbrain, nunca ErroML (D5)', async () => {
@@ -491,6 +518,16 @@ it('erro pelo Bitbrain: o log tem só status, empresa e caminho, sem corpo (spec
 
 (Importe `vi` de `vitest` e `ErroML` de `./cliente` se o arquivo ainda não importar.)
 
+`src/conectores/marketplace/mercadolivre/cliente.test.ts`, no `describe` do `esperaDo429`:
+
+```ts
+  it('o teto do Retry-After é 30 s no ML e pode subir (60 s no Bitbrain, D20)', () => {
+    expect(esperaDo429(0, '60', () => 0)).toBe(30_000);
+    expect(esperaDo429(0, '60', () => 0, 60_000)).toBe(60_000);
+    expect(esperaDo429(0, '120', () => 0, 60_000)).toBe(60_000);
+  });
+```
+
 - [ ] **Passo 2:** `npm test -- src/conectores/marketplace` → FAIL (o módulo não existe e o `ErroML` não tem `empresa`).
 
 - [ ] **Passo 3: Implementação**
@@ -509,6 +546,15 @@ it('erro pelo Bitbrain: o log tem só status, empresa e caminho, sem corpo (spec
     this.caminho = caminho;
     this.empresa = empresa;
   }
+```
+
+Ainda em `mercadolivre/cliente.ts`, o `esperaDo429` ganha o teto como 4º argumento (D20). O cliente do ML continua chamando sem ele:
+
+```ts
+export function esperaDo429(tentativa: number, retryAfter: string | null, aleatorio: () => number, maximoMs = 30_000): number {
+  if (retryAfter !== null && /^\d+$/.test(retryAfter.trim())) return Math.min(Number(retryAfter) * 1000, maximoMs);
+  return Math.min(500 * 2 ** tentativa, 8_000) + Math.floor(aleatorio() * 250);
+}
 ```
 
 `mercadolivre/erros.ts`:
@@ -537,6 +583,8 @@ export const CAMINHO_EMPRESAS = '/integracao/devolucoes/empresas';
 export const CAMINHO_ML = '/integracao/devolucoes/ml';
 /** Ao abrir Configurações › Mercado Livre, a lista de contas não pode segurar a tela por muito tempo (D13). */
 export const TIMEOUT_EMPRESAS_MS = 5_000;
+/** D20: o limite da rota (DEVOLUCOES_RPM) responde 429 com Retry-After: 60; o cliente do ML para em 30 s. */
+export const ESPERA_MAXIMA_BITBRAIN_MS = 60_000;
 
 export const MENSAGEM_RESPOSTA_MANUAL = 'No modo Bitbrain o sistema não escreve no Mercado Livre: responda no ML à mão.';
 
@@ -622,7 +670,7 @@ export function criarClienteViaBitbrain(p: OpcoesClienteBitbrain): ClienteML {
       const resposta = await fetchFn(url, { headers: cabecalhos(p.token), signal: AbortSignal.timeout(timeoutMs) });
       const texto = await resposta.text();
       if (resposta.status === 429 && tentativa < NOVAS_TENTATIVAS_429) {
-        await esperar(esperaDo429(tentativa, resposta.headers.get('retry-after'), aleatorio));
+        await esperar(esperaDo429(tentativa, resposta.headers.get('retry-after'), aleatorio, ESPERA_MAXIMA_BITBRAIN_MS));
         continue;
       }
       if (resposta.ok) return { status: resposta.status, texto };
@@ -1219,7 +1267,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `API_ML`.
 - Produz:
   - `EMPRESAS_FALSAS: readonly { empresa: string; nome: string; seller_id: string }[]`: `loja-falsa-1` (seller `123456789` = `vendedorFalso()`) e `loja-falsa-2` (seller `223456789`);
-  - `EMPRESA_FALSA_FORA_DO_AR = 'loja-falsa-fora'`: fica fora do `/empresas` e responde 500 a todo `/ml`;
+  - `EMPRESA_FALSA_FORA_DO_AR = 'loja-falsa-fora'`: fica fora do `/empresas` e responde 504 a todo `/ml` (como a falha de rede entre o Bitbrain e o ML);
   - `RECLAMACOES_FALSAS_POR_EMPRESA: Record<string, string[]>`: `loja-falsa-1` tem `['5200000001']` (cenário 2: urgente, reputação, Full) e `loja-falsa-2` tem `['5500000002']` (cenário 5: triagem). Ids fixos, porque os bancos de teste começam vazios;
   - `caminhoPermitido(alvo: URL, sellerId: string): boolean`;
   - `semDadosPessoais(caminho: string, corpo: unknown): unknown`;
@@ -1298,11 +1346,11 @@ describe('Bitbrain falso (D3)', () => {
     await expect(c.get(`${busca}&status=opened`)).rejects.toBeInstanceOf(ErroBitbrain);
   });
 
-  it('empresa desconhecida: 404 ErroBitbrain empresa; empresa fora do ar: ErroML 500', async () => {
+  it('empresa desconhecida: 404 ErroBitbrain empresa; empresa fora do ar: ErroML 504 (rede do ML)', async () => {
     await expect(cliente('nao-existe').get('/orders/1')).rejects.toMatchObject({ motivo: 'empresa' });
     const erro = await cliente(EMPRESA_FALSA_FORA_DO_AR).get('/orders/1').catch((e: unknown) => e);
     expect(erro).toBeInstanceOf(ErroML);
-    expect(erro).toMatchObject({ status: 500 });
+    expect(erro).toMatchObject({ status: 504 });
   });
 });
 
@@ -1363,7 +1411,7 @@ export const EMPRESAS_FALSAS = [
   { empresa: 'loja-falsa-1', nome: 'Loja Falsa 1', seller_id: '123456789' },
   { empresa: 'loja-falsa-2', nome: 'Loja Falsa 2', seller_id: '223456789' },
 ] as const;
-/** Fica fora do /empresas; todo /ml dela dá 500 ("uma conta que falha não para as outras", D6). */
+/** Fica fora do /empresas; todo /ml dela dá 504, como a falha de rede entre o Bitbrain e o ML ("uma conta que falha não para as outras", D6). */
 export const EMPRESA_FALSA_FORA_DO_AR = 'loja-falsa-fora';
 /** O que a busca de cada empresa acha: ids fixos dos cenários do ML falso (5<c><seq>). Os bancos de teste começam vazios. */
 export const RECLAMACOES_FALSAS_POR_EMPRESA: Record<string, string[]> = {
@@ -1468,7 +1516,7 @@ export const fetchBitbrainFalso: typeof fetch = async (entrada, init) => {
   if (url.pathname !== CAMINHO_ML) return respostaJson({ detail: 'Not Found' }, 404);
   const empresa = url.searchParams.get('empresa') ?? '';
   const caminho = url.searchParams.get('caminho') ?? '';
-  if (empresa === EMPRESA_FALSA_FORA_DO_AR) return respostaJson({ message: 'internal error', error: 'internal_error', status: 500 }, 500);
+  if (empresa === EMPRESA_FALSA_FORA_DO_AR) return respostaJson({ message: 'gateway timeout', error: 'gateway_timeout', status: 504 }, 504);
   const dados = EMPRESAS_FALSAS.find((e) => e.empresa === empresa);
   if (!dados || !caminho.startsWith('/')) return respostaJson({ erro: 'empresa sem conta do ML' }, 404);
   const alvo = new URL(caminho, API_ML);
@@ -2075,7 +2123,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Criar: `src/modules/mercado-livre/bitbrain.int.test.ts`
 
 **Interfaces:**
-- Consome: `criarClienteViaBitbrain` e `ErroBitbrain` (Tarefa 2); `fetchDoBitbrain` (Tarefa 6); `contasBitbrain` e `reclamacoesMl.conta` (Tarefa 5); `aplicarReclamacao(…, conta)` (Tarefa 5); `usarModoBitbrain` e `contasFalsasTeste` (Tarefa 6).
+- Consome: `criarClienteViaBitbrain` e `ErroBitbrain` (Tarefa 2); `fetchDoBitbrain` e `marcarContaIndisponivel` (Tarefa 6, D21); `contasBitbrain` e `reclamacoesMl.conta` (Tarefa 5); `aplicarReclamacao(…, conta)` (Tarefa 5); `usarModoBitbrain` e `contasFalsasTeste` (Tarefa 6).
 - Produz (`fabrica-conector.ts`):
   - `type ContextoConectorML = { conta?: string | null; devolucaoId?: string | null }`;
   - `obterConectorDaConta(db: DbOuTx, empresa: string, o?: { config?: ConfigML; fetchFn?: typeof fetch }): Promise<ConectorMercadoLivre | null>`, que devolve null se a conta não existe em `contas_bitbrain`;
@@ -2159,6 +2207,14 @@ describe('ml.sincronizar-reclamacao com a conta (D1)', () => {
     expect((erro as Error).message).toContain('Bitbrain recusou: confira o BITBRAIN_TOKEN');
     expect(JSON.stringify(erro)).not.toContain('token-errado-secreto');
     expect((erro as Error).message).not.toContain('token-errado-secreto');
+  });
+
+  it('empresa que o Bitbrain não tem (404 da rota): a conta fica indisponível e a tarefa termina sem erro (D21)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await db.insert(contasBitbrain).values({ empresa: 'loja-sumida', nome: 'Loja Sumida', sellerId: '423456789', recebeDevolucoes: true });
+    expect(await sincronizarReclamacao(db, fila, '5200000001', AGORA, 'loja-sumida')).toBeNull();
+    const [conta] = await db.select().from(contasBitbrain).where(eq(contasBitbrain.empresa, 'loja-sumida'));
+    expect(conta.disponivel).toBe(false);
   });
 });
 
@@ -2284,10 +2340,27 @@ export async function sincronizarReclamacao(
   if (bitbrain && !contaUsada) return null;
   const conector = await obterConectorML(db, { conta: contaUsada });
   if (!conector) return null;
-  // (o try/catch, o garantirTextoMotivo e o marcarNotificacoesProcessadas de hoje, sem mudança)
+  let dados: DadosDevolucaoML;
+  try {
+    dados = await conector.obterReclamacao(reclamacaoId);
+  } catch (erro) {
+    if (erro instanceof ErroContaReconectar) return null;
+    // D21: "empresa sem conta do ML" não melhora tentando de novo: a conta fica indisponível e o Gestor é avisado.
+    if (erro instanceof ErroBitbrain && erro.motivo === 'empresa' && contaUsada) {
+      logErroML('sincronizar reclamação', erro, { reclamacaoId });
+      await marcarContaIndisponivel(db, contaUsada);
+      return null;
+    }
+    if (!ehRecusaDefinitiva(erro)) throw erro;
+    logErroML('sincronizar reclamação', erro, { reclamacaoId });
+    await marcarNotificacoesProcessadas(db, reclamacaoId, agora);
+    return null;
+  }
+  // (o garantirTextoMotivo e o marcarNotificacoesProcessadas de hoje, sem mudança)
   const resultado = await aplicarReclamacao(db, dados, agora, fila, contaUsada);
 ```
 
+- No `tarefas.ts`, importe `ErroBitbrain` (`@/conectores/marketplace/bitbrain/cliente`) e `marcarContaIndisponivel` (`./contas-bitbrain`).
 - `fiscal/nota-venda.ts`, no `buscarNotaVendaNoCanal`: `const conector = await obterConector(db, 'MERCADO_LIVRE', { devolucaoId });`.
 
 - [ ] **Passo 4:** `npm run test:int && npm test && npm run typecheck && npm run lint && npm run build:scripts` → PASS. A suíte inteira de integração prova o modo `api` (registro, tarefas, fiscal).
@@ -4083,13 +4156,12 @@ describe('OkParaResponder (extra, §4.6)', () => {
     render(<OkParaResponder itens={ITENS} acao={acao} />);
     fireEvent.click(screen.getByRole('button', { name: 'Marcar como respondido' }));
     fireEvent.click(screen.getByRole('button', { name: 'Toque de novo para marcar como respondido' }));
-    expect((await screen.findByRole('status', { name: '' })).textContent).toContain('"OK" marcado como respondido no ML.');
+    // O BotaoConfirmar também tem um role="status" (vazio): procure pelo texto e confira o papel.
+    expect((await screen.findByText('"OK" marcado como respondido no ML.')).getAttribute('role')).toBe('status');
     expect((acao.mock.calls[0] as unknown as [EstadoOk, FormData])[1].get('devolucao')).toBe(ITENS[0].devolucaoId);
   });
 });
 ```
-
-(Se `findByRole('status', { name: '' })` encontrar também o `role="status"` do `BotaoConfirmar`, procure pelo texto com `screen.findByText('"OK" marcado como respondido no ML.')` e confira que o `role` é `status`.)
 
 `tests/e2e/apoio-bitbrain.ts`, acréscimos:
 
@@ -4539,7 +4611,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Passo 1: `README.md`.** Na tabela "Andamento", antes da linha "Ligação das contas reais", acrescente:
 
 ```
-| Integração pelo Bitbrain | Devoluções do ML pelo Bitbrain (várias contas, marcadas pelo Gestor), 5 extras do ML (urgente, reputação, Full, triagem e dinheiro) e respostas ao ML à mão | Pronta na branch `integracao-bitbrain`. Falta a sessão do Bitbrain publicar a rota e ligar na VPS (`ML_CONECTOR=bitbrain`) |
+| Integração pelo Bitbrain | Devoluções do ML pelo Bitbrain (várias contas, marcadas pelo Gestor), 5 extras do ML (urgente, reputação, Full, triagem e dinheiro) e respostas ao ML à mão | Pronta na branch `integracao-bitbrain`. A rota do Bitbrain já existe (`https://app.bitbrain.com.br`); falta ligar na VPS (`ML_CONECTOR=bitbrain`) |
 ```
 
 - [ ] **Passo 2: `docs/superpowers/andamento.md`.**
@@ -4553,7 +4625,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
     - respostas ao ML à mão: "Responda no ML" e "OK para responder no ML".
   - **Testes:** o e2e do modo Bitbrain roda à parte, com `npm run test:e2e:bitbrain`.
   - **Falta:**
-    - a sessão do Bitbrain publicar a rota (contrato em [../integracao/bitbrain-rota-devolucoes.md](../integracao/bitbrain-rota-devolucoes.md), com o adendo do `logistic.type`);
+    - a rota do Bitbrain já foi construída e confere com o contrato (base `https://app.bitbrain.com.br`, limite `DEVOLUCOES_RPM` de 120/min por empresa). Falta mandar a ela o adendo do `logistic.type` ([../integracao/bitbrain-rota-devolucoes.md](../integracao/bitbrain-rota-devolucoes.md)) e publicá-la, se ainda não estiver no ar;
     - ligar na VPS, conforme `docs/operacao/deploy-vps.md`, seção "Ligar o modo Bitbrain";
     - a integração no `main`, pelo controlador.
 - Em "Próximos passos", acrescente como 1º item: "Ligar o modo Bitbrain na VPS depois que o Bitbrain publicar a rota; testar com uma conta marcada e conferir A16–A19 com dados reais".
@@ -4569,13 +4641,13 @@ Pré-requisito: a sessão do Bitbrain publicou a rota (`docs/integracao/bitbrain
 
 1. Confira a rota, sem gravar o token no histórico:
    ```bash
-   read -rs TOKEN && curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" https://<domínio do Bitbrain>/integracao/devolucoes/empresas; unset TOKEN
+   read -rs TOKEN && curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" https://app.bitbrain.com.br/integracao/devolucoes/empresas; unset TOKEN
    ```
-   Esperado: `200`. `401` = token diferente; `404` = rota desligada.
+   Esperado: `200`. `401` = token diferente; `404` = rota desligada; `429` = limite da rota (`DEVOLUCOES_RPM`): espere 1 minuto.
 2. No `.env.producao` do sistema (fora do git), troque ou acrescente:
    ```
    ML_CONECTOR=bitbrain
-   BITBRAIN_URL=https://<domínio do Bitbrain>
+   BITBRAIN_URL=https://app.bitbrain.com.br
    BITBRAIN_TOKEN=<o mesmo DEVOLUCOES_TOKEN>
    ```
 3. Suba de novo só o web e o worker: `dc up -d web worker`. Confira `dc ps` (healthy) e `curl -s https://<domínio do sistema>/api/saude`. O log nunca mostra o token.
