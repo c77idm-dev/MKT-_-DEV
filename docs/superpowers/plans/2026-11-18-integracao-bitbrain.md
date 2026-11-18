@@ -3922,3 +3922,713 @@ git commit -m "feat(ml): selos Urgente, Afeta reputacao e Full, conta no cartao,
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
+### Tarefa 13: Contestações ML no modo `bitbrain` ("Responda no ML", "OK para responder no ML" e o alerta)
+
+**Objetivo:** no modo `bitbrain`:
+- o detalhe da contestação troca o "Enviar ao ML" pelo bloco "Responda no ML": o motivo (código SRF e texto), a mensagem com "Copiar", as fotos para baixar uma a uma e "Marcar como respondida" (extra);
+- a lista `/contestacoes` ganha no topo a seção "OK para responder no ML" (extra), com "Marcar como respondido";
+- o alerta "Respostas para dar no ML" leva a essa tela.
+
+No modo `api`, as telas ficam como hoje.
+
+**Arquivos:**
+- Modificar: `src/app/(app)/contestacoes/[id]/page.tsx`, `src/app/(app)/contestacoes/[id]/acoes.ts`, `src/app/(app)/contestacoes/page.tsx`
+- Criar:
+  - `src/components/mercado-livre/BotaoCopiar.tsx` e `BotaoCopiar.test.tsx`;
+  - `src/app/(app)/contestacoes/[id]/RespondaNoML.tsx` e `RespondaNoML.test.tsx`;
+  - `src/app/(app)/contestacoes/OkParaResponder.tsx` e `OkParaResponder.test.tsx`;
+  - `src/app/(app)/contestacoes/acoes.ts` e `src/app/(app)/contestacoes/tipos.ts`;
+  - `tests/e2e/bitbrain-respostas.spec.ts`.
+- Modificar (apoio do e2e): `tests/e2e/apoio-bitbrain.ts`
+
+**Interfaces:**
+- Consome:
+  - `marcarContestacaoRespondida`, `listarOkPendentes`, `marcarOkRespondido` e `OkPendente` (Tarefa 9);
+  - `ErroContestacao` e `DetalheContestacao.conta` (Tarefa 9);
+  - o alerta `respostas_ml` (Tarefa 10);
+  - `configBitbrainE2E` (Tarefa 11) e `contasFalsasTeste` (Tarefa 6);
+  - `contestacaoPronta` (`apoio-ml.ts`) e `devolucaoMLConferidaTeste` (`fabricas-ml.ts`).
+- Produz:
+  - `BotaoCopiar({ texto, rotulo?, rotuloCopiado? })`: componente de cliente; o aviso fica em `role="status"`;
+  - `RespondaNoML({ acao, codigo, conta, motivo, rotuloMotivo, mensagem, fotos })`: componente de cliente;
+  - `marcarRespondidaAcao(id: string, _anterior: EstadoEnvio, _dados: FormData): Promise<EstadoEnvio>`: o `id` chega ligado por `bind` e é validado com `z.uuid()`. Com sucesso, vai a `redirect(/contestacoes/{id}?ok=respondida)`;
+  - `type OkVista = { devolucaoId: string; codigo: string; pedidos: string; reclamacaoId: string; conta: string | null; selo: DadosSelo | null }`, `type EstadoOk = { erros: string[]; ok: string | null }` e `ESTADO_INICIAL_OK`, em `contestacoes/tipos.ts`;
+  - `marcarOkRespondidoAcao(_anterior: EstadoOk, dados: FormData): Promise<EstadoOk>`: o campo `devolucao` é validado com `z.uuid()`;
+  - `OkParaResponder({ itens, acao })`: componente de cliente;
+  - no e2e: `okPendentePronto(): Promise<{ id: string; codigo: string }>` e `fotoProntaSemArquivo(devolucaoId: string): Promise<void>`.
+
+- [ ] **Passo 1: Testes que falham**
+
+`BotaoCopiar.test.tsx`:
+
+```tsx
+// @vitest-environment jsdom
+import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BotaoCopiar } from './BotaoCopiar';
+
+function areaDeTransferencia(writeText: (t: string) => Promise<void>) {
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+}
+afterEach(() => vi.restoreAllMocks());
+
+describe('BotaoCopiar', () => {
+  it('copia o texto e avisa em role=status', async () => {
+    const writeText = vi.fn(async () => {});
+    areaDeTransferencia(writeText);
+    render(<BotaoCopiar texto="Mensagem para o ML" rotuloCopiado="Mensagem copiada." />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar' }));
+    expect((await screen.findByRole('status')).textContent).toBe('Mensagem copiada.');
+    expect(writeText).toHaveBeenCalledWith('Mensagem para o ML');
+  });
+
+  it('sem permissão para copiar: explica como copiar à mão', async () => {
+    areaDeTransferencia(async () => {
+      throw new Error('negado');
+    });
+    render(<BotaoCopiar texto="x" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar' }));
+    expect((await screen.findByText(/Toque e segure na mensagem para copiar/)).getAttribute('role')).toBe('status');
+  });
+});
+```
+
+`RespondaNoML.test.tsx`:
+
+```tsx
+// @vitest-environment jsdom
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type { EstadoEnvio } from './acoes';
+import { RespondaNoML } from './RespondaNoML';
+
+const FOTOS = [
+  { id: 'f1', rotulo: 'Foto 1', url: '/api/arquivos?c=1' },
+  { id: 'f3', rotulo: 'Foto 3 · unidade 1', url: null },
+];
+const props = {
+  codigo: 'DEV-000001',
+  conta: 'Loja 1',
+  motivo: 'SRF2' as const,
+  rotuloMotivo: 'Produto avariado',
+  mensagem: 'Na conferência da devolução DEV-000001 encontramos:\n- Unidade 1: avariado.',
+  fotos: FOTOS,
+};
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = () => undefined;
+});
+
+describe('RespondaNoML (§4.6)', () => {
+  it('mostra o motivo, a mensagem, a conta, "Copiar" e só as fotos prontas, para baixar', () => {
+    render(<RespondaNoML acao={vi.fn()} {...props} />);
+    expect(screen.getByRole('heading', { name: 'Responda no ML' })).toBeTruthy();
+    expect(screen.getByText('SRF2')).toBeTruthy();
+    expect(screen.getByText(/Produto avariado/)).toBeTruthy();
+    expect(screen.getByText(/na conta Loja 1/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copiar' })).toBeTruthy();
+    const baixar = screen.getAllByRole('link', { name: /^Baixar/ });
+    expect(baixar).toHaveLength(1);
+    expect(baixar[0].getAttribute('download')).toBe('DEV-000001-1.jpg');
+    expect(baixar[0].getAttribute('href')).toBe('/api/arquivos?c=1');
+  });
+
+  it('"Marcar como respondida" pede o 2º toque e chama a ação', () => {
+    const acao = vi.fn(async (): Promise<EstadoEnvio> => ({ erros: [] }));
+    render(<RespondaNoML acao={acao} {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar como respondida' }));
+    expect(acao).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Toque de novo para marcar como respondida' }));
+    expect(acao).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+`OkParaResponder.test.tsx`:
+
+```tsx
+// @vitest-environment jsdom
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { OkParaResponder } from './OkParaResponder';
+import type { EstadoOk, OkVista } from './tipos';
+
+const ITENS: OkVista[] = [
+  {
+    devolucaoId: '11111111-1111-4111-8111-111111111111',
+    codigo: 'DEV-000007',
+    pedidos: '2000000200000001',
+    reclamacaoId: '5200000001',
+    conta: 'Loja 1',
+    selo: { texto: 'Prazo 20/11/2026 23:59', tom: 'atencao' },
+  },
+];
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = () => undefined;
+});
+
+describe('OkParaResponder (extra, §4.6)', () => {
+  it('um cartão por devolução, com pedido, reclamação, conta e prazo; vazio tem aviso', () => {
+    const { unmount } = render(<OkParaResponder itens={ITENS} acao={vi.fn()} />);
+    const cartao = screen.getByRole('article', { name: 'DEV-000007' });
+    for (const texto of ['2000000200000001', '5200000001', 'Loja 1', 'Prazo 20/11/2026 23:59']) expect(cartao.textContent).toContain(texto);
+    unmount();
+    render(<OkParaResponder itens={[]} acao={vi.fn()} />);
+    expect(screen.getByText('Nenhum "OK" para responder no ML.')).toBeTruthy();
+  });
+
+  it('2 toques em "Marcar como respondido" mandam a devolução; a resposta aparece em role=status', async () => {
+    const acao = vi.fn(async (): Promise<EstadoOk> => ({ erros: [], ok: '"OK" marcado como respondido no ML.' }));
+    render(<OkParaResponder itens={ITENS} acao={acao} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar como respondido' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Toque de novo para marcar como respondido' }));
+    expect((await screen.findByRole('status', { name: '' })).textContent).toContain('"OK" marcado como respondido no ML.');
+    expect((acao.mock.calls[0] as unknown as [EstadoOk, FormData])[1].get('devolucao')).toBe(ITENS[0].devolucaoId);
+  });
+});
+```
+
+(Se `findByRole('status', { name: '' })` encontrar também o `role="status"` do `BotaoConfirmar`, procure pelo texto com `screen.findByText('"OK" marcado como respondido no ML.')` e confira que o `role` é `status`.)
+
+`tests/e2e/apoio-bitbrain.ts`, acréscimos:
+
+```ts
+import { randomUUID } from 'node:crypto';
+import { evidencias, reclamacoesMl } from '../../src/db/schema';
+import { processarResultadoConferencia } from '../../src/modules/mercado-livre/resultado';
+import { devolucaoMLConferidaTeste } from '../helpers/fabricas-ml';
+
+/** Devolução do ML conferida sem problema, da Loja Falsa 1, com o "OK" pendente (modo bitbrain, §4.6). */
+export async function okPendentePronto(): Promise<{ id: string; codigo: string }> {
+  return comBanco(async (db) => {
+    await contasFalsasTeste(db);
+    const d = await devolucaoMLConferidaTeste(db, { itens: [{ sku: 'MLF-FONE-01', destino: 'BOM' }] });
+    const reclamacaoId = d.externa?.reclamacaoId;
+    if (!reclamacaoId) throw new Error('devolução sem reclamação');
+    await db.insert(reclamacoesMl).values({ claimId: reclamacaoId, devolucaoId: d.id, conta: 'loja-falsa-1', sincronizadaEm: new Date() });
+    await processarResultadoConferencia(db, d.id, new Date(), configBitbrainE2E());
+    return { id: d.id, codigo: d.codigo };
+  });
+}
+
+/** Foto PRONTA registrada no banco (sem o arquivo no disco): basta para a tela montar o link "Baixar". */
+export async function fotoProntaSemArquivo(devolucaoId: string): Promise<void> {
+  await comBanco(async (db) => {
+    const id = randomUUID();
+    await db.insert(evidencias).values({
+      id,
+      devolucaoId,
+      itemId: null,
+      tipo: 'FOTO_1_ETIQUETA',
+      tipoConteudo: 'image/jpeg',
+      caminho: `evidencias/${devolucaoId}/${id}.jpg`,
+      provedor: 'disco',
+      tamanhoOriginal: 10,
+      tamanho: 10,
+      sha256Original: '0'.repeat(64),
+      sha256Final: '0'.repeat(64),
+      situacaoProcessamento: 'PRONTA',
+      idCliente: randomUUID(),
+      processadoEm: new Date(),
+    });
+  });
+}
+```
+
+`tests/e2e/bitbrain-respostas.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { eq } from 'drizzle-orm';
+import { devolucoes } from '../../src/db/schema';
+import { comBanco, entrarComo, semRolagemLateral } from './apoio';
+import { fotoProntaSemArquivo, okPendentePronto } from './apoio-bitbrain';
+import { alvosDeToque44, contestacaoPronta } from './apoio-ml';
+import { USUARIOS_E2E } from './dados';
+
+test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+
+test('contestação no modo Bitbrain: "Responda no ML", Copiar, fotos para baixar e "Marcar como respondida"', async ({ page }) => {
+  const { id, codigo } = await contestacaoPronta({ cenario: 1, motivo: 'AVARIADO' });
+  const devolucaoId = await comBanco(async (db) => (await db.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.codigo, codigo)))[0].id);
+  await fotoProntaSemArquivo(devolucaoId);
+
+  await entrarComo(page, USUARIOS_E2E.gestor);
+  await page.goto(`/contestacoes/${id}`);
+  const bloco = page.locator('section[aria-labelledby="titulo-responda"]');
+  await expect(bloco.getByRole('heading', { name: 'Responda no ML' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enviar ao ML' })).toHaveCount(0);
+  await expect(bloco.getByText('SRF2', { exact: true })).toBeVisible();
+  await expect(bloco.getByText(/Produto avariado/)).toBeVisible();
+
+  await bloco.getByRole('button', { name: 'Copiar' }).click();
+  await expect(bloco.getByRole('status').filter({ hasText: 'Mensagem copiada.' })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(`Na conferência da devolução ${codigo}`);
+  await expect(bloco.getByRole('link', { name: /^Baixar/ }).first()).toHaveAttribute('download', `${codigo}-1.jpg`);
+  await semRolagemLateral(page);
+  await alvosDeToque44(bloco);
+
+  await bloco.getByRole('button', { name: 'Marcar como respondida' }).click();
+  await bloco.getByRole('button', { name: 'Toque de novo para marcar como respondida' }).click();
+  await expect(page).toHaveURL(/\?ok=respondida$/);
+  await expect(page.getByRole('status').filter({ hasText: 'Contestação marcada como respondida no ML.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Respondida no ML' })).toBeVisible();
+  await semRolagemLateral(page);
+});
+
+test('"OK para responder no ML": a devolução conferida sem problema aparece e sai ao marcar', async ({ page }) => {
+  const { codigo } = await okPendentePronto();
+  await entrarComo(page, USUARIOS_E2E.gestor);
+  await page.goto('/contestacoes');
+  const secao = page.locator('section[aria-labelledby="titulo-ok-ml"]');
+  await expect(secao.getByRole('heading', { name: /OK para responder no ML/ })).toBeVisible();
+  const cartao = secao.getByRole('article', { name: codigo });
+  await expect(cartao.getByText('Loja Falsa 1')).toBeVisible();
+  await semRolagemLateral(page);
+  await alvosDeToque44(secao);
+
+  await cartao.getByRole('button', { name: 'Marcar como respondido' }).click();
+  await cartao.getByRole('button', { name: 'Toque de novo para marcar como respondido' }).click();
+  await expect(page.getByRole('status').filter({ hasText: '"OK" marcado como respondido no ML.' })).toBeVisible();
+  await expect(secao.getByRole('article', { name: codigo })).toHaveCount(0);
+});
+
+test('alerta "Respostas para dar no ML" leva às Contestações ML', async ({ page }) => {
+  await okPendentePronto();
+  await entrarComo(page, USUARIOS_E2E.gestor);
+  await page.goto('/fluxo/alertas');
+  const alerta = page.getByRole('link', { name: /Respostas para dar no ML/ });
+  await expect(alerta).toBeVisible();
+  await semRolagemLateral(page);
+  await alerta.click();
+  await expect(page).toHaveURL(/\/contestacoes$/);
+  await expect(page.getByRole('heading', { name: /OK para responder no ML/ })).toBeVisible();
+});
+```
+
+- [ ] **Passo 2:** `npm test -- src/components/mercado-livre "src/app/(app)/contestacoes"` → FAIL.
+
+- [ ] **Passo 3: Implementação**
+
+`src/components/mercado-livre/BotaoCopiar.tsx`:
+
+```tsx
+'use client';
+
+import { useState } from 'react';
+import { BOTAO_SECUNDARIO } from '../estilos';
+
+/** "Copiar" da mensagem para colar no ML (§4.6). O aviso é anunciado (role=status); sem a área de transferência, explica como copiar. */
+export function BotaoCopiar({ texto, rotulo = 'Copiar', rotuloCopiado = 'Copiado.' }: { texto: string; rotulo?: string; rotuloCopiado?: string }) {
+  const [aviso, setAviso] = useState('');
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setAviso(rotuloCopiado);
+    } catch {
+      setAviso('Não deu para copiar aqui. Toque e segure na mensagem para copiar.');
+    }
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <button type="button" onClick={copiar} className={`${BOTAO_SECUNDARIO} w-full md:w-auto`}>
+        {rotulo}
+      </button>
+      <span role="status" className="text-sm text-texto-2">
+        {aviso}
+      </span>
+    </div>
+  );
+}
+```
+
+`src/app/(app)/contestacoes/[id]/RespondaNoML.tsx`:
+
+```tsx
+'use client';
+
+import { ListaErros } from '@/components/ListaErros';
+import { BOTAO_PRIMARIO, CARTAO, ROTULO } from '@/components/estilos';
+import { BotaoConfirmar } from '@/components/mercado-livre/BotaoConfirmar';
+import { BotaoCopiar } from '@/components/mercado-livre/BotaoCopiar';
+import { Dado } from '@/components/mercado-livre/Dado';
+import { useEnvioFormulario } from '@/components/useEnvioFormulario';
+import type { MotivoCanal } from '@/conectores/marketplace/tipos';
+import type { EstadoEnvio } from './acoes';
+
+type Foto = { id: string; rotulo: string; url: string | null };
+type Props = {
+  acao: (anterior: EstadoEnvio, dados: FormData) => Promise<EstadoEnvio>;
+  codigo: string;
+  conta: string | null;
+  motivo: MotivoCanal;
+  rotuloMotivo: string;
+  mensagem: string;
+  fotos: Foto[];
+};
+
+/** Modo bitbrain (§4.6, D14): o sistema não envia ao ML; o Gestor responde à mão e marca aqui. */
+export function RespondaNoML({ acao, codigo, conta, motivo, rotuloMotivo, mensagem, fotos }: Props) {
+  const [estado, aoEnviar, pendente] = useEnvioFormulario(acao, { erros: [] }, 'erros-responda');
+  const prontas = fotos.filter((f): f is Foto & { url: string } => f.url !== null);
+  return (
+    <section aria-labelledby="titulo-responda" className={`${CARTAO} flex flex-col gap-4`}>
+      <h2 id="titulo-responda" className="text-base font-bold">
+        Responda no ML
+      </h2>
+      <p className="text-sm text-texto-2">
+        No modo Bitbrain o sistema não envia ao Mercado Livre. Abra a devolução {codigo} no ML{conta ? `, na conta ${conta}` : ''}, escolha o
+        motivo, cole a mensagem e anexe as fotos. Depois, toque em &quot;Marcar como respondida&quot;.
+      </p>
+      <dl className="grid gap-3">
+        <Dado rotulo="Motivo">
+          <span className="font-mono">{motivo}</span> · {rotuloMotivo}
+        </Dado>
+        <Dado rotulo="Mensagem">
+          <span className="whitespace-pre-wrap">{mensagem}</span>
+        </Dado>
+      </dl>
+      <BotaoCopiar texto={mensagem} rotuloCopiado="Mensagem copiada." />
+      <div className="flex flex-col gap-2">
+        <h3 className={ROTULO}>Fotos para anexar no ML</h3>
+        {prontas.length === 0 ? (
+          <p className="text-sm text-texto-2">Nenhuma foto pronta desta devolução.</p>
+        ) : (
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {prontas.map((f, i) => (
+              <li key={f.id} className="flex flex-col gap-1 rounded-lg border border-borda bg-superficie p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element -- link temporário assinado (spec §9), sem otimização de imagem */}
+                <img src={f.url} alt="" className="aspect-square w-full rounded object-cover" />
+                <a href={f.url} download={`${codigo}-${i + 1}.jpg`} className="inline-flex min-h-11 items-center text-sm font-semibold text-destaque underline">
+                  Baixar {f.rotulo}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <form onSubmit={aoEnviar} className="flex flex-col gap-2 border-t border-borda pt-3">
+        <p className="text-xs text-texto-2">&quot;Marcar como respondida&quot; (extra) registra no histórico quem respondeu e quando.</p>
+        <ListaErros erros={estado.erros} id="erros-responda" />
+        <BotaoConfirmar
+          rotulo="Marcar como respondida"
+          rotuloConfirmar="Toque de novo para marcar como respondida"
+          desabilitado={pendente}
+          pendente={pendente}
+          rotuloPendente="Marcando…"
+          className={`${BOTAO_PRIMARIO} w-full md:w-auto`}
+        />
+      </form>
+    </section>
+  );
+}
+```
+
+`src/app/(app)/contestacoes/[id]/acoes.ts`, acréscimo (importe `z` de `zod` e `marcarContestacaoRespondida` de `@/modules/mercado-livre/respostas-manuais`):
+
+```ts
+const esquemaId = z.uuid();
+
+/** "Marcar como respondida" (extra, modo bitbrain §4.6). O `id` chega ligado (bind): validado com zod antes de usar. */
+export async function marcarRespondidaAcao(id: string, _anterior: EstadoEnvio, _dados: FormData): Promise<EstadoEnvio> {
+  const usuario = await exigirPermissao('administrar');
+  const lido = esquemaId.safeParse(id);
+  if (!lido.success) return { erros: ['Contestação não encontrada.'] };
+  try {
+    await marcarContestacaoRespondida(obterDb(), lido.data, usuario, new Date());
+  } catch (erro) {
+    if (erro instanceof ErroContestacao) return { erros: erro.erros };
+    throw erro;
+  }
+  revalidatePath('/contestacoes');
+  redirect(`/contestacoes/${lido.data}?ok=respondida`);
+}
+```
+
+`src/app/(app)/contestacoes/[id]/page.tsx`:
+- Importe `configML` e `RespondaNoML`.
+- Leia o `ok` uma vez: `const ok = primeiroValor((await searchParams).ok); const pedido = ok === 'solicitado'; const respondida = ok === 'respondida';` e `const modoBitbrain = configML().modo === 'bitbrain';`.
+- Depois da mensagem de "Envio pedido", acrescente `{respondida && <MensagemSucesso texto="Contestação marcada como respondida no ML." />}`.
+- Na seção "Devolução", acrescente `{c.conta && <Dado rotulo="Conta">{c.conta}</Dado>}`.
+- Na seção `ENVIADA`:
+  - o título vira `{modoBitbrain ? 'Respondida no ML' : 'Enviada ao ML'}`;
+  - o rótulo do 1º `Dado` vira `{modoBitbrain ? 'Respondida em' : 'Enviada em'}`;
+  - o `aria-labelledby` continua `titulo-enviada`.
+- No lugar do `FormularioContestacao`:
+
+```tsx
+      {podeEditar &&
+        (modoBitbrain ? (
+          <RespondaNoML
+            acao={marcarRespondidaAcao.bind(null, c.id)}
+            codigo={c.codigo}
+            conta={c.conta}
+            motivo={c.motivo}
+            rotuloMotivo={ROTULO_MOTIVO_CANAL[c.motivo]}
+            mensagem={c.mensagem}
+            fotos={fotos.map(({ id, rotulo, url }) => ({ id, rotulo, url }))}
+          />
+        ) : (
+          <FormularioContestacao acao={enviarAcao.bind(null, c.id)} motivo={c.motivo} mensagem={c.mensagem} limiteMensagem={LIMITE_MENSAGEM} fotos={fotos} />
+        ))}
+```
+
+`src/app/(app)/contestacoes/tipos.ts`:
+
+```ts
+import type { DadosSelo } from '@/modules/devolucoes/selos';
+
+export type OkVista = { devolucaoId: string; codigo: string; pedidos: string; reclamacaoId: string; conta: string | null; selo: DadosSelo | null };
+export type EstadoOk = { erros: string[]; ok: string | null };
+export const ESTADO_INICIAL_OK: EstadoOk = { erros: [], ok: null };
+```
+
+`src/app/(app)/contestacoes/acoes.ts`:
+
+```ts
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { obterDb } from '@/db';
+import { exigirPermissao } from '@/modules/auth/servidor';
+import { ErroContestacao } from '@/modules/mercado-livre/contestacoes';
+import { marcarOkRespondido } from '@/modules/mercado-livre/respostas-manuais';
+import type { EstadoOk } from './tipos';
+
+const esquema = z.object({ devolucao: z.uuid() });
+
+/** "Marcar como respondido" (§4.6): limpa o "OK" pendente da devolução. Só o Gestor; o id é validado com zod. */
+export async function marcarOkRespondidoAcao(_anterior: EstadoOk, dados: FormData): Promise<EstadoOk> {
+  const usuario = await exigirPermissao('administrar');
+  const lido = esquema.safeParse({ devolucao: dados.get('devolucao') });
+  if (!lido.success) return { erros: ['Pedido inválido.'], ok: null };
+  try {
+    await marcarOkRespondido(obterDb(), lido.data.devolucao, usuario, new Date());
+  } catch (erro) {
+    if (erro instanceof ErroContestacao) return { erros: erro.erros, ok: null };
+    throw erro;
+  }
+  revalidatePath('/contestacoes');
+  return { erros: [], ok: '"OK" marcado como respondido no ML.' };
+}
+```
+
+`src/app/(app)/contestacoes/OkParaResponder.tsx`:
+
+```tsx
+'use client';
+
+import Link from 'next/link';
+import { useState, type FormEvent } from 'react';
+import { ListaErros } from '@/components/ListaErros';
+import { Selo } from '@/components/Selo';
+import { ALERTA_OK, BOTAO_PRIMARIO, CARTAO, VAZIO } from '@/components/estilos';
+import { BotaoConfirmar } from '@/components/mercado-livre/BotaoConfirmar';
+import { useEnvioFormulario } from '@/components/useEnvioFormulario';
+import { ESTADO_INICIAL_OK, type EstadoOk, type OkVista } from './tipos';
+
+type Props = { itens: OkVista[]; acao: (anterior: EstadoOk, dados: FormData) => Promise<EstadoOk> };
+
+/** "OK para responder no ML" (extra, §4.6): conferidas sem problema que esperam o "OK" à mão. Um estado só para a lista. */
+export function OkParaResponder({ itens, acao }: Props) {
+  const [estado, enviar, pendente] = useEnvioFormulario(acao, ESTADO_INICIAL_OK, 'erros-ok-ml');
+  const [enviando, setEnviando] = useState<string | null>(null);
+  function aoEnviar(evento: FormEvent<HTMLFormElement>) {
+    setEnviando(String(new FormData(evento.currentTarget).get('devolucao')));
+    enviar(evento);
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <div aria-live="polite" className="flex flex-col gap-2">
+        {estado.ok ? (
+          <p role="status" className={ALERTA_OK}>
+            {estado.ok}
+          </p>
+        ) : null}
+        <ListaErros erros={estado.erros} id="erros-ok-ml" />
+      </div>
+      {itens.length === 0 ? (
+        <p className={VAZIO}>Nenhum &quot;OK&quot; para responder no ML.</p>
+      ) : (
+        <ul className="grid gap-3 md:grid-cols-2">
+          {itens.map((i) => (
+            <li key={i.devolucaoId}>
+              <article aria-labelledby={`ok-${i.devolucaoId}`} className={`${CARTAO} flex flex-col gap-2 p-3`}>
+                <h3 id={`ok-${i.devolucaoId}`} className="font-mono text-[15px] font-bold">
+                  {i.codigo}
+                </h3>
+                <span className="break-all font-mono text-xs text-texto-2">Pedido {i.pedidos || '—'}</span>
+                <span className="break-all font-mono text-xs text-texto-2">Reclamação {i.reclamacaoId}</span>
+                {i.conta && <span className="text-sm [overflow-wrap:anywhere]">Conta: {i.conta}</span>}
+                {i.selo && (
+                  <span className="flex flex-wrap gap-1.5">
+                    <Selo texto={i.selo.texto} tom={i.selo.tom} />
+                  </span>
+                )}
+                <Link href={`/fluxo/devolucoes/${i.codigo}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-destaque underline">
+                  Ver a devolução
+                </Link>
+                <form onSubmit={aoEnviar}>
+                  <input type="hidden" name="devolucao" value={i.devolucaoId} />
+                  <BotaoConfirmar
+                    rotulo="Marcar como respondido"
+                    rotuloConfirmar="Toque de novo para marcar como respondido"
+                    desabilitado={pendente}
+                    pendente={pendente && enviando === i.devolucaoId}
+                    rotuloPendente="Marcando…"
+                    className={`${BOTAO_PRIMARIO} w-full sm:w-auto`}
+                  />
+                </form>
+              </article>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+```
+
+`src/app/(app)/contestacoes/page.tsx`:
+- Imports: `configML`; `listarOkPendentes`, de `@/modules/mercado-livre/respostas-manuais`; `marcarOkRespondidoAcao`, de `./acoes`; `OkParaResponder`, de `./OkParaResponder`.
+- Depois do `exigirPermissao`: `const modoBitbrain = configML().modo === 'bitbrain';`. O `Promise.all` ganha `modoBitbrain ? listarOkPendentes(db) : Promise.resolve([])`.
+- Logo depois do `<h1>`:
+
+```tsx
+      {modoBitbrain && (
+        <section aria-labelledby="titulo-ok-ml" className="flex flex-col gap-2">
+          <h2 id="titulo-ok-ml" className="text-base font-bold">
+            OK para responder no ML <span className="text-sm font-normal text-texto-2">(extra)</span>
+          </h2>
+          <p className="text-sm text-texto-2">Conferidas sem problema: responda &quot;OK&quot; a cada uma no Mercado Livre (ou no Bitbrain) e marque aqui.</p>
+          <OkParaResponder
+            itens={okPendentes.map((o) => ({
+              devolucaoId: o.devolucaoId,
+              codigo: o.codigo,
+              pedidos: o.pedidos.join(', '),
+              reclamacaoId: o.reclamacaoId,
+              conta: o.conta,
+              selo: o.selo,
+            }))}
+            acao={marcarOkRespondidoAcao}
+          />
+        </section>
+      )}
+```
+
+- [ ] **Passo 4:** `npm test && npm run typecheck && npm run lint` → PASS. Depois rode `npm run test:e2e -- tests/e2e/mercado-livre.spec.ts tests/e2e/integracao-ml.spec.ts` (o "Enviar ao ML" do modo `api` continua igual) e `npm run test:e2e:bitbrain` → PASS nos dois projetos. Tire prints em 390×844 de "Responda no ML" (mensagem longa) e de "OK para responder no ML".
+
+- [ ] **Passo 5: Commit**
+
+```bash
+git add src/components/mercado-livre/BotaoCopiar.tsx src/components/mercado-livre/BotaoCopiar.test.tsx "src/app/(app)/contestacoes" tests/e2e/apoio-bitbrain.ts tests/e2e/bitbrain-respostas.spec.ts
+git commit -m "feat(bitbrain): Contestacoes ML com Responda no ML (Copiar, fotos, Marcar como respondida) e OK para responder no ML
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Tarefa 14: Documentação (README, andamento, publicação na VPS, emenda E21 e adendo ao contrato)
+
+**Objetivo:** deixar registrado o que mudou e como ligar na VPS. Esta tarefa **não** faz a integração nem o merge no `main`: isso é com o controlador.
+
+**Arquivos:**
+- Modificar: `README.md` (tabela "Andamento"), `docs/superpowers/andamento.md`, `docs/operacao/deploy-vps.md`, `docs/superpowers/plans/2026-11-12-contrato-fases-2-6.md` (§10), `docs/integracao/bitbrain-rota-devolucoes.md`
+
+- [ ] **Passo 1: `README.md`.** Na tabela "Andamento", antes da linha "Ligação das contas reais", acrescente:
+
+```
+| Integração pelo Bitbrain | Devoluções do ML pelo Bitbrain (várias contas, marcadas pelo Gestor), 5 extras do ML (urgente, reputação, Full, triagem e dinheiro) e respostas ao ML à mão | Pronta na branch `integracao-bitbrain`. Falta a sessão do Bitbrain publicar a rota e ligar na VPS (`ML_CONECTOR=bitbrain`) |
+```
+
+- [ ] **Passo 2: `docs/superpowers/andamento.md`.**
+- No topo de "Onde paramos", um item novo:
+  - **Integração pelo Bitbrain (18/11), na branch `integracao-bitbrain`:** spec [specs/2026-11-18-integracao-bitbrain-design.md](specs/2026-11-18-integracao-bitbrain-design.md) e plano [plans/2026-11-18-integracao-bitbrain.md](plans/2026-11-18-integracao-bitbrain.md).
+  - **O que entregou:**
+    - `ML_CONECTOR=bitbrain`, com `BITBRAIN_URL` e `BITBRAIN_TOKEN`;
+    - tabela `contas_bitbrain` e migração `0014_bitbrain_contas_extras`;
+    - varredura conta por conta;
+    - 5 extras nos dois modos;
+    - respostas ao ML à mão: "Responda no ML" e "OK para responder no ML".
+  - **Testes:** o e2e do modo Bitbrain roda à parte, com `npm run test:e2e:bitbrain`.
+  - **Falta:**
+    - a sessão do Bitbrain publicar a rota (contrato em [../integracao/bitbrain-rota-devolucoes.md](../integracao/bitbrain-rota-devolucoes.md), com o adendo do `logistic.type`);
+    - ligar na VPS, conforme `docs/operacao/deploy-vps.md`, seção "Ligar o modo Bitbrain";
+    - a integração no `main`, pelo controlador.
+- Em "Próximos passos", acrescente como 1º item: "Ligar o modo Bitbrain na VPS depois que o Bitbrain publicar a rota; testar com uma conta marcada e conferir A16–A19 com dados reais".
+- Em "Como trabalhamos" › "Processo", acrescente: "O e2e tem duas rodadas: `npm run test:e2e` (modo `api`/falso) e `npm run test:e2e:bitbrain` (modo Bitbrain, arquivos `tests/e2e/bitbrain-*.spec.ts`)".
+- Atualize a data da linha "Atualizado em".
+
+- [ ] **Passo 3: `docs/operacao/deploy-vps.md`.** No fim, acrescente a seção abaixo. Ela tem os textos prontos para o usuário colar na sessão da Claude web que opera a VPS; o token nunca é escrito no histórico do shell.
+
+````markdown
+## Ligar o modo Bitbrain (devoluções do ML pelo Bitbrain)
+
+Pré-requisito: a sessão do Bitbrain publicou a rota (`docs/integracao/bitbrain-rota-devolucoes.md`), e o Nathan gerou o `DEVOLUCOES_TOKEN` (`openssl rand -hex 32`) e o pôs no `.env` do Bitbrain.
+
+1. Confira a rota, sem gravar o token no histórico:
+   ```bash
+   read -rs TOKEN && curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" https://<domínio do Bitbrain>/integracao/devolucoes/empresas; unset TOKEN
+   ```
+   Esperado: `200`. `401` = token diferente; `404` = rota desligada.
+2. No `.env.producao` do sistema (fora do git), troque ou acrescente:
+   ```
+   ML_CONECTOR=bitbrain
+   BITBRAIN_URL=https://<domínio do Bitbrain>
+   BITBRAIN_TOKEN=<o mesmo DEVOLUCOES_TOKEN>
+   ```
+3. Suba de novo só o web e o worker: `dc up -d web worker`. Confira `dc ps` (healthy) e `curl -s https://<domínio do sistema>/api/saude`. O log nunca mostra o token.
+4. No sistema, em Configurações › Mercado Livre (Gestor): "Atualizar contas", marque as contas que mandam devoluções para a bancada e toque em "Sincronizar agora".
+5. **Para voltar atrás:** `ML_CONECTOR=api` no `.env.producao` e `dc up -d web worker`. Os dados ficam, e as contas e os extras continuam guardados.
+````
+
+- [ ] **Passo 4: Emenda E21 no contrato** (`plans/2026-11-12-contrato-fases-2-6.md`, §10, depois da E20):
+
+```markdown
+- **E21. Integração pelo Bitbrain (18/11):** spec `specs/2026-11-18-integracao-bitbrain-design.md`, plano `plans/2026-11-18-integracao-bitbrain.md`.
+  - **Variáveis novas:** `ML_CONECTOR` aceita `bitbrain`; `BITBRAIN_URL` (https em produção) e `BITBRAIN_TOKEN` (segredo; o serviço `backup` não recebe). A URL do Bitbrain falso só vale com `PERMITIR_FALSOS=1`.
+  - **Tarefa:** `ml.sincronizar-reclamacao` ganha `conta?: string`.
+  - **Banco:** tabela `contas_bitbrain`; em `reclamacoes_ml`, as colunas `conta`, `acao_pendente`, `urgente`, `afeta_reputacao`, `eh_full`, `triagem_condicao`, `triagem_etapa`, `dinheiro` e `resposta_pendente`. Migração `0014`.
+  - **Interface:** `obterConector(db, canal, contexto?)` ganha o 3º argumento opcional `{ conta?, devolucaoId? }`; `tipos.ts` não muda.
+  - **Histórico:**
+    - entidade `conta_bitbrain`;
+    - chaves `ml_conta_bitbrain_marcada`, `ml_conta_bitbrain_desmarcada`, `ml_resposta_manual_pendente`, `ml_ok_respondido_a_mao` e `ml_contestacao_respondida_a_mao`.
+  - **Alertas:** `respostas_ml` e `conta_bitbrain_indisponivel`.
+  - **Motivo:** as devoluções do ML passam a vir pelo Bitbrain (decisão do usuário de 16/11), e os arquivos são congelados.
+```
+
+- [ ] **Passo 5: Adendo ao contrato da rota** (`docs/integracao/bitbrain-rota-devolucoes.md`). Logo depois da seção "Dados pessoais (LGPD)", acrescente:
+
+```markdown
+### Adendo (18/11, plano do sistema de devoluções, D9)
+- Em `/shipments/{id}`, mantenha também `logistic` só com `mode`, `type` e `direction`. Não é dado pessoal. Com `x-format-new: true`, o ML põe o tipo logístico (ex.: `fulfillment`, a venda Full) em `logistic.type`, e não em `logistic_type`. Sem esse campo, o sistema não sabe se a venda foi Full.
+```
+
+**Avise o usuário:** se o texto da rota já foi colado na sessão do Bitbrain, este adendo precisa ser mandado para lá também.
+
+- [ ] **Passo 6: Conferência final da branch** (antes do commit): `npm test`, `npm run test:int`, `npm run typecheck`, `npm run lint`, `npm run build:scripts`, `npm run test:e2e` e `npm run test:e2e:bitbrain` → tudo PASS. Anote as contagens (unidade, integração, e2e nas duas rodadas) no item do andamento do Passo 2.
+
+- [ ] **Passo 7: Commit**
+
+```bash
+git add README.md docs/superpowers/andamento.md docs/operacao/deploy-vps.md docs/superpowers/plans/2026-11-12-contrato-fases-2-6.md docs/integracao/bitbrain-rota-devolucoes.md
+git commit -m "docs: integracao pelo Bitbrain (README, andamento, ligar na VPS, emenda E21 e adendo do logistic.type)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Cobertura da spec (conferência do plano)
+| Spec | Tarefa |
+|---|---|
+| §4.1: `ML_CONECTOR=bitbrain`, URL e token obrigatórios, https em produção, token fora dos logs, Bitbrain falso com `PERMITIR_FALSOS=1` | 1, 2, 4 |
+| §4.2: `ClienteViaBitbrain` (get/getTexto pela rota; post/postArquivo → `ErroRespostaManual`; erros, 429, `Retry-After` e tempo limite como no cliente do ML); sem renovação de token | 2, 8 |
+| §4.3: `contas_bitbrain`, atualizar pela lista (nova desmarcada, sumida indisponível), só o Gestor marca e cada mudança gera evento, `reclamacoes_ml.conta`, conta no cartão e no detalhe | 5, 6, 11, 12 |
+| §4.4: conector por conta, varredura por conta (falha isolada, `ultima_sincronizacao_em`), payload com a conta, NF de venda pela devolução, "Sincronizar agora", alerta por conta | 7, 8, 10, 11 |
+| §4.5: 5 extras nos dois modos (leituras opcionais, colunas anuláveis, rótulos em `dominio.ts`), selos no cartão, nas listas e na Busca, detalhe completo, urgentes primeiro nas etapas 2 e 3 | 3, 5, 12 |
+| §4.6: OK pendente e evento, contestação "Responda no ML" (motivo, Copiar, fotos, Marcar como respondida), "OK para responder no ML", alerta "Respostas para dar no ML", modo `api` igual | 9, 10, 13 |
+| §5: 5xx → tentativas e Falhas; 401/403 da rota → "Bitbrain recusou: confira o BITBRAIN_TOKEN"; conta indisponível pulada e com aviso; logs sem corpo e sem token | 2, 7, 8, 10 |
+| §6: testes de unidade, integração contra o Bitbrain falso e e2e (`computador` e `celular`) | todas; e2e nas 11, 12 e 13 |
+| §7: como ligar | 14 |
