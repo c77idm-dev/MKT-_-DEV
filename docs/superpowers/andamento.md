@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 18/11/2026 (conector Bitbrain do claude.ai explorado: não traz devoluções; o Bitbrain precisa expor uma API para o sistema). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 18/11/2026 (integração com o Bitbrain: spec e contrato da rota na branch integracao-bitbrain; plano sendo escrito). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
@@ -18,10 +18,28 @@ Atualizado em 18/11/2026 (conector Bitbrain do claude.ai explorado: não traz de
     - o pedido, com itens e SKU e sem dados pessoais;
     - o XML da NF de venda.
     - O conector Bitbrain do sistema chama essa API.
-  - **Ponto de desenho:** hoje o sistema aceita só uma conta do ML por vez. Com o Bitbrain, são até 5 contas.
-  - **Perguntas ao usuário (18/11):**
-    - onde está o código do Bitbrain (qual repositório), e se pode ganhar essa API interna;
-    - quais das 5 contas mandam devoluções para a bancada.
+  - **Decidido com o usuário (18/11):**
+    - **"Não toque no código do Bitbrain."**
+      - O Bitbrain fica em `C:\Users\idmpc\bitbrain`, repositório `josiasdreher/bitbrain`, em Python com FastAPI. Só o Nathan publica.
+      - A aba Devoluções de lá consulta a API de pós-venda do ML na hora.
+      - A rota nova é **pedida por texto** a uma sessão do Claude Code aberta na pasta do Bitbrain.
+    - **Só leitura.** A resposta ao ML (OK e contestação) fica à mão por enquanto, com o texto e as fotos prontos no sistema.
+    - **Várias contas.** O Gestor marca quais mandam devoluções.
+    - **Cinco extras já no primeiro passo:** urgente e prazo, afeta a reputação, Full, triagem do ML e dinheiro.
+  - **Desenho (B1, espelho com lista fechada).** A rota do Bitbrain repassa ao ML só as 12 leituras que o nosso `ConectorML` faz e tira os dados pessoais. O nosso lado troca só o transporte (`ClienteViaBitbrain`) e reaproveita o mapeamento já testado.
+    - Spec: `docs/superpowers/specs/2026-11-18-integracao-bitbrain-design.md`.
+    - Contrato da rota, com o texto para colar na sessão do Bitbrain: `docs/integracao/bitbrain-rota-devolucoes.md`.
+    - Os dois ficam na branch **`integracao-bitbrain`**, no GitHub.
+  - **Onde está o trabalho:**
+    - worktree `C:/Users/idmpc/devolucoes-wt/bitbrain`, na branch `integracao-bitbrain`;
+    - bancos `devolucoes_f7` e `devolucoes_test_f7`, criados com o superusuário `postgres` (a senha está em `C:\Users\idmpc\.postgres-superusuario.txt`), porque o papel `devolucoes` não cria bancos;
+    - `PORTA_E2E=3107`.
+  - **Próximos passos:**
+    1. Plano em `docs/superpowers/plans/2026-11-18-integracao-bitbrain.md`, na branch. Está sendo escrito.
+    2. Construir com o fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js), com os argumentos: `pasta` da worktree, `branch` `integracao-bitbrain`, `pref` `bb`, `porta` 3107, `bancoTeste` `devolucoes_test_f7`, e os briefs `bb-task-N-brief.md`. Depois rodar a revisão final ([workflows/fase-final.js](workflows/fase-final.js)) e juntar no `main`.
+    3. O usuário cola o texto do contrato na sessão do Bitbrain. Quando a rota estiver publicada:
+       - na VPS: `ML_CONECTOR=bitbrain`, `BITBRAIN_URL` e `BITBRAIN_TOKEN`;
+       - no sistema, em Configurações › Mercado Livre: marcar as contas e "Sincronizar agora".
 - **Melhorias dos vídeos do adm (16/11), no `main` (`514add1`):** vieram da transcrição de 3 vídeos que o adm mandou. Cada uma tem spec e plano em `docs/superpowers/specs|plans/2026-11-16-*`, revisão independente aprovada e suíte inteira verde (762 de unidade, 453 de integração, 210 e2e).
   1. **Motivo da reclamação do ML** no cartão e no "Motivo do cliente" (consulta `/post-purchase/v1/claims/reasons/{id}` com cache; nunca sobrescreve motivo manual). Migração `0011`. Suposição A15 do formato da resposta, a confirmar com a conta real.
   2. **Fotos da avaria** na conferência: até 6 por unidade, com "Remover" (segundo toque). Migração `0012` (índice único ignora EXTRA).
