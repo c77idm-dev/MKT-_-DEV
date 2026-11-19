@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { itensRetiradaFull, retiradasFull } from '../../src/db/schema';
 import { criarRetirada } from '../../src/modules/retiradas/retiradas';
 import { criarProdutoTeste } from '../helpers/fabricas';
-import { codigoUnico, comBanco, entrarComo, paginaNaoEncontrada, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { abrirMenuAcoes, codigoUnico, comBanco, entrarComo, paginaNaoEncontrada, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { esperarEnviada, fotoDeTeste } from './apoio-conferencia';
 import { USUARIOS_E2E } from './dados';
 
@@ -131,8 +131,14 @@ test('o Fiscal vê a lista e a retirada, mas não abre nem confere', async ({ pa
   const etiqueta = codigoUnico('FULLF');
   const { codigo } = await comBanco(async (db) => criarRetirada(db, etiqueta, await usuarioPorEmail(db, USUARIOS_E2E.operador.email)));
   await entrarComo(page, USUARIOS_E2E.fiscal);
-  // (extra) O Fiscal não passa pelo Recebimento: o link fica no Fluxo.
-  const link = page.getByRole('link', { name: 'Retiradas do Full', exact: true });
+  // (extra) O Fiscal não passa pelo Recebimento: chega às retiradas pelo menu "O que você quer fazer?" do Fluxo,
+  // que mostra só as 2 ações de todos os perfis.
+  const menu = await abrirMenuAcoes(page);
+  await expect(menu.getByRole('link')).toHaveCount(2);
+  await expect(menu.getByRole('link', { name: 'Receber pacote' })).toHaveCount(0);
+  await expect(menu.getByRole('link', { name: 'Nova devolução' })).toHaveCount(0);
+  await expect(menu.getByRole('link', { name: 'Planilha Volta ao armazém', exact: true })).toBeVisible();
+  const link = menu.getByRole('link', { name: 'Retiradas do Full', exact: true });
   expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await semRolagemLateral(page);
   await link.click();
