@@ -1,8 +1,11 @@
 import type { DbOuTx } from '@/db/client';
 import type { Perfil } from '@/modules/auth/perfis';
 import type { TomSelo } from '@/modules/devolucoes/selos';
+import { configML } from '@/modules/mercado-livre/config';
 import { obterContaML } from '@/modules/mercado-livre/contas';
+import { contaAtrasada, contarContasIndisponiveis, listarContasBitbrain } from '@/modules/mercado-livre/contas-bitbrain';
 import { sincronizacaoAtrasada } from '@/modules/mercado-livre/dominio';
+import { contarRespostasParaDarNoML } from '@/modules/mercado-livre/respostas-manuais';
 import {
   contarSemFornecedor, contestacoesComPrazoVencendo, devolucoesComAlertaLote, devolucoesComMLEncerradoAposChegada,
   devolucoesComPrazoVencendo, devolucoesEntreguesSemLeitura, lotesComAlertaNfCancelada, notasRejeitadas,
@@ -26,6 +29,11 @@ async function calcular(id: IdAlerta, db: DbOuTx, perfil: Perfil, agora: Date, f
       const contestacoes = perfil === 'GESTOR' ? await contestacoesComPrazoVencendo(db, agora) : [];
       return contagem(devs.length + contestacoes.length);
     }
+    case 'respostas_ml':
+      // D10: só no modo bitbrain, onde as respostas ao ML são dadas à mão.
+      return configML().modo === 'bitbrain' ? contagem(await contarRespostasParaDarNoML(db)) : null;
+    case 'conta_bitbrain_indisponivel':
+      return configML().modo === 'bitbrain' ? contagem(await contarContasIndisponiveis(db)) : null;
     case 'nf_rejeitada': {
       const n = await notasRejeitadas(db);
       return contagem(n.devolucaoIds.length + n.lotes.length);
@@ -33,6 +41,8 @@ async function calcular(id: IdAlerta, db: DbOuTx, perfil: Perfil, agora: Date, f
     case 'conta_ml_reconectar':
       return condicao((await obterContaML(db))?.situacao === 'RECONECTAR');
     case 'sincronizacao_ml': {
+      // Modo bitbrain (§4.4): uma conta marcada parada há mais de 1 h já conta; a quantidade é o número de contas.
+      if (configML().modo === 'bitbrain') return contagem((await listarContasBitbrain(db)).filter((c) => contaAtrasada(c, agora)).length);
       const conta = await obterContaML(db);
       return condicao(conta?.situacao === 'ATIVA' && sincronizacaoAtrasada(conta.ultimaSincronizacaoEm ?? conta.conectadaEm, agora));
     }

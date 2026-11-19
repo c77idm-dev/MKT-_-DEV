@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { TOKEN_BITBRAIN_FALSO, URL_BITBRAIN_FALSO } from '../../src/lib/env';
 
 // O playwright.config.ts importa este arquivo antes de carregar o .env, então o .env é lido aqui.
 if (existsSync('.env')) process.loadEnvFile('.env');
@@ -26,3 +27,11 @@ export const AMBIENTE_E2E = {
   EMISSOR_NFE: 'falso',
   PERMITIR_FALSOS: '1',
 } as const;
+
+export type ModoE2E = 'falso' | 'bitbrain';
+
+/** O ambiente do servidor e do worker do e2e. No modo bitbrain, o ML chega pelo Bitbrain falso (D3, só com PERMITIR_FALSOS=1). */
+export function ambienteE2E(modo: ModoE2E = 'falso'): Record<string, string> {
+  if (modo === 'falso') return { ...AMBIENTE_E2E };
+  return { ...AMBIENTE_E2E, ML_CONECTOR: 'bitbrain', BITBRAIN_URL: URL_BITBRAIN_FALSO, BITBRAIN_TOKEN: TOKEN_BITBRAIN_FALSO };
+}

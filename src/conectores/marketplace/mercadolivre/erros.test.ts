@@ -76,3 +76,15 @@ describe('ErroMotivoIndisponivel', () => {
     );
   });
 });
+
+describe('logErroML pelo Bitbrain', () => {
+  it('erro pelo Bitbrain: o log tem só status, empresa e caminho, sem corpo (spec Bitbrain §5)', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    logErroML('teste', new ErroML(500, '{"buyer":{"first_name":"Ana"}}', '/orders/1', 'megadino'));
+    const linha = JSON.parse(String(log.mock.calls[0][0]));
+    expect(linha).toMatchObject({ status: 500, empresa: 'megadino', caminho: '/orders/1' });
+    expect(linha).not.toHaveProperty('corpo');
+    expect(String(log.mock.calls[0][0])).not.toContain('Ana');
+    log.mockRestore();
+  });
+});

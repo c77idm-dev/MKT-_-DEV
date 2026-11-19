@@ -10,7 +10,7 @@ import { URL_TOKEN_ML } from './oauth';
  * exemplos da documentação (tests/fixtures/ml/doc) e dos cenários (tests/fixtures/ml-falso/cenarios.json).
  *
  * Sem estado: o cenário vem do próprio id, então o servidor e o worker (processos diferentes) respondem igual.
- *   reclamação 5<c><seq>, devolução 6<c><seq>, envio 4<c><seq>, pedido 20000<i>0<c><seq>, anúncio MLB9<i><c><seq>
+ *   reclamação 5<c><seq>, devolução 6<c><seq>, envio 4<c><seq>, envio da venda 7<i><c><seq>, pedido 20000<i>0<c><seq>, anúncio MLB9<i><c><seq>
  *   (c = cenário de 1 a 9; seq = 8 dígitos; i = posição do item na devolução)
  */
 
@@ -28,6 +28,11 @@ type CenarioFalso = {
   devolucao?: { status: string; subtype: string };
   envio?: { status: string; type: string; destino: string } | null;
   itens?: { sku: string; quantidade: string }[];
+  /** Extras (D17): ação obrigatória da loja, valor de affects-reputation, venda Full e triagem do ML. */
+  urgente?: boolean;
+  afetaReputacao?: string;
+  full?: boolean;
+  triagem?: { condicao: string; etapa: string };
 };
 type ArquivoCenarios = {
   vendedor: number;
@@ -68,6 +73,7 @@ export type IdsFalsos = {
   envioId: string;
   rastreio: string;
   pedidos: string[];
+  enviosVenda: string[];
   itens: string[];
 };
 
@@ -82,6 +88,7 @@ export function idsFalsos(numero: number, seq: string): IdsFalsos {
     envioId: `4${numero}${seq}`,
     rastreio: `ML${numero}${seq}BR`,
     pedidos: posicoes.map((i) => `20000${i}0${numero}${seq}`),
+    enviosVenda: posicoes.map((i) => `7${i}${numero}${seq}`),
     itens: posicoes.map((i) => `MLB9${i}${numero}${seq}`),
   };
 }
@@ -146,8 +153,8 @@ function reclamacaoFalsa(ids: IdsFalsos, c: CenarioFalso, agora: Date) {
         type: 'seller',
         user_id: arquivo().vendedor,
         available_actions: [
-          { action: 'return_review_ok', due_date: prazo, mandatory: false },
-          { action: 'return_review_fail', due_date: prazo, mandatory: false },
+          { action: 'return_review_ok', due_date: prazo, mandatory: c.urgente === true },
+          { action: 'return_review_fail', due_date: prazo, mandatory: c.urgente === true },
         ],
       },
     ],
@@ -174,6 +181,7 @@ function devolucaoFalsa(ids: IdsFalsos, c: CenarioFalso, agora: Date) {
       total_quantity: item.quantidade,
       return_quantity: item.quantidade,
     })),
+    related_entities: c.triagem ? ['reviews'] : [],
     date_created: new Date(agora.getTime() - 2 * DIA).toISOString(),
     last_updated: agora.toISOString(),
   };
@@ -186,6 +194,7 @@ function pedidoFalso(ids: IdsFalsos, i: number) {
   return {
     ...doc('pedido.json'),
     id: Number(ids.pedidos[i]),
+    shipping: { id: Number(ids.enviosVenda[i]) },
     order_items: [
       {
         item: { id: ids.itens[i], title: nota.descricao, variation_id: null, seller_sku: item.sku, seller_custom_field: null },
@@ -194,6 +203,19 @@ function pedidoFalso(ids: IdsFalsos, i: number) {
         currency_id: 'BRL',
       },
     ],
+  };
+}
+
+function envioVendaFalso(ids: IdsFalsos, i: number, c: CenarioFalso, agora: Date) {
+  const tipo = c.full ? 'fulfillment' : 'drop_off';
+  return {
+    ...doc('envio.json'),
+    id: Number(ids.enviosVenda[i]),
+    status: 'delivered',
+    tracking_number: `MLV${ids.cenario}${ids.seq}`,
+    logistic_type: tipo,
+    logistic: { mode: 'me2', type: tipo, direction: 'forward' },
+    status_history: { date_shipped: new Date(agora.getTime() - 10 * DIA).toISOString(), date_delivered: new Date(agora.getTime() - 9 * DIA).toISOString() },
   };
 }
 
@@ -297,10 +319,45 @@ const ROTAS: Rota[] = [
     metodo: 'GET',
     padrao: /^\/shipments\/(\d+)$/,
     responder: (m, _url, agora) => {
+      const venda = /^7(\d)([1-9])(\d{8})$/.exec(m[1]);
+      if (venda) {
+        const idsVenda = idsFalsos(Number(venda[2]), venda[3]);
+        const cVenda = cenario(idsVenda.cenario);
+        const i = Number(venda[1]);
+        return cVenda && i < idsVenda.enviosVenda.length ? respostaJson(envioVendaFalso(idsVenda, i, cVenda, agora)) : naoEncontrado();
+      }
       const ids = idsPor(m[1], /^4([1-9])(\d{8})$/);
       const c = ids && cenario(ids.cenario);
       const envio = ids && c && envioFalso(ids, c, agora);
       return envio ? respostaJson(envio) : naoEncontrado();
+    },
+  },
+  {
+    metodo: 'GET',
+    padrao: /^\/post-purchase\/v1\/claims\/(\d+)\/affects-reputation$/,
+    responder: (m) => {
+      const ids = idsDaReclamacaoFalsa(m[1]);
+      const c = ids && cenario(ids.cenario);
+      return c ? respostaJson({ affects_reputation: c.afetaReputacao ?? 'not_affected', has_incentive: false }) : naoEncontrado();
+    },
+  },
+  {
+    metodo: 'GET',
+    padrao: /^\/post-purchase\/v1\/returns\/(\d+)\/reviews$/,
+    responder: (m) => {
+      const ids = idsPor(m[1], /^6([1-9])(\d{8})$/);
+      const c = ids && cenario(ids.cenario);
+      if (!ids || !c?.triagem) return naoEncontrado();
+      return respostaJson({
+        reviews: [
+          {
+            resource: 'order',
+            resource_id: Number(ids.pedidos[0]),
+            method: 'triage',
+            resource_reviews: [{ stage: c.triagem.etapa, status: 'failed', product_condition: c.triagem.condicao, product_destination: 'seller' }],
+          },
+        ],
+      });
     },
   },
   {

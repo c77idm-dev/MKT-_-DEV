@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import { asc, eq } from 'drizzle-orm';
 import { ErroML } from '@/conectores/marketplace/mercadolivre/cliente';
 import { ErroReclamacaoSemDevolucao } from '@/conectores/marketplace/mercadolivre/conector';
+import { EXTRAS_VAZIOS } from '@/conectores/marketplace/mercadolivre/mapeamento';
 import type { ConectorMercadoLivre, DadosDevolucaoML, ReclamacaoAtualizada } from '@/conectores/marketplace/mercadolivre/tipos';
 import type { DevolucaoExterna, ResultadoConferencia } from '@/conectores/marketplace/tipos';
 import type { TokensML } from '@/conectores/marketplace/mercadolivre/oauth';
@@ -29,6 +30,9 @@ export function configMLTeste(mudancas: Partial<ConfigML> = {}): ConfigML {
     redirectUri: 'http://localhost/api/ml/retorno',
     usarPkce: false,
     chaveBase64: CHAVE_TESTE,
+    bitbrainUrl: '',
+    bitbrainToken: '',
+    permitirFalsos: false,
     ...mudancas,
   };
 }
@@ -94,6 +98,7 @@ export function dadosDevolucaoMLTeste(
     statusDevolucao: devolucao ? devolucao.statusCanal.split('/')[0] : null,
     atualizadaEm: new Date(),
     devolucao,
+    extras: EXTRAS_VAZIOS,
     ...extra,
   };
 }

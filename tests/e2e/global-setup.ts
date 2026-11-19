@@ -1,16 +1,18 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, openSync, rmSync } from 'node:fs';
+import type { FullConfig } from '@playwright/test';
 import { criarDb } from '../../src/db/client';
 import { migrar } from '../../src/db/migrate';
 import { criarUsuario } from '../../src/modules/auth/usuarios';
 import { limparTabelas, urlBancoTeste } from '../helpers/db';
-import { AMBIENTE_E2E, USUARIOS_E2E } from './dados';
+import { ambienteE2E, USUARIOS_E2E, type ModoE2E } from './dados';
 
 /**
  * Prepara o banco de testes, sobe o worker do e2e (o mesmo banco e o mesmo disco do servidor) e devolve
  * a função que o encerra no fim (o Playwright usa o retorno do globalSetup como teardown).
  */
-export default async function globalSetup() {
+export default async function globalSetup(config: FullConfig) {
+  const modo: ModoE2E = config.metadata?.modoML === 'bitbrain' ? 'bitbrain' : 'falso';
   const url = urlBancoTeste();
   await migrar(url);
   const { db, sql } = criarDb(url);
@@ -28,8 +30,8 @@ export default async function globalSetup() {
   mkdirSync('.dados-e2e', { recursive: true });
   const log = openSync('.dados-e2e/worker.log', 'a');
   const worker = spawn(process.execPath, ['--import', 'tsx', 'scripts/worker.ts'], {
-    // AMBIENTE_E2E traz PERMITIR_FALSOS=1 (contrato §10, E1).
-    env: { ...process.env, ...AMBIENTE_E2E, DATABASE_URL: url },
+    // O ambiente traz PERMITIR_FALSOS=1 (contrato §10, E1) e, no modo bitbrain, o Bitbrain falso.
+    env: { ...process.env, ...ambienteE2E(modo), DATABASE_URL: url },
     stdio: ['ignore', log, log],
     windowsHide: true,
   });

@@ -13,7 +13,7 @@ describe('configML', () => {
         ML_USAR_PKCE: 'true',
         CHAVE_CRIPTOGRAFIA: 'abc',
       }),
-    ).toEqual({ modo: 'api', clientId: '999', clientSecret: 's', redirectUri: 'https://x/api/ml/retorno', usarPkce: true, chaveBase64: 'abc' });
+    ).toEqual({ modo: 'api', clientId: '999', clientSecret: 's', redirectUri: 'https://x/api/ml/retorno', usarPkce: true, chaveBase64: 'abc', bitbrainUrl: '', bitbrainToken: '', permitirFalsos: false });
     expect(configML({ ML_USAR_PKCE: true }).usarPkce).toBe(true);
     expect(configML({ ML_USAR_PKCE: 'false' }).usarPkce).toBe(false);
   });
@@ -44,5 +44,17 @@ describe('chaveCriptografia', () => {
   it('no modo api sem chave, ou com chave de tamanho errado, é ErroConfiguracaoML', () => {
     expect(() => chaveCriptografia(configML({ ML_CONECTOR: 'api' }))).toThrow(ErroConfiguracaoML);
     expect(() => chaveCriptografia(configML({ CHAVE_CRIPTOGRAFIA: randomBytes(8).toString('base64') }))).toThrow(ErroConfiguracaoML);
+  });
+});
+
+describe('configML no modo bitbrain', () => {
+  it('lê a URL (sem a barra do fim), o token e a liberação dos falsos', () => {
+    const c = configML({ ML_CONECTOR: 'bitbrain', BITBRAIN_URL: ' https://bb.exemplo.com.br/ ', BITBRAIN_TOKEN: ' t ', PERMITIR_FALSOS: '1' });
+    expect(c).toMatchObject({ modo: 'bitbrain', bitbrainUrl: 'https://bb.exemplo.com.br', bitbrainToken: 't', permitirFalsos: true });
+  });
+
+  it('faltas: no modo bitbrain só a URL e o token (o app do ML não é preciso)', () => {
+    expect(faltasConfigML(configML({ ML_CONECTOR: 'bitbrain' }))).toEqual(['BITBRAIN_URL', 'BITBRAIN_TOKEN']);
+    expect(faltasConfigML(configML({ ML_CONECTOR: 'bitbrain', BITBRAIN_URL: 'https://x', BITBRAIN_TOKEN: 't' }))).toEqual([]);
   });
 });

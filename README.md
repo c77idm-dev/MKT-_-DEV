@@ -128,6 +128,7 @@ No ar (provisório): https://devolucoes.179-199-128-100.sslip.io. A Fase 1 foi p
 | 5. Remessas | Lotes automáticos, NF de Remessa, lista consolidada | Pronta e no `main` (14/11/2026), com o emissor simulado. Falta publicar na VPS e a NF de remessa real em homologação ("Ligação das contas reais") |
 | 6. Acabamento | Painel de alertas, Falhas, prazo de guarda, backup e passagem para produção | Pronta e no `main` (15/11/2026). Falta publicar na VPS, testar a restauração do backup lá e a NF em produção aprovada pelo contador |
 | Publicação na VPS | Fases 2 a 6 de uma vez | **Próximo passo** (roteiro pronto no fim do plano da Fase 6) |
+| Integração pelo Bitbrain | Devoluções do ML pelo Bitbrain (várias contas, marcadas pelo Gestor), 5 extras do ML (urgente, reputação, Full, triagem e dinheiro) e respostas ao ML à mão | Pronta e no `main` (19/11/2026). A rota do Bitbrain já existe (`https://app.bitbrain.com.br`); falta ligar na VPS (`ML_CONECTOR=bitbrain`) |
 | Ligação das contas reais | ML real, Focus NFe em homologação, B2 para as mídias, domínio próprio | Depois da publicação |
 
 A ordem e as regras do trabalho em paralelo estão no [contrato entre as fases](docs/superpowers/plans/2026-11-12-contrato-fases-2-6.md).

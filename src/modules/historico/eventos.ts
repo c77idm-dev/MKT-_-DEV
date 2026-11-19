@@ -20,7 +20,9 @@ export type EntidadeHistorico =
   | 'nota_fiscal'
   | 'lote'
   /** Melhoria 3: a retirada do Full (as fotos dela gravam evidencia_* aqui). */
-  | 'retirada_full';
+  | 'retirada_full'
+  /** Integração Bitbrain: a conta (id = empresa do Bitbrain). */
+  | 'conta_bitbrain';
 
 export type NovoEvento = {
   entidade: EntidadeHistorico;

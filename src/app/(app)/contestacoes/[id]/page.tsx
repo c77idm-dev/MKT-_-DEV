@@ -9,13 +9,15 @@ import { obterDb } from '@/db';
 import { formatarDataHora } from '@/lib/formatar';
 import { primeiroValor } from '@/lib/parametros';
 import { exigirPermissao } from '@/modules/auth/servidor';
+import { configML } from '@/modules/mercado-livre/config';
 import { obterContestacao } from '@/modules/mercado-livre/contestacoes';
 import { ROTULO_MOTIVO_CANAL, ROTULO_STATUS_CONTESTACAO } from '@/modules/mercado-livre/dominio';
 import { LIMITE_MENSAGEM } from '@/modules/mercado-livre/resultado';
 import { TOM_STATUS_CONTESTACAO } from '@/modules/mercado-livre/selos';
 import { armazenamentoDoProvedor, provedorAtual } from '@/modules/midia/armazenamento';
-import { enviarAcao } from './acoes';
+import { enviarAcao, marcarRespondidaAcao } from './acoes';
 import { FormularioContestacao } from './FormularioContestacao';
+import { RespondaNoML } from './RespondaNoML';
 
 export const metadata: Metadata = { title: 'Contestação · Gestão de Devoluções' };
 
@@ -29,7 +31,10 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
   const { id } = await params;
   const c = await obterContestacao(obterDb(), id);
   if (!c) notFound();
-  const pedido = primeiroValor((await searchParams).ok) === 'solicitado';
+  const ok = primeiroValor((await searchParams).ok);
+  const pedido = ok === 'solicitado';
+  const respondida = ok === 'respondida';
+  const modoBitbrain = configML().modo === 'bitbrain';
   // Cada foto pelo provedor onde foi gravada (disco ou s3; contrato §10, E15).
   const fotos = await Promise.all(
     c.fotos.map(async (f) => ({
@@ -57,6 +62,7 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
       </div>
 
       {pedido && c.status !== 'FALHOU' && <MensagemSucesso texto="Envio pedido ao Mercado Livre. O resultado aparece aqui em instantes." />}
+      {respondida && <MensagemSucesso texto="Contestação marcada como respondida no ML." />}
       {c.status === 'FALHOU' && c.erro && (
         <p role="alert" className={`${ALERTA_ERRO} [overflow-wrap:anywhere]`}>
           O envio falhou: {c.erro}
@@ -82,6 +88,7 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
           <Dado rotulo="ID da devolução no ML" mono>
             {c.devolucaoExternaId ?? '—'}
           </Dado>
+          {c.conta && <Dado rotulo="Conta">{c.conta}</Dado>}
         </dl>
       </section>
 
@@ -118,10 +125,10 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
       {c.status === 'ENVIADA' && (
         <section aria-labelledby="titulo-enviada" className={`${CARTAO} flex flex-col gap-3`}>
           <h2 id="titulo-enviada" className="text-base font-bold">
-            Enviada ao ML
+            {modoBitbrain ? 'Respondida no ML' : 'Enviada ao ML'}
           </h2>
           <dl className="grid gap-3">
-            <Dado rotulo="Enviada em">
+            <Dado rotulo={modoBitbrain ? 'Respondida em' : 'Enviada em'}>
               {c.enviadaEm ? formatarDataHora(c.enviadaEm) : '—'}
               {c.revisadoPorNome ? ` por ${c.revisadoPorNome}` : ''}
             </Dado>
@@ -139,9 +146,22 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
         </section>
       )}
 
-      {podeEditar && (
-        <FormularioContestacao acao={enviarAcao.bind(null, c.id)} motivo={c.motivo} mensagem={c.mensagem} limiteMensagem={LIMITE_MENSAGEM} fotos={fotos} />
-      )}
+      {podeEditar &&
+        (modoBitbrain ? (
+          <RespondaNoML
+            acao={marcarRespondidaAcao.bind(null, c.id)}
+            codigo={c.codigo}
+            conta={c.conta}
+            pedidos={c.pedidos.join(', ')}
+            reclamacaoId={c.reclamacaoId}
+            motivo={c.motivo}
+            rotuloMotivo={ROTULO_MOTIVO_CANAL[c.motivo]}
+            mensagem={c.mensagem}
+            fotos={fotos.map(({ id, rotulo, url }) => ({ id, rotulo, url }))}
+          />
+        ) : (
+          <FormularioContestacao acao={enviarAcao.bind(null, c.id)} motivo={c.motivo} mensagem={c.mensagem} limiteMensagem={LIMITE_MENSAGEM} fotos={fotos} />
+        ))}
     </div>
   );
 }

@@ -5,9 +5,13 @@ import { ITEM_LISTA, VAZIO } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { primeiroValor } from '@/lib/parametros';
 import { exigirPermissao } from '@/modules/auth/servidor';
+import { configML } from '@/modules/mercado-livre/config';
 import { contarContestacoes, listarContestacoes } from '@/modules/mercado-livre/contestacoes';
 import { ehStatusContestacao, ROTULO_MOTIVO_CANAL, ROTULO_STATUS_CONTESTACAO, type StatusContestacao } from '@/modules/mercado-livre/dominio';
+import { listarOkPendentes } from '@/modules/mercado-livre/respostas-manuais';
 import { TOM_STATUS_CONTESTACAO } from '@/modules/mercado-livre/selos';
+import { marcarOkRespondidoAcao } from './acoes';
+import { OkParaResponder } from './OkParaResponder';
 
 export const metadata: Metadata = { title: 'Contestações ML · Gestão de Devoluções' };
 
@@ -22,14 +26,38 @@ type Props = { searchParams: Promise<{ status?: string | string[] }> };
 /** Spec §6.6 (extra do PDF, aprovado na spec): fila das contestações com o prazo do ML em destaque. Só o Gestor (§6.9). */
 export default async function PaginaContestacoes({ searchParams }: Props) {
   await exigirPermissao('administrar');
+  const modoBitbrain = configML().modo === 'bitbrain';
   const pedido = primeiroValor((await searchParams).status);
   const status: StatusContestacao = ehStatusContestacao(pedido) ? pedido : 'AGUARDANDO_GESTOR';
   const db = obterDb();
-  const [lista, contagem] = await Promise.all([listarContestacoes(db, status), contarContestacoes(db)]);
+  const [lista, contagem, okPendentes] = await Promise.all([
+    listarContestacoes(db, status),
+    contarContestacoes(db),
+    modoBitbrain ? listarOkPendentes(db) : Promise.resolve([]),
+  ]);
   const filtro = FILTROS.find((f) => f.status === status) ?? FILTROS[0];
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
       <h1 className="text-xl font-bold">Contestações ML</h1>
+      {modoBitbrain && (
+        <section aria-labelledby="titulo-ok-ml" className="flex flex-col gap-2">
+          <h2 id="titulo-ok-ml" className="text-base font-bold">
+            OK para responder no ML <span className="text-sm font-normal text-texto-2">(extra)</span>
+          </h2>
+          <p className="text-sm text-texto-2">Conferidas sem problema: responda &quot;OK&quot; a cada uma no Mercado Livre (ou no Bitbrain) e marque aqui.</p>
+          <OkParaResponder
+            itens={okPendentes.map((o) => ({
+              devolucaoId: o.devolucaoId,
+              codigo: o.codigo,
+              pedidos: o.pedidos.join(', '),
+              reclamacaoId: o.reclamacaoId,
+              conta: o.conta,
+              selo: o.selo,
+            }))}
+            acao={marcarOkRespondidoAcao}
+          />
+        </section>
+      )}
       <nav aria-label="Filtrar contestações" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
         {FILTROS.map((f) => (
           <Link

@@ -1,19 +1,23 @@
 import type { z } from 'zod';
+import { AFETA_REPUTACAO_DO_ML, CONDICAO_TRIAGEM_DO_ML, DINHEIRO_DO_ML } from '@/modules/mercado-livre/dominio';
 import type { DevolucaoExterna } from '../tipos';
 import {
   esquemaAnuncio,
   esquemaDevolucao,
   esquemaEnvio,
+  esquemaEnvioVenda,
   esquemaMotivoReclamacao,
   esquemaPedido,
   esquemaReclamacao,
+  esquemaReputacao,
+  esquemaRevisoes,
   type AnuncioJson,
   type DevolucaoJson,
   type EnvioDevolucaoJson,
   type PedidoJson,
   type ReclamacaoJson,
 } from './esquemas';
-import type { DadosDevolucaoML } from './tipos';
+import type { DadosDevolucaoML, ExtrasML } from './tipos';
 
 export class ErroFormatoML extends Error {
   constructor(oQue: string, detalhes: string) {
@@ -102,12 +106,77 @@ export function textoMotivoReclamacao(json: unknown): string | null {
   return null;
 }
 
+export const EXTRAS_VAZIOS: ExtrasML = {
+  acaoPendente: null,
+  urgente: null,
+  afetaReputacao: null,
+  ehFull: null,
+  triagemCondicao: null,
+  triagemEtapa: null,
+  dinheiro: null,
+};
+
+function porPrazo(a: { due_date: Date | null }, b: { due_date: Date | null }): number {
+  return (a.due_date?.getTime() ?? Number.POSITIVE_INFINITY) - (b.due_date?.getTime() ?? Number.POSITIVE_INFINITY);
+}
+
+/** D7/A19: a ação obrigatória da loja (urgente) ou, sem ela, a revisão com prazo (não urgente). Sem a loja: nulos. */
+function acaoDaLoja(r: ReclamacaoJson): Pick<ExtrasML, 'acaoPendente' | 'urgente'> {
+  const loja = r.players.filter((p) => p.role === 'respondent' || p.type === 'seller');
+  if (loja.length === 0) return { acaoPendente: null, urgente: null };
+  const acoes = loja.flatMap((p) => p.available_actions);
+  const obrigatoria = acoes.filter((a) => a.mandatory === true).sort(porPrazo)[0];
+  if (obrigatoria) return { acaoPendente: obrigatoria.action, urgente: true };
+  const revisao = acoes.filter((a) => ACOES_REVISAO.has(a.action) && a.due_date !== null).sort(porPrazo)[0];
+  return { acaoPendente: revisao?.action ?? null, urgente: false };
+}
+
+function traduzir<T extends string>(mapa: Record<string, T>, valor: string | null | undefined): T | null {
+  return valor && Object.hasOwn(mapa, valor) ? mapa[valor] : null;
+}
+
+/** Função pura (§4.5): os 5 extras a partir do que o ML devolveu. Leitura ausente ou fora do formato → nulo. */
+export function extrasDaReclamacao(e: {
+  reclamacao: ReclamacaoJson;
+  devolucao: DevolucaoJson | null;
+  reputacao: unknown;
+  revisoes: unknown;
+  envioVenda: unknown;
+}): ExtrasML {
+  const reputacao = esquemaReputacao.safeParse(e.reputacao);
+  const envio = esquemaEnvioVenda.safeParse(e.envioVenda);
+  const tipoLogistico = envio.success ? (envio.data.logistic_type ?? envio.data.logistic?.type ?? null) : null;
+  const revisoes = esquemaRevisoes.safeParse(e.revisoes);
+  const triagem = (revisoes.success ? revisoes.data.flatMap((r) => r.resource_reviews) : []).filter((x) => x.product_condition !== null).at(-1) ?? null;
+  return {
+    ...acaoDaLoja(e.reclamacao),
+    afetaReputacao: reputacao.success ? traduzir(AFETA_REPUTACAO_DO_ML, reputacao.data.affects_reputation) : null,
+    ehFull: tipoLogistico === null ? null : tipoLogistico === 'fulfillment',
+    triagemCondicao: traduzir(CONDICAO_TRIAGEM_DO_ML, triagem?.product_condition),
+    triagemEtapa: triagem?.stage ?? null,
+    dinheiro: e.devolucao ? traduzir(DINHEIRO_DO_ML, e.devolucao.status_money) : null,
+  };
+}
+
+/** O envio da venda (pedido.shipping.id) do 1º pedido que tiver: é nele que o ML diz se a venda foi Full. */
+export function idEnvioDaVenda(pedidos: unknown[]): string | null {
+  for (const p of pedidos) {
+    const lido = esquemaPedido.safeParse(p);
+    const id = lido.success ? (lido.data.shipping?.id ?? null) : null;
+    if (id) return id;
+  }
+  return null;
+}
+
 export type EntradaMapeamento = {
   reclamacao: unknown;
   devolucao: unknown | null;
   pedidos: unknown[];
   anuncios: unknown[];
   envio: unknown | null;
+  reputacao?: unknown;
+  revisoes?: unknown;
+  envioVenda?: unknown;
 };
 
 /**
@@ -125,6 +194,7 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
       statusDevolucao: null,
       atualizadaEm: r.last_updated ?? r.date_created,
       devolucao: null,
+      extras: extrasDaReclamacao({ reclamacao: r, devolucao: null, reputacao: e.reputacao ?? null, revisoes: null, envioVenda: null }),
     };
   }
   const d = analisar(esquemaDevolucao, e.devolucao, 'devolução');
@@ -168,5 +238,12 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
       };
     }),
   };
-  return { reclamacaoId: r.id, statusReclamacao: r.status, motivoId: r.reason_id, subtipo: d.subtype, statusDevolucao: d.status, atualizadaEm, devolucao };
+  const extras = extrasDaReclamacao({
+    reclamacao: r,
+    devolucao: d,
+    reputacao: e.reputacao ?? null,
+    revisoes: e.revisoes ?? null,
+    envioVenda: e.envioVenda ?? null,
+  });
+  return { reclamacaoId: r.id, statusReclamacao: r.status, motivoId: r.reason_id, subtipo: d.subtype, statusDevolucao: d.status, atualizadaEm, devolucao, extras };
 }

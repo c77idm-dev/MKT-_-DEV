@@ -99,6 +99,13 @@
       "when": 1794849038239,
       "tag": "0013_melhoria3_retirada_full",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795093887779,
+      "tag": "0014_bitbrain_contas_extras",
+      "breakpoints": true
     }
   ]
 }

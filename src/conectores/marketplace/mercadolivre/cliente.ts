@@ -5,13 +5,16 @@ export class ErroML extends Error {
   /** Não enumerável: o pg-boss grava o erro em job.output copiando as chaves próprias, e o corpo cru pode ter dados do comprador. */
   declare readonly corpo: string;
   readonly caminho: string;
+  /** Empresa do Bitbrain quando o erro veio pela rota dele (D16); null no modo api. */
+  readonly empresa: string | null;
 
-  constructor(status: number, corpo: string, caminho: string) {
-    super(`Mercado Livre respondeu ${status} em ${caminho}`);
+  constructor(status: number, corpo: string, caminho: string, empresa: string | null = null) {
+    super(`Mercado Livre respondeu ${status} em ${caminho}${empresa ? ` (conta ${empresa}, pelo Bitbrain)` : ''}`);
     this.name = 'ErroML';
     this.status = status;
     Object.defineProperty(this, 'corpo', { value: corpo, enumerable: false });
     this.caminho = caminho;
+    this.empresa = empresa;
   }
 }
 
@@ -38,8 +41,8 @@ export type OpcoesClienteML = {
 /** Spec §7.2: o 429 (`local_rate_limited`) pede nova tentativa com espera crescente e jitter. */
 export const NOVAS_TENTATIVAS_429 = 3;
 
-export function esperaDo429(tentativa: number, retryAfter: string | null, aleatorio: () => number): number {
-  if (retryAfter !== null && /^\d+$/.test(retryAfter.trim())) return Math.min(Number(retryAfter) * 1000, 30_000);
+export function esperaDo429(tentativa: number, retryAfter: string | null, aleatorio: () => number, maximoMs = 30_000): number {
+  if (retryAfter !== null && /^\d+$/.test(retryAfter.trim())) return Math.min(Number(retryAfter) * 1000, maximoMs);
   return Math.min(500 * 2 ** tentativa, 8_000) + Math.floor(aleatorio() * 250);
 }
 

@@ -13,6 +13,11 @@ function lista<const T extends readonly [string, ...string[]]>(valores: T, padra
 /** Só para desenvolvimento e testes. Em produção, SEGREDO_LINKS é obrigatório. */
 export const SEGREDO_LINKS_DESENVOLVIMENTO = 'segredo-de-desenvolvimento-nao-usar-em-producao';
 
+/** Só para testes (contrato §10, E1; plano Bitbrain D3): o Bitbrain falso. Esta URL só vale com PERMITIR_FALSOS=1. */
+export const URL_BITBRAIN_FALSO = 'http://bitbrain-falso.invalid';
+/** Token que o Bitbrain falso aceita. Não é segredo: só serve para o falso. */
+export const TOKEN_BITBRAIN_FALSO = 'token-do-bitbrain-falso-so-para-testes';
+
 /** Todas as variáveis das Fases 2 a 4 (contrato §3). Variável nova só por emenda ao contrato. */
 const esquema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL é obrigatório'),
@@ -34,12 +39,15 @@ const esquema = z.object({
   FFMPEG_PATH: comPadrao('ffmpeg'),
   FFPROBE_PATH: comPadrao('ffprobe'),
   // Mercado Livre (Fase 3)
-  ML_CONECTOR: lista(['api', 'falso'] as const, 'api'),
+  ML_CONECTOR: lista(['api', 'bitbrain', 'falso'] as const, 'api'),
   ML_CLIENT_ID: opcional(),
   ML_CLIENT_SECRET: opcional(),
   ML_REDIRECT_URI: opcional(),
   ML_USAR_PKCE: lista(['true', 'false'] as const, 'false'),
   CHAVE_CRIPTOGRAFIA: opcional(),
+  // Bitbrain (integração de 18/11): só com ML_CONECTOR=bitbrain. O token é o DEVOLUCOES_TOKEN do Bitbrain.
+  BITBRAIN_URL: opcional(),
+  BITBRAIN_TOKEN: opcional(),
   // Focus NFe (Fase 4)
   EMISSOR_NFE: lista(['focus', 'falso'] as const, 'focus'),
   FOCUS_TOKEN_HOMOLOGACAO: opcional(),
@@ -50,6 +58,30 @@ type EnvLido = z.infer<typeof esquema>;
 export type Env = Omit<EnvLido, 'SEGREDO_LINKS'> & { SEGREDO_LINKS: string };
 
 const VARIAVEIS_S3 = ['S3_ENDPOINT', 'S3_REGIAO', 'S3_BUCKET', 'S3_CHAVE_ID', 'S3_CHAVE_SECRETA'] as const;
+
+function protocoloDe(url: string): string {
+  try {
+    return new URL(url).protocol;
+  } catch {
+    return '';
+  }
+}
+
+/** As mensagens nunca trazem o valor das variáveis (o token é segredo). */
+function problemasBitbrain(e: EnvLido): string[] {
+  const erros: string[] = [];
+  const url = e.BITBRAIN_URL;
+  if (!url) erros.push('BITBRAIN_URL: obrigatório com ML_CONECTOR=bitbrain');
+  else if (url === URL_BITBRAIN_FALSO) {
+    if (e.PERMITIR_FALSOS !== '1') erros.push('BITBRAIN_URL: o Bitbrain falso só vale com PERMITIR_FALSOS=1 (testes)');
+  } else {
+    const protocolo = protocoloDe(url);
+    if (protocolo !== 'https:' && protocolo !== 'http:') erros.push('BITBRAIN_URL: precisa ser um endereço http(s) válido');
+    else if (e.NODE_ENV === 'production' && protocolo !== 'https:') erros.push('BITBRAIN_URL: em produção precisa começar com https://');
+  }
+  if (!e.BITBRAIN_TOKEN) erros.push('BITBRAIN_TOKEN: obrigatório com ML_CONECTOR=bitbrain');
+  return erros;
+}
 
 function problemas(e: EnvLido): string[] {
   const erros: string[] = [];
@@ -69,6 +101,7 @@ function problemas(e: EnvLido): string[] {
   if (e.CHAVE_CRIPTOGRAFIA && Buffer.from(e.CHAVE_CRIPTOGRAFIA, 'base64').length !== 32) {
     erros.push('CHAVE_CRIPTOGRAFIA: precisa ter 32 bytes em base64 (gere com: openssl rand -base64 32)');
   }
+  if (e.ML_CONECTOR === 'bitbrain') erros.push(...problemasBitbrain(e));
   return erros;
 }
 

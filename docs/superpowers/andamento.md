@@ -1,8 +1,27 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 19/11/2026 (integração com o Bitbrain: rota do Bitbrain no ar; nosso lado com as Tarefas 1 a 3 de 14 prontas). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main`; falta ligar na VPS). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
+- **Integração pelo Bitbrain: no `main` desde 19/11.** Spec [specs/2026-11-18-integracao-bitbrain-design.md](specs/2026-11-18-integracao-bitbrain-design.md) e plano [plans/2026-11-18-integracao-bitbrain.md](plans/2026-11-18-integracao-bitbrain.md).
+  - **Revisão final aprovada** (run `wf_b85dc797-2e1`), com 10 itens corrigidos e nenhuma rodada extra. Os principais:
+    - o nome longo da conta não alarga mais o cartão no celular;
+    - o "Urgentes do ML primeiro (extra)" ficou marcado nas etapas 2 e 3;
+    - o "Responda no ML" manda abrir a venda e a reclamação, não o código interno;
+    - os dois e2e instáveis ficaram determinísticos: `estoque-bom.spec.ts:32`, que já falhava antes desta branch, e `bitbrain-devolucoes`;
+    - o adendo do `logistic` entrou no texto para colar no Bitbrain;
+    - o atalho `dc` ficou definido no `deploy-vps.md`.
+  - **O que ficou de propósito** (riscos pequenos, cada um com o motivo) está no fim de `.superpowers/sdd/fases-2-6/progress-bb.md`, que é local e fica fora do git.
+  - **O que entregou:**
+    - `ML_CONECTOR=bitbrain`, com `BITBRAIN_URL` e `BITBRAIN_TOKEN`;
+    - tabela `contas_bitbrain` e migração `0014_bitbrain_contas_extras`;
+    - varredura conta por conta;
+    - 5 extras nos dois modos;
+    - respostas ao ML à mão: "Responda no ML" e "OK para responder no ML".
+  - **Testes (19/11):** unidade 823; integração 497 (7 pulados); e2e do modo `api`/falso 214 (8 pulados); e2e do modo Bitbrain 12 (6 testes nos projetos `computador` e `celular`). O e2e do modo Bitbrain roda à parte, com `npm run test:e2e:bitbrain`. Typecheck, lint e `build:scripts` limpos.
+  - **Falta:**
+    - a rota do Bitbrain já foi construída e confere com o contrato (base `https://app.bitbrain.com.br`, limite `DEVOLUCOES_RPM` de 120/min por empresa). Falta mandar a ela o adendo do `logistic.type` ([../integracao/bitbrain-rota-devolucoes.md](../integracao/bitbrain-rota-devolucoes.md)) e publicá-la, se ainda não estiver no ar;
+    - ligar na VPS, conforme `docs/operacao/deploy-vps.md`, seção "Ligar o modo Bitbrain".
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
   - **Conector "Bitbrain" do claude.ai: autorizado e explorado em 18/11.**
     - **O que é:** o painel das lojas no ML, só de leitura.
@@ -29,22 +48,11 @@ Atualizado em 19/11/2026 (integração com o Bitbrain: rota do Bitbrain no ar; n
   - **Desenho (B1, espelho com lista fechada).** A rota do Bitbrain repassa ao ML só as 12 leituras que o nosso `ConectorML` faz e tira os dados pessoais. O nosso lado troca só o transporte (`ClienteViaBitbrain`) e reaproveita o mapeamento já testado.
     - Spec: `docs/superpowers/specs/2026-11-18-integracao-bitbrain-design.md`.
     - Contrato da rota, com o texto para colar na sessão do Bitbrain: `docs/integracao/bitbrain-rota-devolucoes.md`.
-    - Os dois ficam na branch **`integracao-bitbrain`**, no GitHub.
-  - **Onde está o trabalho:**
-    - worktree `C:/Users/idmpc/devolucoes-wt/bitbrain`, na branch `integracao-bitbrain`;
-    - bancos `devolucoes_f7` e `devolucoes_test_f7`, criados com o superusuário `postgres` (a senha está em `C:\Users\idmpc\.postgres-superusuario.txt`), porque o papel `devolucoes` não cria bancos;
-    - `PORTA_E2E=3107`.
+    - A branch `integracao-bitbrain` foi juntada no `main` em 19/11.
+  - **Como foi construída:** 14 tarefas pelo fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js) (run `wf_064982fb-f9b`), todas aprovadas de primeira, e a revisão final pelo [workflows/fase-final.js](workflows/fase-final.js) (run `wf_b85dc797-2e1`).
   - **Próximos passos:**
-    1. ✅ **Plano pronto:** `docs/superpowers/plans/2026-11-18-integracao-bitbrain.md`, na branch, com 14 tarefas e as decisões D1–D21.
-    2. **Construção em andamento**, pelo fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js), no run `wf_064982fb-f9b`.
-       - **Argumentos:** `{"fase":"Bitbrain","pasta":"/c/Users/idmpc/devolucoes-wt/bitbrain","branch":"integracao-bitbrain","pref":"bb","tarefas":[1,…,14],"porta":3107,"bancoTeste":"devolucoes_test_f7"}`.
-       - **Os resumos** `bb-task-N-brief.md` são o preâmbulo do plano mais a tarefa.
-       - **19/11, 15h30:** ✅ as **14 tarefas estão prontas**, todas aprovadas de primeira, sem nenhuma rodada de correção (`8676f95`, já no GitHub).
-       - **Revisão final em andamento** no run `wf_b85dc797-2e1` ([workflows/fase-final.js](workflows/fase-final.js)), com os mesmos argumentos mais `"base":"33db31d"` e `"plano":"docs/superpowers/plans/2026-11-18-integracao-bitbrain.md"`, e as decisões desta fase em `decisoes`.
-       - **Depois:** juntar no `main`. O `main` só tem commits de documentos desde `697d34c`; o conflito esperado é só no `andamento.md`.
-       - **Para olhar na revisão final:** o e2e `estoque-bom.spec.ts:32` [celular] falhou nas rodadas completas das Tarefas 2 e 11, na checagem da ordem dos cartões. Nas duas vezes pareceu sem relação com a tarefa. Conferir se falha também no `main`.
-       - **Se o fluxo parar com commit parcial:** pôr a nota de retomada no topo do `bb-task-N-brief.md`, como foi feito na Tarefa 4, e retomar com `resumeFromRunId`.
-       - **Depois:** a revisão final ([workflows/fase-final.js](workflows/fase-final.js)) e a junção no `main`.
+    1. **Pendente na tela Fluxo (pedido do usuário em 19/11):** o topo do Fluxo no celular, com Recebimento, Nova devolução, Retiradas do Full e Planilha Volta ao armazém, está confuso. As opções foram desenhadas em https://claude.ai/artifact/2szY5un7T73PeLAHZ3Si6D. A recomendada é a **A**: no topo só "Receber pacote"; Nova devolução e Importar planilha na etapa 1; Volta ao armazém e Retiradas do Full na etapa 4. **Esperando a escolha do usuário.**
+    2. **Guia ilustrado etapa por etapa (19/11):** https://claude.ai/artifact/31b76FEK2BWz7tbuB5z4wG, com 45 telas reais do celular e dados de exemplo. Se a tela Fluxo mudar, as capturas precisam ser refeitas.
     3. ✅ **A rota do Bitbrain está publicada** (Bitbrain `50afdf8`, https://app.bitbrain.com.br): devolve `401` sem token, e com token lista as 5 contas.
        - O token já está no `.env` do Bitbrain na VPS.
        - **Falta o adendo do Full na sessão do Bitbrain:** manter `logistic` (`mode`, `type`, `direction`) no filtro de `/shipments` e publicar de novo.
@@ -118,6 +126,7 @@ Atualizado em 19/11/2026 (integração com o Bitbrain: rota do Bitbrain no ar; n
   - Quando o time termina as tarefas, rode o fluxo [workflows/fase-final.js](workflows/fase-final.js) na fase. Ele faz a revisão final (servidor e telas), as correções, a re-revisão e o push. Argumentos: os mesmos do outro fluxo, mais `"base":"<commit do main de onde a fase partiu>"`, `"plano":"docs/superpowers/plans/<plano da fase>.md"` e, se precisar, `"decisoes"`.
 - **Atenção ao publicar na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500. As variáveis do backup vão num arquivo **separado**, o `.env.backup` (contrato E20), nunca no `.env.producao`.
 - **Próximos passos, em ordem:**
+  0. Ligar o modo Bitbrain na VPS depois que o Bitbrain publicar a rota; testar com uma conta marcada e conferir A16–A19 com dados reais.
   1. ~~Publicação na VPS~~ **feita em 15/11.** Falta o usuário testar no celular (câmera real no Android e no iPhone, Foto 1, Falhas, Alertas). Texto antigo: **Publicação na VPS de tudo de uma vez** (Fases 2 a 6; decisão do usuário em 14/11). Passe ao usuário o texto pronto para colar, que está no plano da Fase 6, seção "Depois da fase", item 1. Passos novos desde a Fase 1: `SEGREDO_LINKS` (E17), serviço `worker`, volume `/data`, `location /api/midia/` no nginx (só `nginx -t && systemctl reload nginx`), o `.env.backup` com as variáveis `BACKUP_*` (E20) e o serviço `backup`, mais um backup e uma restauração de teste (critério de pronto da spec §14). Antes, o usuário cria no B2 o bucket só de backup e a chave restrita a ele.
   2. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação (certificado A1), B2 e domínio. O usuário deve separar o certificado A1, a conta da Focus e o app do ML. Depois, a passagem da NF-e para produção com a aprovação do contador (plano da Fase 6, "Depois da fase", item 2) e as conferências manuais que sobraram (item 3).
   3. A pergunta da Inscrição Estadual.
@@ -139,6 +148,7 @@ Atualizado em 19/11/2026 (integração com o Bitbrain: rota do Bitbrain no ar; n
   - Alvos de toque de 44 px ou mais; contraste de 4,5:1 ou mais.
   - Escreva e2e nos projetos `computador` e `celular`.
 - **Processo (desenvolvimento guiado por subagentes):**
+  - O e2e tem duas rodadas: `npm run test:e2e` (modo `api`/falso) e `npm run test:e2e:bitbrain` (modo Bitbrain, arquivos `tests/e2e/bitbrain-*.spec.ts`).
   - Para cada tarefa do plano: um implementador; depois uma revisão da tarefa; depois rodadas de correção até a revisão ficar limpa.
   - No fim da fase: uma revisão final dividida em servidor e telas; depois uma onda de correções; depois o merge no `main` e o push.
   - Use TDD.

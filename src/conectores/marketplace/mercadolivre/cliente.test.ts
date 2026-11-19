@@ -49,6 +49,12 @@ describe('esperaDo429 (spec §7.2: espera crescente com jitter)', () => {
     expect(esperaDo429(0, '120', () => 0)).toBe(30_000);
     expect(esperaDo429(0, 'Wed, 21 Oct 2026 07:28:00 GMT', () => 0)).toBe(500);
   });
+
+  it('o teto do Retry-After é 30 s no ML e pode subir (60 s no Bitbrain, D20)', () => {
+    expect(esperaDo429(0, '60', () => 0)).toBe(30_000);
+    expect(esperaDo429(0, '60', () => 0, 60_000)).toBe(60_000);
+    expect(esperaDo429(0, '120', () => 0, 60_000)).toBe(60_000);
+  });
 });
 
 describe('criarClienteML: 429, 401, POST, multipart e texto', () => {

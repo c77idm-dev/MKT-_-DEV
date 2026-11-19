@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { eq } from 'drizzle-orm';
 import { idReclamacaoFalsa } from '../../src/conectores/marketplace/mercadolivre/falso';
-import { devolucoes } from '../../src/db/schema';
-import { comBanco, entrarComo, paginaNaoEncontrada, semRolagemLateral } from './apoio';
+import { devolucoes, reclamacoesMl } from '../../src/db/schema';
+import { criarDevolucaoTeste } from '../helpers/fabricas';
+import { codigoUnico, comBanco, entrarComo, paginaNaoEncontrada, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { alvosDeToque44, avisarML, contestacaoPronta, emModoFalso, esperarDevolucaoDaReclamacao, garantirContaFalsa, semContaML } from './apoio-ml';
 import { USUARIOS_E2E } from './dados';
 
@@ -53,7 +54,7 @@ test('aviso do ML cria a devolução sozinha e o detalhe mostra a seção Mercad
   await expect(page.getByRole('heading', { level: 1, name: codigo })).toBeVisible();
   await expect(page.getByText('Automática (API do canal)')).toBeVisible();
   const secao = page.locator('section[aria-labelledby="titulo-ml"]');
-  await expect(secao.getByRole('heading', { name: 'Mercado Livre' })).toBeVisible();
+  await expect(secao.getByRole('heading', { name: 'Mercado Livre', exact: true })).toBeVisible();
   await expect(secao.getByText(reclamacaoId, { exact: true })).toBeVisible();
   await expect(secao.getByText('A caminho')).toBeVisible();
   await semRolagemLateral(page);
@@ -156,4 +157,50 @@ test('fiscal não abre Configurações › Mercado Livre nem o detalhe de uma co
   await entrarComo(page, USUARIOS_E2E.fiscal);
   await paginaNaoEncontrada(page, '/configuracoes/mercado-livre');
   await paginaNaoEncontrada(page, `/contestacoes/${id}`);
+});
+
+test('extras do ML (cenário 2): Urgente, Afeta reputação e Full no cartão; os extras no detalhe', async ({ page, request }) => {
+  await garantirContaFalsa();
+  const reclamacaoId = idReclamacaoFalsa(2);
+  await avisarML(request, reclamacaoId);
+  const codigo = await esperarDevolucaoDaReclamacao(reclamacaoId);
+
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto(`/fluxo/busca?reclamacao=${reclamacaoId}`);
+  const cartao = page.getByRole('link', { name: new RegExp(codigo) });
+  await expect(cartao).toContainText('Urgente · até');
+  await expect(cartao).toContainText('Afeta reputação');
+  await expect(cartao).toContainText('Full');
+  await expect(cartao).not.toContainText('Mercado Livre ·');
+  await semRolagemLateral(page);
+
+  await page.goto(`/fluxo/devolucoes/${codigo}`);
+  const secao = page.locator('section[aria-labelledby="titulo-ml"]');
+  await expect(secao.getByText('Mais do Mercado Livre')).toBeVisible();
+  await expect(secao.getByText('Afeta a reputação')).toBeVisible();
+  await expect(secao.getByText('Revisar a devolução')).toBeVisible();
+  await expect(secao.getByText('retido')).toBeVisible();
+  await semRolagemLateral(page);
+  await alvosDeToque44(secao);
+});
+
+test('nas etapas 2 e 3 as urgentes vêm primeiro (extra)', async ({ page }) => {
+  const urgente = await comBanco(async (db) => {
+    // Só esta fica urgente (o banco do e2e é o mesmo no computador e no celular).
+    await db.update(reclamacoesMl).set({ urgente: false }).where(eq(reclamacoesMl.urgente, true));
+    const operador = await usuarioPorEmail(db, USUARIOS_E2E.operador.email);
+    const comum = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    const nova = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    await db.update(devolucoes).set({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: new Date(Date.now() - 3_600_000) }).where(eq(devolucoes.id, comum.id));
+    await db.update(devolucoes).set({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: new Date() }).where(eq(devolucoes.id, nova.id));
+    await db.insert(reclamacoesMl).values({ claimId: codigoUnico('CLM'), devolucaoId: nova.id, urgente: true, sincronizadaEm: new Date() });
+    return nova;
+  });
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto('/fluxo/etapa/2');
+  const primeiro = page.locator('main a[href^="/fluxo/devolucoes/DEV-"]').first();
+  await expect(primeiro).toHaveAttribute('href', `/fluxo/devolucoes/${urgente.codigo}`);
+  await expect(primeiro).toContainText('Urgente');
+  await expect(page.getByText('Urgentes do ML primeiro (extra).')).toBeVisible();
+  await semRolagemLateral(page);
 });
