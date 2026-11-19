@@ -33,6 +33,14 @@ Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main
         2. Pedir o adendo do `logistic` à sessão do Bitbrain, para o selo Full funcionar.
         3. Apagar as fotos que ficaram sem dono no armazenamento, das antigas DEV-000004 e 000005, e perguntar ao usuário se apaga também a DEV-000001.
         4. Mover o arquivo solto `/opt/devolucoes/backup-antes-fase1-20261112-1928.sql` para `~/backups-devolucoes`.
+      - **Em construção (aprovado em 19/11): produtos do ML com foto (extra)**, na branch `produtos-do-ml`, no mesmo worktree.
+        - O que faz:
+          - quando chega uma devolução do ML com um SKU não cadastrado, cria o produto com o título, o EAN (GTIN) e a foto principal do anúncio, sem fornecedor;
+          - se o produto já existe, só preenche o que estiver vazio;
+          - liga os itens das devoluções antigas na próxima atualização delas;
+          - migração `0015` (`produtos.foto_url` e `produtos.ml_item_id`);
+          - a fotinha aparece no cartão, na conferência, no detalhe e em Cadastros.
+        - Só os produtos que aparecem nas devoluções. Para trazer o catálogo inteiro, a rota do Bitbrain precisaria liberar a lista de anúncios, o que fica para depois, se o usuário pedir.
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
   - **Conector "Bitbrain" do claude.ai: autorizado e explorado em 18/11.**
     - **O que é:** o painel das lojas no ML, só de leitura.
