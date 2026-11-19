@@ -108,7 +108,8 @@ async function evento(
   await registrarEvento(tx, { entidade: 'devolucao', entidadeId: devolucaoId, acao, usuarioId: null, em: agora, ...extra });
 }
 
-async function gravarReclamacao(tx: DbOuTx, dados: DadosDevolucaoML, devolucaoId: string | null, agora: Date): Promise<void> {
+async function gravarReclamacao(tx: DbOuTx, dados: DadosDevolucaoML, devolucaoId: string | null, agora: Date, conta: string | null): Promise<void> {
+  const x = dados.extras;
   const valores = {
     returnId: dados.devolucao?.devolucaoExternaId ?? null,
     motivoId: dados.motivoId,
@@ -118,8 +119,30 @@ async function gravarReclamacao(tx: DbOuTx, dados: DadosDevolucaoML, devolucaoId
     devolucaoId,
     atualizadaNoMlEm: dados.atualizadaEm,
     sincronizadaEm: agora,
+    acaoPendente: x.acaoPendente,
+    urgente: x.urgente,
+    afetaReputacao: x.afetaReputacao,
+    ehFull: x.ehFull,
+    triagemCondicao: x.triagemCondicao,
+    triagemEtapa: x.triagemEtapa,
+    dinheiro: x.dinheiro,
+    ...(conta ? { conta } : {}),
   };
-  await tx.insert(reclamacoesMl).values({ claimId: dados.reclamacaoId, ...valores }).onConflictDoUpdate({ target: reclamacoesMl.claimId, set: valores });
+  await tx
+    .insert(reclamacoesMl)
+    .values({ claimId: dados.reclamacaoId, ...valores })
+    .onConflictDoUpdate({
+      target: reclamacoesMl.claimId,
+      set: {
+        ...valores,
+        // D8: uma leitura opcional recusada (nulo) não apaga o que o ML já tinha dito. Urgente e ação seguem o ML.
+        afetaReputacao: sql`coalesce(excluded."afeta_reputacao", ${reclamacoesMl.afetaReputacao})`,
+        ehFull: sql`coalesce(excluded."eh_full", ${reclamacoesMl.ehFull})`,
+        triagemCondicao: sql`coalesce(excluded."triagem_condicao", ${reclamacoesMl.triagemCondicao})`,
+        triagemEtapa: sql`coalesce(excluded."triagem_etapa", ${reclamacoesMl.triagemEtapa})`,
+        dinheiro: sql`coalesce(excluded."dinheiro", ${reclamacoesMl.dinheiro})`,
+      },
+    });
 }
 
 async function atualizar(tx: DbOuTx, atual: Atual, d: DevolucaoExterna, motivo: string | null, agora: Date): Promise<void> {
@@ -233,12 +256,12 @@ async function aplicarStatus(tx: DbOuTx, alvo: Atual, d: DevolucaoExterna, agora
  * Aplica no sistema o que o ML mostra de uma reclamação (contrato §5.5). Numa transação com trava por reclamação
  * (espaço 3 das travas do sistema: o 1 é do rastreio e o 2 da gestão de usuários).
  */
-export async function aplicarReclamacao(db: DbOuTx, dados: DadosDevolucaoML, agora: Date, fila?: Fila): Promise<ResultadoAplicacao> {
+export async function aplicarReclamacao(db: DbOuTx, dados: DadosDevolucaoML, agora: Date, fila?: Fila, conta: string | null = null): Promise<ResultadoAplicacao> {
   return db.transaction(async (tx): Promise<ResultadoAplicacao> => {
     await tx.execute(sql`select pg_advisory_xact_lock(3, hashtext(${`reclamacao:${dados.reclamacaoId}`}))`);
     const d = dados.devolucao;
     if (!d) {
-      await gravarReclamacao(tx, dados, null, agora);
+      await gravarReclamacao(tx, dados, null, agora, conta);
       return { acao: 'sem_devolucao' };
     }
     // O texto já foi buscado e guardado no cache antes da transação (tarefas.ts); aqui só é lido.
@@ -260,7 +283,7 @@ export async function aplicarReclamacao(db: DbOuTx, dados: DadosDevolucaoML, ago
         acao = 'vinculada';
         alvoId = manual.id;
       } else if (d.semEnvioFisico || encerradaNoML(d)) {
-        await gravarReclamacao(tx, dados, null, agora);
+        await gravarReclamacao(tx, dados, null, agora, conta);
         return { acao: 'so_consulta', motivo: d.semEnvioFisico ? 'low_cost' : 'encerrada_no_ml' };
       } else {
         const criada = await criarDevolucao(tx, dadosNovaDevolucao(d, motivo), { origem: 'API', usuario: null, canal: dadosCanal(d), agora });
@@ -271,7 +294,7 @@ export async function aplicarReclamacao(db: DbOuTx, dados: DadosDevolucaoML, ago
     }
     const [alvo] = await tx.select(COLUNAS).from(devolucoes).where(eq(devolucoes.id, alvoId));
     const status = await aplicarStatus(tx, alvo, d, agora);
-    await gravarReclamacao(tx, dados, alvo.id, agora);
+    await gravarReclamacao(tx, dados, alvo.id, agora, conta);
     if (acao === 'vinculada' && fila && DEPOIS_DA_CONFERENCIA.includes(status)) {
       // Chave diferente da do fim da conferência (`devolucaoId`), que já foi usada e ficou só com o evento "sem vínculo"
       // (contrato §10, E4). O vínculo acontece uma vez por devolução.

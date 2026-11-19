@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { contestacoesCanal, devolucoes, itensDevolucao, motivosReclamacaoMl, reclamacoesMl } from '@/db/schema';
+import { EXTRAS_VAZIOS } from '@/conectores/marketplace/mercadolivre/mapeamento';
 import { obterContestacao } from './contestacoes';
 import { FilaMemoria } from '@/modules/fila/fila';
 import { listarEventos } from '@/modules/historico/eventos';
@@ -251,5 +252,47 @@ describe('motivo da reclamação do ML no "Motivo do cliente" (melhoria 1)', () 
     }
     expect((await devolucao(comMotivo.id)).motivoCliente).toBe('Não serviu');
     expect((await devolucao(semMotivo.id)).motivoCliente).toBe(MOTIVO);
+  });
+});
+
+describe('extras e conta em reclamacoes_ml (integração Bitbrain, D8)', () => {
+  const EXTRAS = {
+    acaoPendente: 'return_review_ok',
+    urgente: true,
+    afetaReputacao: 'AFETA',
+    ehFull: true,
+    triagemCondicao: 'NAO_VENDAVEL',
+    triagemEtapa: 'closed',
+    dinheiro: 'RETIDO',
+  } as const;
+  const linha = async (claimId: string) => (await db.select().from(reclamacoesMl).where(eq(reclamacoesMl.claimId, claimId)))[0];
+
+  it('grava os extras e a conta', async () => {
+    const dados = dadosDevolucaoMLTeste(devolucaoExternaTeste(), { extras: EXTRAS });
+    await aplicarReclamacao(db, dados, AGORA, undefined, 'loja-falsa-1');
+    expect(await linha(dados.reclamacaoId)).toMatchObject({ ...EXTRAS, conta: 'loja-falsa-1', respostaPendente: null });
+  });
+
+  it('de novo: urgente e ação acompanham o ML; os outros extras nulos não apagam o que já se sabia; sem conta, a conta fica', async () => {
+    const externa = devolucaoExternaTeste();
+    await aplicarReclamacao(db, dadosDevolucaoMLTeste(externa, { extras: EXTRAS }), AGORA, undefined, 'loja-falsa-1');
+    const depois = dadosDevolucaoMLTeste(externa, { extras: { ...EXTRAS_VAZIOS, urgente: false } });
+    await aplicarReclamacao(db, depois, AGORA, undefined, null);
+    expect(await linha(depois.reclamacaoId)).toMatchObject({
+      urgente: false,
+      acaoPendente: null,
+      afetaReputacao: 'AFETA',
+      ehFull: true,
+      triagemCondicao: 'NAO_VENDAVEL',
+      triagemEtapa: 'closed',
+      dinheiro: 'RETIDO',
+      conta: 'loja-falsa-1',
+    });
+  });
+
+  it('modo api (sem conta): a conta fica nula; reclamação sem devolução também guarda os extras', async () => {
+    const dados = dadosDevolucaoMLTeste(null, { extras: { ...EXTRAS_VAZIOS, urgente: true, acaoPendente: 'return_review_ok' } });
+    await aplicarReclamacao(db, dados, AGORA);
+    expect(await linha(dados.reclamacaoId)).toMatchObject({ conta: null, urgente: true, acaoPendente: 'return_review_ok' });
   });
 });

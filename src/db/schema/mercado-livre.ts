@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
-import { check, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { SITUACOES_CONTA, STATUS_CONTESTACAO } from '../../modules/mercado-livre/dominio';
+import type { AfetaReputacao, CondicaoTriagem, RespostaPendente, SituacaoDinheiro } from '../../modules/mercado-livre/dominio';
 import { usuarios } from './auth';
 import { canalEnum, devolucoes } from './devolucoes';
 
@@ -69,8 +70,25 @@ export const reclamacoesMl = pgTable(
     devolucaoId: uuid('devolucao_id').references(() => devolucoes.id, { onDelete: 'set null' }),
     atualizadaNoMlEm: timestamp('atualizada_no_ml_em', { withTimezone: true }),
     sincronizadaEm: timestamp('sincronizada_em', { withTimezone: true }).notNull(),
+    /** Empresa do Bitbrain (contas_bitbrain.empresa); nula no modo api e nas antigas (§4.3). */
+    conta: text('conta'),
+    /** Extras (§4.5): nulo = o ML não informou. */
+    acaoPendente: text('acao_pendente'),
+    urgente: boolean('urgente'),
+    afetaReputacao: text('afeta_reputacao').$type<AfetaReputacao>(),
+    ehFull: boolean('eh_full'),
+    triagemCondicao: text('triagem_condicao').$type<CondicaoTriagem>(),
+    triagemEtapa: text('triagem_etapa'),
+    dinheiro: text('dinheiro').$type<SituacaoDinheiro>(),
+    /** Modo bitbrain (§4.6): 'OK' = falta responder "OK" no ML, à mão. */
+    respostaPendente: text('resposta_pendente').$type<RespostaPendente>(),
   },
   (t) => [
+    index('reclamacoes_ml_resposta_pendente_idx').on(t.respostaPendente),
+    check('reclamacoes_ml_afeta_reputacao', sql`"afeta_reputacao" in ('AFETA', 'NAO_AFETA', 'NAO_SE_APLICA')`),
+    check('reclamacoes_ml_triagem_condicao', sql`"triagem_condicao" in ('VENDAVEL', 'NAO_VENDAVEL', 'DESCARTE', 'FALTANDO')`),
+    check('reclamacoes_ml_dinheiro', sql`"dinheiro" in ('RETIDO', 'DEVOLVIDO', 'LIBERADO')`),
+    check('reclamacoes_ml_resposta_pendente', sql`"resposta_pendente" in ('OK')`),
     index('reclamacoes_ml_devolucao_idx').on(t.devolucaoId),
     index('reclamacoes_ml_return_idx').on(t.returnId),
     index('reclamacoes_ml_subtipo_idx').on(t.subtipo),
@@ -82,4 +100,21 @@ export const motivosReclamacaoMl = pgTable('motivos_reclamacao_ml', {
   id: text('id').primaryKey(),
   nome: text('nome').notNull(),
   consultadoEm: timestamp('consultado_em', { withTimezone: true }).notNull(),
+});
+
+/** Contas do ML que o Bitbrain tem (integração de 18/11, §4.3). O Gestor marca as que mandam devoluções para a bancada. */
+export const contasBitbrain = pgTable('contas_bitbrain', {
+  /** O account_key do Bitbrain (ex.: "megadino"). */
+  empresa: text('empresa').primaryKey(),
+  nome: text('nome').notNull(),
+  sellerId: text('seller_id').notNull(),
+  /** Nenhuma vem marcada (B3). */
+  recebeDevolucoes: boolean('recebe_devolucoes').notNull().default(false),
+  /** D2: false = sumiu da lista do Bitbrain (ou ele disse "empresa sem conta do ML"). Nunca é apagada. */
+  disponivel: boolean('disponivel').notNull().default(true),
+  /** Última varredura bem-sucedida desta conta: alerta "sincronização parada" por conta (spec §11). */
+  ultimaSincronizacaoEm: timestamp('ultima_sincronizacao_em', { withTimezone: true }),
+  /** Quando e por quem a marcação mudou. */
+  atualizadaEm: timestamp('atualizada_em', { withTimezone: true }).notNull().defaultNow(),
+  atualizadaPor: uuid('atualizada_por').references(() => usuarios.id, { onDelete: 'set null' }),
 });

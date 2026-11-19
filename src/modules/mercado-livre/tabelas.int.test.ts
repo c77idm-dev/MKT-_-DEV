@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { contasMarketplace, contestacoesCanal, devolucoes, notificacoesRecebidas, reclamacoesMl } from '@/db/schema';
+import { contasBitbrain, contasMarketplace, contestacoesCanal, devolucoes, notificacoesRecebidas, reclamacoesMl } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 
@@ -30,6 +30,30 @@ describe('tabelas do Mercado Livre (contrato §4.2)', () => {
     expect(conta).toMatchObject({ situacao: 'ATIVA', ultimaSincronizacaoEm: null, conectadaPor: null });
     const erro = await db.insert(contasMarketplace).values(valores).catch((e: unknown) => e);
     expect(restricao(erro)).toBe('contas_marketplace_canal_seller_uq');
+  });
+
+  it('conta do Bitbrain: nasce sem receber devoluções e disponível', async () => {
+    const [conta] = await db.insert(contasBitbrain).values({ empresa: 'megadino', nome: 'IDM Shop', sellerId: '25255785' }).returning();
+    expect(conta).toMatchObject({ recebeDevolucoes: false, disponivel: true, ultimaSincronizacaoEm: null, atualizadaPor: null });
+  });
+
+  it('reclamacoes_ml: extras anuláveis; valores fora da lista são recusados pelo banco', async () => {
+    await db.insert(reclamacoesMl).values({ claimId: '5000000101', sincronizadaEm: new Date() });
+    const [r] = await db.select().from(reclamacoesMl).where(eq(reclamacoesMl.claimId, '5000000101'));
+    expect(r).toMatchObject({ conta: null, urgente: null, afetaReputacao: null, ehFull: null, dinheiro: null, respostaPendente: null });
+    const casos = [
+      ['5000000102', { afetaReputacao: 'X' }, 'reclamacoes_ml_afeta_reputacao'],
+      ['5000000103', { triagemCondicao: 'X' }, 'reclamacoes_ml_triagem_condicao'],
+      ['5000000104', { dinheiro: 'X' }, 'reclamacoes_ml_dinheiro'],
+      ['5000000105', { respostaPendente: 'X' }, 'reclamacoes_ml_resposta_pendente'],
+    ] as const;
+    for (const [claimId, valores, nome] of casos) {
+      const erro = await db
+        .insert(reclamacoesMl)
+        .values({ claimId, sincronizadaEm: new Date(), ...(valores as unknown as Record<string, never>) })
+        .catch((e: unknown) => e);
+      expect(restricao(erro)).toBe(nome);
+    }
   });
 
   it('contestação: uma por devolução, nasce AGUARDANDO_GESTOR, motivo só de SRF2 a SRF6', async () => {
