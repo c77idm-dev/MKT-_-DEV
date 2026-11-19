@@ -39,7 +39,9 @@ Atualizado em 19/11/2026 (integração com o Bitbrain: rota do Bitbrain no ar; n
     2. **Construção em andamento**, pelo fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js), no run `wf_064982fb-f9b`.
        - **Argumentos:** `{"fase":"Bitbrain","pasta":"/c/Users/idmpc/devolucoes-wt/bitbrain","branch":"integracao-bitbrain","pref":"bb","tarefas":[1,…,14],"porta":3107,"bancoTeste":"devolucoes_test_f7"}`.
        - **Os resumos** `bb-task-N-brief.md` são o preâmbulo do plano mais a tarefa.
-       - **19/11, 13h20:** as Tarefas 1 a 11 estão prontas e aprovadas de primeira, sem nenhuma rodada de correção (`9d315b3`, já no GitHub). A Tarefa 12 (selos, urgentes primeiro, extras no detalhe) está em andamento. Faltam a 13 (Contestações ML no modo bitbrain) e a 14 (documentos).
+       - **19/11, 15h30:** ✅ as **14 tarefas estão prontas**, todas aprovadas de primeira, sem nenhuma rodada de correção (`8676f95`, já no GitHub).
+       - **Revisão final em andamento** no run `wf_b85dc797-2e1` ([workflows/fase-final.js](workflows/fase-final.js)), com os mesmos argumentos mais `"base":"33db31d"` e `"plano":"docs/superpowers/plans/2026-11-18-integracao-bitbrain.md"`, e as decisões desta fase em `decisoes`.
+       - **Depois:** juntar no `main`. O `main` só tem commits de documentos desde `697d34c`; o conflito esperado é só no `andamento.md`.
        - **Para olhar na revisão final:** o e2e `estoque-bom.spec.ts:32` [celular] falhou nas rodadas completas das Tarefas 2 e 11, na checagem da ordem dos cartões. Nas duas vezes pareceu sem relação com a tarefa. Conferir se falha também no `main`.
        - **Se o fluxo parar com commit parcial:** pôr a nota de retomada no topo do `bb-task-N-brief.md`, como foi feito na Tarefa 4, e retomar com `resumeFromRunId`.
        - **Depois:** a revisão final ([workflows/fase-final.js](workflows/fase-final.js)) e a junção no `main`.
