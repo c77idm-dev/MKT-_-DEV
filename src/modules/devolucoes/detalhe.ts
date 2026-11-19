@@ -44,6 +44,8 @@ export async function obterDetalhe(db: DbOuTx, codigo: string) {
       status: itensDevolucao.status,
       descricao: produtos.descricao,
       ean: produtos.ean,
+      /** Produtos do ML (extra): a foto do anúncio. */
+      fotoUrl: produtos.fotoUrl,
       fornecedor: fornecedores.razaoSocial,
     })
     .from(itensDevolucao)

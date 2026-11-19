@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ResumoDevolucao } from '@/modules/devolucoes/busca';
 import { ROTULO_CANAL, ROTULO_STATUS } from '@/modules/devolucoes/dominio';
 import { TOM_DO_STATUS } from '@/modules/devolucoes/selos';
+import { FotoProduto } from './FotoProduto';
 import { Selo } from './Selo';
 
 const CONTAGEM = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold';
@@ -26,10 +27,18 @@ export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }
           {canal}
         </span>
       </span>
-      <span className="text-sm">
-        {d.produto ?? 'Sem itens cadastrados'}
-        {outras > 0 ? ` + ${outras} ${outras === 1 ? 'unidade' : 'unidades'}` : ''}
-      </span>
+      {d.produto ? (
+        // Produtos do ML (extra): a foto do anúncio ao lado do nome. w-0 + min-w-full: a linha não alarga o cartão.
+        <span className="flex w-0 min-w-full items-center gap-2.5">
+          <FotoProduto url={d.fotoProduto} descricao={d.produto} />
+          <span className="min-w-0 break-words text-sm">
+            {d.produto}
+            {outras > 0 ? ` + ${outras} ${outras === 1 ? 'unidade' : 'unidades'}` : ''}
+          </span>
+        </span>
+      ) : (
+        <span className="text-sm">Sem itens cadastrados</span>
+      )}
       <span className="break-all font-mono text-xs text-texto-2">{d.rastreio ?? 'Sem rastreio'}</span>
       {motivo && (
         // w-0 + min-w-full: a linha não alarga o cartão (nem a coluna da grade); o texto inteiro fica no detalhe.
