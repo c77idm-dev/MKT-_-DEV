@@ -1,13 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { contestacoesCanal } from '@/db/schema';
+import { contasBitbrain, contestacoesCanal, reclamacoesMl } from '@/db/schema';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
+import { configBitbrainTeste } from '../../../tests/helpers/fabricas-bitbrain';
 import { configMLTeste, contaMLTeste, dadosDevolucaoMLTeste, devolucaoExternaTeste, devolucaoMLConferidaTeste } from '../../../tests/helpers/fabricas-ml';
 import { listarSemEnvioFisico, resumoContaML, resumoMLDaDevolucao } from './consultas';
 import { marcarSincronizacao } from './contas';
 import { processarResultadoConferencia } from './resultado';
+import { marcarOkRespondido } from './respostas-manuais';
 import { aplicarReclamacao } from './sincronizar';
 
 const { db, sql } = criarDbTeste();
@@ -41,6 +43,8 @@ describe('resumoMLDaDevolucao (seção "Mercado Livre" do detalhe)', () => {
       entregueEm: d.entregueEm,
       prazo: d.prazoConferencia,
       sincronizadaEm: AGORA,
+      conta: null,
+      extras: { acaoPendente: null, urgente: null, afetaReputacao: null, ehFull: null, triagemCondicao: null, triagemEtapa: null, dinheiro: null },
       resultado: { tipo: 'ok', em: AGORA },
     });
   });
@@ -79,5 +83,38 @@ describe('resumoContaML e listarSemEnvioFisico (Configurações › Mercado Livr
     const lista = await listarSemEnvioFisico(db);
     expect(lista).toHaveLength(2);
     expect(lista[0]).toMatchObject({ reclamacaoId: recente.reclamacaoId, returnId: recente.devolucaoExternaId, statusDevolucao: 'closed' });
+  });
+});
+
+describe('resumoMLDaDevolucao: conta, extras e respostas à mão (integração Bitbrain)', () => {
+  it('traz a conta pelo nome, os extras da última reclamação e o OK pendente e depois respondido', async () => {
+    const d = await devolucaoMLConferidaTeste(db, { itens: [{ destino: 'BOM' }] });
+    await db.insert(contasBitbrain).values({ empresa: 'megadino', nome: 'IDM Shop', sellerId: '1' });
+    await db.insert(reclamacoesMl).values({
+      claimId: d.externa!.reclamacaoId,
+      devolucaoId: d.id,
+      conta: 'megadino',
+      urgente: false,
+      afetaReputacao: 'NAO_AFETA',
+      ehFull: true,
+      triagemCondicao: 'VENDAVEL',
+      triagemEtapa: 'closed',
+      dinheiro: 'DEVOLVIDO',
+      sincronizadaEm: AGORA,
+    });
+    await processarResultadoConferencia(db, d.id, AGORA, configBitbrainTeste());
+    const r = await resumoMLDaDevolucao(db, d.id);
+    expect(r).toMatchObject({
+      conta: 'IDM Shop',
+      extras: { urgente: false, afetaReputacao: 'NAO_AFETA', ehFull: true, triagemCondicao: 'VENDAVEL', triagemEtapa: 'closed', dinheiro: 'DEVOLVIDO' },
+      resultado: { tipo: 'ok_pendente_manual' },
+    });
+    await marcarOkRespondido(db, d.id, await criarUsuarioTeste(db, 'GESTOR'), AGORA, configBitbrainTeste());
+    expect((await resumoMLDaDevolucao(db, d.id))?.resultado).toMatchObject({ tipo: 'ok_respondido_a_mao' });
+  });
+
+  it('modo api, sem reclamação gravada: conta e extras nulos', async () => {
+    const d = await devolucaoMLConferidaTeste(db, { itens: [{ destino: 'BOM' }] });
+    expect(await resumoMLDaDevolucao(db, d.id)).toMatchObject({ conta: null, extras: null });
   });
 });

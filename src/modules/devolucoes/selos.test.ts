@@ -47,3 +47,20 @@ describe('selos da NF de devolução (Fase 4)', () => {
     expect(selosDaDevolucao({ ...aguardando, situacaoNota: null }, AGORA)).toEqual([]);
   });
 });
+
+it('urgente do ML: o selo "Urgente · até dd/mm" substitui o "Prazo dd/mm" (D7)', () => {
+  const base = {
+    canal: 'MERCADO_LIVRE' as const,
+    status: 'PENDENTE_CHEGADA' as const,
+    naoIdentificada: false,
+    entregueSegundoCanalEm: null,
+    prazoConferenciaCanal: new Date('2026-11-25T15:00:00Z'),
+  };
+  const agora = new Date('2026-11-18T15:00:00Z');
+  expect(selosDaDevolucao(base, agora).map((s) => s.texto)).toEqual(['Prazo 25/11']);
+  expect(selosDaDevolucao({ ...base, ml: { urgente: true, afetaReputacao: 'AFETA', ehFull: true } }, agora).map((s) => s.texto)).toEqual([
+    'Urgente · até 25/11',
+    'Afeta reputação',
+    'Full',
+  ]);
+});

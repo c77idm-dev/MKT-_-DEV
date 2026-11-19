@@ -12,6 +12,7 @@ const CONTAGEM = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs fo
  */
 export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }) {
   const outras = d.unidades - 1;
+  const canal = `${d.canal ? ROTULO_CANAL[d.canal] : 'Canal a identificar'}${d.contaML ? ` · ${d.contaML}` : ''}`;
   const motivo = d.motivoCliente?.trim() || null;
   const destinos = d.destinos && (d.destinos.bom > 0 || d.destinos.problema > 0) ? d.destinos : null;
   return (
@@ -20,8 +21,10 @@ export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }
       className="flex min-h-11 flex-col gap-1.5 rounded-xl border border-borda bg-superficie p-3 hover:border-destaque"
     >
       <span className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[13px] font-semibold">{d.codigo}</span>
-        <span className="text-xs font-semibold text-texto-2">{d.canal ? ROTULO_CANAL[d.canal] : 'Canal a identificar'}</span>
+        <span className="shrink-0 font-mono text-[13px] font-semibold">{d.codigo}</span>
+        <span className="min-w-0 truncate text-xs font-semibold text-texto-2" title={canal}>
+          {canal}
+        </span>
       </span>
       <span className="text-sm">
         {d.produto ?? 'Sem itens cadastrados'}

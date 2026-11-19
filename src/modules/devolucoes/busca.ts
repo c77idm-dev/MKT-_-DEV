@@ -4,10 +4,14 @@ import { devolucoes, fornecedores, itensDevolucao, produtos } from '@/db/schema'
 import { escaparLike } from '@/lib/texto';
 import { somenteDigitos } from '@/modules/catalogo/documentos';
 import type { DestinoEstoque, SituacaoNotaFiscal } from '@/modules/fiscal/dominio';
+import type { AfetaReputacao } from '@/modules/mercado-livre/dominio';
 import type { Canal, StatusDevolucao } from './dominio';
 import { POR_PAGINA_DEVOLUCOES, type FiltrosBusca } from './filtros';
 import { normalizarRastreio } from './rastreio';
 import { selosDaDevolucao, type DadosSelo } from './selos';
+
+/** A reclamação do ML mais recente da devolução (extras e conta; integração Bitbrain). Colunas qualificadas à mão, como as outras subconsultas. */
+const DA_ULTIMA_RECLAMACAO = sql`from "reclamacoes_ml" where "reclamacoes_ml"."devolucao_id" = "devolucoes"."id" order by "reclamacoes_ml"."sincronizada_em" desc limit 1`;
 
 export type ResumoDevolucao = {
   id: string;
@@ -29,6 +33,8 @@ export type ResumoDevolucao = {
   destinos?: { bom: number; problema: number };
   /** A NF de devolução que não está cancelada (null = nenhuma). */
   situacaoNota?: SituacaoNotaFiscal | null;
+  /** Nome da conta do Bitbrain (D18); null no modo api. */
+  contaML?: string | null;
 };
 
 export type OpcoesBusca = {
@@ -43,6 +49,8 @@ export type OpcoesBusca = {
   destino?: DestinoEstoque;
   /** Só estas devoluções (a página dos alertas). Lista vazia = nenhuma. */
   ids?: readonly string[];
+  /** Etapas 2 e 3 (extra): urgentes do ML primeiro. */
+  urgentesPrimeiro?: boolean;
 };
 
 function condicoes(db: DbOuTx, f: FiltrosBusca): SQL[] {
@@ -117,10 +125,11 @@ export async function buscarDevolucoes(
   const onde = lista.length > 0 ? and(...lista) : undefined;
 
   const [{ total }] = await db.select({ total: count() }).from(devolucoes).where(onde);
-  const ordem =
+  const base =
     opcoes.ordem === 'chegada'
       ? [asc(devolucoes.recebidaEm), asc(devolucoes.numero)]
       : [sql`${devolucoes.entregueSegundoCanalEm} is null`, desc(devolucoes.numero)];
+  const ordem = opcoes.urgentesPrimeiro ? [sql`coalesce((select "reclamacoes_ml"."urgente" ${DA_ULTIMA_RECLAMACAO}), false) desc`, ...base] : base;
 
   const linhas = await db
     .select({
@@ -148,6 +157,17 @@ export async function buscarDevolucoes(
       unidades: sql<number>`(select count(*) from "itens_devolucao" where "itens_devolucao"."devolucao_id" = "devolucoes"."id")::int`,
       estoqueBom: sql<number>`(select count(*) from "itens_devolucao" where "itens_devolucao"."devolucao_id" = "devolucoes"."id" and "itens_devolucao"."status" = 'AGUARDANDO_NF' and "itens_devolucao"."destino" = 'BOM')::int`,
       estoqueProblema: sql<number>`(select count(*) from "itens_devolucao" where "itens_devolucao"."devolucao_id" = "devolucoes"."id" and "itens_devolucao"."status" = 'AGUARDANDO_NF' and "itens_devolucao"."destino" = 'PROBLEMA')::int`,
+      mlUrgente: sql<boolean | null>`(select "reclamacoes_ml"."urgente" ${DA_ULTIMA_RECLAMACAO})`,
+      mlAfetaReputacao: sql<AfetaReputacao | null>`(select "reclamacoes_ml"."afeta_reputacao" ${DA_ULTIMA_RECLAMACAO})`,
+      mlFull: sql<boolean | null>`(select "reclamacoes_ml"."eh_full" ${DA_ULTIMA_RECLAMACAO})`,
+      contaML: sql<string | null>`(
+        select coalesce("contas_bitbrain"."nome", "reclamacoes_ml"."conta")
+        from "reclamacoes_ml"
+        left join "contas_bitbrain" on "contas_bitbrain"."empresa" = "reclamacoes_ml"."conta"
+        where "reclamacoes_ml"."devolucao_id" = "devolucoes"."id" and "reclamacoes_ml"."conta" is not null
+        order by "reclamacoes_ml"."sincronizada_em" desc
+        limit 1
+      )`,
       situacaoNota: sql<SituacaoNotaFiscal | null>`(select "notas_fiscais"."situacao" from "notas_fiscais" where "notas_fiscais"."devolucao_id" = "devolucoes"."id" and "notas_fiscais"."situacao" <> 'CANCELADA' limit 1)`,
     })
     .from(devolucoes)
@@ -159,7 +179,7 @@ export async function buscarDevolucoes(
   const agora = opcoes.agora ?? new Date();
   return {
     total,
-    devolucoes: linhas.map(({ entregueSegundoCanalEm, prazoConferenciaCanal, estoqueBom, estoqueProblema, ...resto }) => ({
+    devolucoes: linhas.map(({ entregueSegundoCanalEm, prazoConferenciaCanal, estoqueBom, estoqueProblema, mlUrgente, mlAfetaReputacao, mlFull, ...resto }) => ({
       ...resto,
       destinos: { bom: estoqueBom, problema: estoqueProblema },
       selos: selosDaDevolucao(
@@ -170,6 +190,7 @@ export async function buscarDevolucoes(
           entregueSegundoCanalEm,
           prazoConferenciaCanal,
           situacaoNota: resto.situacaoNota,
+          ml: { urgente: mlUrgente, afetaReputacao: mlAfetaReputacao, ehFull: mlFull },
         },
         agora,
       ),

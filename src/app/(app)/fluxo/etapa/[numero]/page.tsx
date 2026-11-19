@@ -83,6 +83,7 @@ export default async function PaginaEtapa({ params, searchParams }: Props) {
     status: statusDaEtapa(etapa.numero),
     ordem: etapa.numero === 2 ? 'chegada' : 'recentes',
     pagina,
+    urgentesPrimeiro: etapa.numero === 2 || etapa.numero === 3,
   });
   return (
     <ListaDevolucoes

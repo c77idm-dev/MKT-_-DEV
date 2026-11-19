@@ -65,3 +65,14 @@ describe('CartaoDevolucao na etapa 4', () => {
     expect(screen.queryByText(/^Estoque/)).toBeNull();
   });
 });
+
+describe('CartaoDevolucao: conta do Bitbrain (D18)', () => {
+  it('mostra "Mercado Livre · <conta>" numa linha com reticências; sem conta, só o canal', () => {
+    const { unmount } = render(<CartaoDevolucao devolucao={{ ...BASE, canal: 'MERCADO_LIVRE', contaML: 'IDM Shop' }} />);
+    const linha = screen.getByText('Mercado Livre · IDM Shop');
+    expect(linha.className).toContain('truncate');
+    unmount();
+    render(<CartaoDevolucao devolucao={{ ...BASE, canal: 'MERCADO_LIVRE' }} />);
+    expect(screen.getByText('Mercado Livre')).toBeTruthy();
+  });
+});

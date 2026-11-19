@@ -56,7 +56,7 @@ export async function montarQuadro(db: DbOuTx, agora: Date = new Date()): Promis
       const { devolucoes: cartoes, total } = await buscarDevolucoes(
         db,
         {},
-        { status, ordem: etapa.numero === 2 ? 'chegada' : 'recentes', porPagina: CARTOES_POR_COLUNA, agora },
+        { status, ordem: etapa.numero === 2 ? 'chegada' : 'recentes', porPagina: CARTOES_POR_COLUNA, agora, urgentesPrimeiro: etapa.numero === 2 || etapa.numero === 3 },
       );
       const coluna: ColunaQuadro = { numero: etapa.numero, titulo: etapa.titulo, total, cartoes, href };
       return etapa.numero === 4 ? { ...coluna, estoque: await contarEstoque(db) } : coluna;

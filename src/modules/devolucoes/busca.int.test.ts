@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { devolucoes, itensDevolucao } from '@/db/schema';
+import { contasBitbrain, devolucoes, itensDevolucao, reclamacoesMl } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarFornecedorTeste, criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { buscarDevolucoes, type OpcoesBusca } from './busca';
@@ -172,5 +172,30 @@ describe('Código de Barras: EAN lido na conferência', () => {
     expect(await codigos({ codigo: '7899999999993' })).toEqual([c.codigo]);
     await db.update(itensDevolucao).set({ eanLido: 'INT-ABC' }).where(eq(itensDevolucao.id, item.id));
     expect(await codigos({ codigo: 'int-abc' })).toEqual([c.codigo]);
+  });
+});
+
+describe('extras do ML e conta no resumo (integração Bitbrain)', () => {
+  it('selos Urgente, Afeta reputação e Full, e a conta pelo nome do Bitbrain', async () => {
+    const operador = await criarUsuarioTeste(db);
+    const d = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    await db.insert(contasBitbrain).values({ empresa: 'megadino', nome: 'IDM Shop', sellerId: '1' });
+    await db.insert(reclamacoesMl).values({ claimId: '5000000201', devolucaoId: d.id, conta: 'megadino', urgente: true, afetaReputacao: 'AFETA', ehFull: true, sincronizadaEm: new Date() });
+    const [r] = (await buscarDevolucoes(db, {}, { ids: [d.id] })).devolucoes;
+    expect(r.contaML).toBe('IDM Shop');
+    expect(r.selos.map((s) => s.texto)).toEqual(expect.arrayContaining(['Afeta reputação', 'Full', expect.stringMatching(/^Urgente/)]));
+  });
+
+  it('urgentesPrimeiro: a urgente vem antes, mesmo tendo chegado depois (extra)', async () => {
+    const operador = await criarUsuarioTeste(db);
+    const antiga = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    const urgente = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE' });
+    await db.update(devolucoes).set({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: new Date('2026-11-18T10:00:00Z') }).where(eq(devolucoes.id, antiga.id));
+    await db.update(devolucoes).set({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: new Date('2026-11-18T11:00:00Z') }).where(eq(devolucoes.id, urgente.id));
+    await db.insert(reclamacoesMl).values({ claimId: '5000000202', devolucaoId: urgente.id, urgente: true, sincronizadaEm: new Date() });
+    const ordem = async (urgentesPrimeiro: boolean) =>
+      (await buscarDevolucoes(db, {}, { ids: [antiga.id, urgente.id], status: ['AGUARDANDO_CONFERENCIA'], ordem: 'chegada', urgentesPrimeiro })).devolucoes.map((x) => x.id);
+    expect(await ordem(false)).toEqual([antiga.id, urgente.id]);
+    expect(await ordem(true)).toEqual([urgente.id, antiga.id]);
   });
 });
