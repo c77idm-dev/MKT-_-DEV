@@ -606,3 +606,8 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
   - **Alertas:** `respostas_ml` e `conta_bitbrain_indisponivel`.
   - **e2e (D4):** script `test:e2e:bitbrain` no `package.json`; `playwright.config.ts` exporta `configE2E(modo)` e ganha `playwright.bitbrain.config.ts`; `tests/e2e/global-setup.ts` lê `metadata.modoML`; `tests/e2e/dados.ts` ganha `ambienteE2E(modo)`.
   - **Motivo:** as devoluções do ML passam a vir pelo Bitbrain (decisão do usuário de 16/11), e os arquivos são congelados.
+- **E22. Dossiê de provas (PDF) (extra, aprovado em 19/11):**
+  - **Histórico:** arquivo novo `src/modules/historico/rotulos/dossie.ts` (`ROTULOS_DOSSIE`, prefixo `dossie_`), ligado ao `ROTULO_ACAO`, com a chave `dossie_gerado` ("Dossiê de provas (PDF) gerado"). O evento vai na entidade `devolucao` e guarda só números (páginas, tamanho, imagens).
+  - **Rota:** `GET /api/devolucoes/[codigo]/dossie`, com `ver_listas` antes de qualquer leitura (sem sessão vai ao login; sem permissão ou código desconhecido, 404; antes do fim da conferência, 409). Módulo `src/modules/dossie/`.
+  - **Telas:** o botão do detalhe entra na `SecaoConferencia` (o `[codigo]/page.tsx` continua congelado) e no bloco "Responda no ML".
+  - **Motivo:** os arquivos de rótulos são congelados.

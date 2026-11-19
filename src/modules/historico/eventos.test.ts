@@ -3,6 +3,7 @@ import { ROTULO_ACAO, rotuloDaAcao } from './eventos';
 import { ROTULOS_ACABAMENTO } from './rotulos/acabamento';
 import { ROTULOS_BASE } from './rotulos/base';
 import { ROTULOS_CONFERENCIA } from './rotulos/conferencia';
+import { ROTULOS_DOSSIE } from './rotulos/dossie';
 import { ROTULOS_FISCAL } from './rotulos/fiscal';
 import { ROTULOS_LOTES } from './rotulos/lotes';
 import { ROTULOS_MERCADO_LIVRE } from './rotulos/mercado-livre';
@@ -16,6 +17,7 @@ const ARQUIVOS: Record<string, Record<string, string>> = {
   lotes: ROTULOS_LOTES,
   acabamento: ROTULOS_ACABAMENTO,
   retiradas: ROTULOS_RETIRADAS,
+  dossie: ROTULOS_DOSSIE,
 };
 
 // Chaves do contrato §4.7: todas as que os planos das Fases 2 a 6 usam. Os arquivos congelam depois da Parte A (§10, E3).
@@ -50,6 +52,8 @@ const RESERVADAS: Record<string, string[]> = {
     'retirada_full_criada', 'retirada_full_item_incluido', 'retirada_full_quantidade_alterada', 'retirada_full_item_removido',
     'retirada_full_concluida',
   ],
+  // Dossiê de provas (PDF) (extra, 19/11; emenda E22): prefixo dossie_.
+  dossie: ['dossie_gerado'],
 };
 
 describe('rótulos do histórico (contrato §4.7)', () => {
@@ -67,6 +71,11 @@ describe('rótulos do histórico (contrato §4.7)', () => {
 
   it('as chaves da retirada do Full têm o prefixo retirada_full_', () => {
     for (const chave of Object.keys(ROTULOS_RETIRADAS)) expect(chave).toMatch(/^retirada_full_/);
+  });
+
+  it('as chaves do dossiê de provas têm o prefixo dossie_', () => {
+    for (const chave of Object.keys(ROTULOS_DOSSIE)) expect(chave).toMatch(/^dossie_/);
+    expect(rotuloDaAcao('dossie_gerado')).toBe('Dossiê de provas (PDF) gerado');
   });
 
   it('rotuloDaAcao usa o rótulo ou devolve a própria chave', () => {
