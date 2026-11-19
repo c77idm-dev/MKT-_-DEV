@@ -4,8 +4,10 @@ import type { TomSelo } from '@/modules/devolucoes/selos';
 /** Spec §6.0.1 e decisão 9 da Fase 6: quem vê cada alerta do painel, na ordem de prioridade. */
 export const IDS_ALERTA = [
   'prazo_ml',
+  'respostas_ml',
   'nf_rejeitada',
   'conta_ml_reconectar',
+  'conta_bitbrain_indisponivel',
   'sincronizacao_ml',
   'sem_fornecedor',
   'entregue_sem_leitura',
@@ -21,9 +23,16 @@ type Definicao = { titulo: string; perfis: readonly Perfil[]; tom: TomSelo; href
 
 export const DEFINICAO_ALERTA: Record<IdAlerta, Definicao> = {
   prazo_ml: { titulo: 'Prazo do ML vencendo', perfis: ['OPERADOR', 'GESTOR'], tom: 'erro', href: '/fluxo/alertas#prazo_ml' },
+  respostas_ml: { titulo: 'Respostas para dar no ML', perfis: ['GESTOR'], tom: 'atencao', href: '/contestacoes' },
   nf_rejeitada: { titulo: 'NF rejeitada', perfis: ['FISCAL', 'GESTOR'], tom: 'erro', href: '/fluxo/alertas#nf_rejeitada' },
   conta_ml_reconectar: {
     titulo: 'Conta do Mercado Livre precisa ser reconectada',
+    perfis: ['GESTOR'],
+    tom: 'erro',
+    href: '/configuracoes/mercado-livre',
+  },
+  conta_bitbrain_indisponivel: {
+    titulo: 'Conta do ML indisponível no Bitbrain',
     perfis: ['GESTOR'],
     tom: 'erro',
     href: '/configuracoes/mercado-livre',

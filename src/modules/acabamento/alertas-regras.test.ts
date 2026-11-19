@@ -15,7 +15,15 @@ describe('alertas do painel (spec §6.0.1)', () => {
   it('cada perfil vê só os seus (decisão 9)', () => {
     expect(alertasDoPerfil('OPERADOR')).toEqual(['prazo_ml', 'entregue_sem_leitura']);
     expect(alertasDoPerfil('FISCAL')).toEqual(['nf_rejeitada', 'sem_fornecedor', 'lote_nf_cancelada']);
-    expect(alertasDoPerfil('GESTOR')).toHaveLength(11);
+    expect(alertasDoPerfil('GESTOR')).toHaveLength(13);
+  });
+});
+
+describe('alertas do modo Bitbrain', () => {
+  it('alertas do modo Bitbrain (D10): títulos e links', () => {
+    expect(DEFINICAO_ALERTA.respostas_ml).toMatchObject({ titulo: 'Respostas para dar no ML', perfis: ['GESTOR'], href: '/contestacoes' });
+    expect(DEFINICAO_ALERTA.conta_bitbrain_indisponivel).toMatchObject({ titulo: 'Conta do ML indisponível no Bitbrain', perfis: ['GESTOR'] });
+    expect(alertasDoPerfil('GESTOR').slice(0, 2)).toEqual(['prazo_ml', 'respostas_ml']);
   });
 });
 
