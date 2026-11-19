@@ -36,6 +36,10 @@ describe('Bitbrain falso (D3)', () => {
     const dados = await conector(loja1).obterReclamacao('5200000001');
     expect(dados.devolucao).toMatchObject({ reclamacaoId: '5200000001', statusCanal: 'delivered/delivered', itens: [{ sku: 'MLF-FONE-01', quantidade: 1 }] });
     expect(dados.extras).toMatchObject({ urgente: true, afetaReputacao: 'AFETA', ehFull: true, dinheiro: 'RETIDO' });
+    // Produtos do ML (extra): o anúncio passa pelo Bitbrain como veio (título, GTIN e foto).
+    expect(dados.produtos).toEqual([
+      expect.objectContaining({ sku: 'MLF-FONE-01', descricao: 'Fone de Ouvido Bluetooth MLF', ean: '7891234567895', fotoUrl: 'https://imagens.ml-falso.example/mlf-fone-01.png' }),
+    ]);
   });
 
   it('cenário 5 pela loja 2: triagem do ML', async () => {
