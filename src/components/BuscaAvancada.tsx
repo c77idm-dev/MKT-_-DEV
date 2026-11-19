@@ -113,7 +113,15 @@ export function BuscaAvancada({ acao, filtros, atalho }: { acao: string; filtros
         <h2 id="titulo-busca" className="text-base font-bold">
           Busca Avançada
         </h2>
-        <form method="get" action={acao} role="search" aria-labelledby="titulo-busca" className="flex flex-col gap-3">
+        {/* A key recria o formulário quando os filtros mudam (ex.: a etiqueta tirou um): os campos não guardam o valor antigo. */}
+        <form
+          key={filtrosParaQuery(filtros)}
+          method="get"
+          action={acao}
+          role="search"
+          aria-labelledby="titulo-busca"
+          className="flex flex-col gap-3"
+        >
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <fieldset className={GRUPO}>
               <legend className={LEGENDA}>Código de Rastreamento</legend>

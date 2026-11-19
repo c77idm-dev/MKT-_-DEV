@@ -43,6 +43,13 @@ describe('BuscaAvancada (spec §6.7)', () => {
     expect(etiqueta.getAttribute('href')).toBe('/fluxo/busca?canal=MERCADO_LIVRE');
   });
 
+  it('quando a etiqueta tira um filtro (mesma página, outra URL), o formulário mostra os filtros novos', () => {
+    const { rerender } = render(<BuscaAvancada acao="/fluxo/busca" filtros={{ reputacao: '1', rastreio: 'BR1' }} />);
+    rerender(<BuscaAvancada acao="/fluxo/busca" filtros={{}} />);
+    expect((screen.getByRole('checkbox', { name: 'Só as que afetam a reputação no ML (extra)' }) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByRole('textbox', { name: 'Código de Rastreamento' }) as HTMLInputElement).value).toBe('');
+  });
+
   it('(extra) o atalho fica na mesma linha do botão "Filtros"', () => {
     render(<BuscaAvancada acao="/fluxo/busca" filtros={{}} atalho={<a href="/fluxo/busca?reputacao=1">Atalho</a>} />);
     const botao = screen.getByRole('button', { name: 'Filtros' });
