@@ -1,11 +1,33 @@
 {
   "id": "MLB3456789012",
   "title": "Fone de Ouvido Bluetooth",
+  "thumbnail": "http://http2.mlstatic.com/D_611111-MLB70000000001_072026-I.jpg",
+  "secure_thumbnail": "https://http2.mlstatic.com/D_611111-MLB70000000001_072026-I.jpg",
+  "pictures": [
+    {
+      "id": "611111-MLB70000000001_072026",
+      "url": "http://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg",
+      "secure_url": "https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg",
+      "size": "500x500",
+      "max_size": "1200x1200"
+    },
+    {
+      "id": "622222-MLB70000000002_072026",
+      "url": "http://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg",
+      "secure_url": "https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg",
+      "size": "500x500",
+      "max_size": "1200x1200"
+    }
+  ],
   "attributes": [
     { "id": "BRAND", "name": "Marca", "value_name": "Marca Exemplo" },
     { "id": "GTIN", "name": "Código universal de produto", "value_name": "7891234567895" }
   ],
   "variations": [
-    { "id": 178234567890, "attributes": [{ "id": "GTIN", "name": "Código universal de produto", "value_name": "7891234567888" }] }
+    {
+      "id": 178234567890,
+      "picture_ids": ["622222-MLB70000000002_072026"],
+      "attributes": [{ "id": "GTIN", "name": "Código universal de produto", "value_name": "7891234567888" }]
+    }
   ]
 }

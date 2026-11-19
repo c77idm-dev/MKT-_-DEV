@@ -17,7 +17,8 @@ import {
   type PedidoJson,
   type ReclamacaoJson,
 } from './esquemas';
-import type { DadosDevolucaoML, ExtrasML } from './tipos';
+import { normalizarEan } from '@/modules/catalogo/documentos';
+import type { DadosDevolucaoML, ExtrasML, ProdutoDoAnuncioML } from './tipos';
 
 export class ErroFormatoML extends Error {
   constructor(oQue: string, detalhes: string) {
@@ -56,11 +57,59 @@ export function escolherEnvio(d: DevolucaoJson): EnvioDevolucaoJson | null {
   return d.shipments.find((s) => s.type === 'return_from_triage') ?? d.shipments.at(-1) ?? null;
 }
 
+function variacaoDoAnuncio(a: AnuncioJson, variacao: string | null) {
+  return a.variations.find((v) => v.id !== null && v.id === variacao) ?? null;
+}
+
+const ATRIBUTOS_GTIN = new Set(['GTIN', 'EAN']);
+
+/**
+ * O 1º GTIN válido (8, 12, 13 ou 14 dígitos com o dígito verificador certo, como no cadastro): primeiro os da variação,
+ * depois os do anúncio. O ML aceita mais de um código no mesmo atributo, separados por vírgula.
+ */
 export function gtinDoAnuncio(a: AnuncioJson, variacao: string | null): string | null {
-  const daVariacao = a.variations.find((v) => v.id !== null && v.id === variacao)?.attributes ?? [];
-  const valor = [...daVariacao, ...a.attributes].find((x) => x.id === 'GTIN')?.value_name ?? '';
-  const digitos = valor.replace(/\D/g, '');
-  return [8, 12, 13, 14].includes(digitos.length) ? digitos : null;
+  const daVariacao = variacaoDoAnuncio(a, variacao)?.attributes ?? [];
+  for (const atributo of [...daVariacao, ...a.attributes]) {
+    if (!ATRIBUTOS_GTIN.has(atributo.id)) continue;
+    for (const parte of (atributo.value_name ?? '').split(/[,;|/]/)) {
+      const gtin = normalizarEan(parte);
+      if (gtin) return gtin;
+    }
+  }
+  return null;
+}
+
+/** Só https (a CSP aceita `img-src https:`); qualquer outra coisa vira null. */
+function urlHttps(valor: string | null | undefined): string | null {
+  const texto = valor?.trim() ?? '';
+  if (!texto || texto.length > 2048) return null;
+  try {
+    const url = new URL(texto);
+    return url.protocol === 'https:' && url.hostname !== '' && !url.username && !url.password ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** O limite da descrição no cadastro de produtos (interpretarLinhaProduto). */
+const MAX_DESCRICAO = 200;
+
+/**
+ * Produtos do ML (extra), função pura: o que o anúncio diz do produto. Foto: a 1ª da variação (picture_ids[0] em
+ * pictures), senão a 1ª do anúncio, senão a miniatura; só https.
+ */
+export function produtoDoAnuncio(a: AnuncioJson, variacao: string | null): Omit<ProdutoDoAnuncioML, 'sku'> {
+  const titulo = (a.title ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_DESCRICAO).trimEnd();
+  const idFotoVariacao = variacaoDoAnuncio(a, variacao)?.picture_ids[0] ?? null;
+  const fotoVariacao = idFotoVariacao ? a.pictures.find((p) => p.id === idFotoVariacao) : undefined;
+  const primeira = a.pictures[0];
+  const candidatas = [fotoVariacao?.secure_url, fotoVariacao?.url, primeira?.secure_url, primeira?.url, a.secure_thumbnail, a.thumbnail];
+  return {
+    mlItemId: a.id,
+    descricao: titulo || null,
+    ean: gtinDoAnuncio(a, variacao),
+    fotoUrl: candidatas.map(urlHttps).find((u) => u !== null) ?? null,
+  };
 }
 
 export function skuDoPedido(p: PedidoJson | undefined, itemId: string | null, variacao: string | null): string | null {
@@ -195,6 +244,7 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
       atualizadaEm: r.last_updated ?? r.date_created,
       devolucao: null,
       extras: extrasDaReclamacao({ reclamacao: r, devolucao: null, reputacao: e.reputacao ?? null, revisoes: null, envioVenda: null }),
+      produtos: [],
     };
   }
   const d = analisar(esquemaDevolucao, e.devolucao, 'devolução');
@@ -213,6 +263,11 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
   const pedidos = [...new Set(d.orders.map((o) => o.order_id))];
   if (pedidos.length === 0 && r.resource_id) pedidos.push(r.resource_id);
 
+  const linhas = d.orders.map((o) => ({
+    o,
+    anuncio: anuncios.find((a) => a.id === o.item_id) ?? null,
+    sku: skuDoPedido(pedidosJson.find((p) => p.id === o.order_id), o.item_id, o.variation_id) ?? o.item_id ?? `PEDIDO-${o.order_id}`,
+  }));
   const devolucao: DevolucaoExterna = {
     canal: 'MERCADO_LIVRE',
     devolucaoExternaId: d.id,
@@ -228,16 +283,14 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
     entregueEm,
     prazoConferencia: prazoDaReclamacao(r),
     atualizadaEm,
-    itens: d.orders.map((o) => {
-      const anuncio = anuncios.find((a) => a.id === o.item_id);
-      return {
-        pedido: o.order_id,
-        sku: skuDoPedido(pedidosJson.find((p) => p.id === o.order_id), o.item_id, o.variation_id) ?? o.item_id ?? `PEDIDO-${o.order_id}`,
-        ean: anuncio ? gtinDoAnuncio(anuncio, o.variation_id) : null,
-        quantidade: quantidadeML(o.return_quantity) ?? quantidadeML(o.total_quantity) ?? 1,
-      };
-    }),
+    itens: linhas.map(({ o, anuncio, sku }) => ({
+      pedido: o.order_id,
+      sku,
+      ean: anuncio ? gtinDoAnuncio(anuncio, o.variation_id) : null,
+      quantidade: quantidadeML(o.return_quantity) ?? quantidadeML(o.total_quantity) ?? 1,
+    })),
   };
+  const produtos = linhas.flatMap(({ o, anuncio, sku }) => (anuncio ? [{ sku, ...produtoDoAnuncio(anuncio, o.variation_id) }] : []));
   const extras = extrasDaReclamacao({
     reclamacao: r,
     devolucao: d,
@@ -245,5 +298,15 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
     revisoes: e.revisoes ?? null,
     envioVenda: e.envioVenda ?? null,
   });
-  return { reclamacaoId: r.id, statusReclamacao: r.status, motivoId: r.reason_id, subtipo: d.subtype, statusDevolucao: d.status, atualizadaEm, devolucao, extras };
+  return {
+    reclamacaoId: r.id,
+    statusReclamacao: r.status,
+    motivoId: r.reason_id,
+    subtipo: d.subtype,
+    statusDevolucao: d.status,
+    atualizadaEm,
+    devolucao,
+    extras,
+    produtos,
+  };
 }

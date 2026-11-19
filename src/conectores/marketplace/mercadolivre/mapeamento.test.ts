@@ -16,7 +16,7 @@ import {
   extrasDaReclamacao,
   gtinDoAnuncio,
   idEnvioDaVenda,
-  mapearReclamacao, prazoDaReclamacao, quantidadeML, temDevolucao, textoMotivoReclamacao } from './mapeamento';
+  mapearReclamacao, prazoDaReclamacao, produtoDoAnuncio, quantidadeML, temDevolucao, textoMotivoReclamacao } from './mapeamento';
 
 const COMPLETA = { reclamacao, devolucao, pedidos: [pedido], anuncios: [anuncio], envio };
 
@@ -47,7 +47,22 @@ describe('mapearReclamacao (spec §7.2 e §7.3)', () => {
         itens: [{ pedido: '2000008003035430', sku: 'fone-01', ean: '7891234567888', quantidade: 1 }],
       },
       extras: { ...EXTRAS_VAZIOS, acaoPendente: 'return_review_ok', urgente: false, dinheiro: 'RETIDO' },
+      produtos: [
+        {
+          sku: 'fone-01',
+          mlItemId: 'MLB3456789012',
+          descricao: 'Fone de Ouvido Bluetooth',
+          ean: '7891234567888',
+          fotoUrl: 'https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg',
+        },
+      ],
     });
+  });
+
+  it('produtos (extra): um por item com anúncio lido; sem anúncio ou sem devolução, nenhum', () => {
+    expect(mapearReclamacao({ ...COMPLETA, anuncios: [] }).produtos).toEqual([]);
+    const semDevolucao = mapearReclamacao({ reclamacao: { ...reclamacao, related_entities: [] }, devolucao: null, pedidos: [], anuncios: [], envio: null });
+    expect(semDevolucao.produtos).toEqual([]);
   });
 
   it('reclamação sem devolução (só mediação): devolucao null', () => {
@@ -160,11 +175,69 @@ describe('funções do mapeamento', () => {
     expect(gtinDoAnuncio(esquemaAnuncio.parse({ id: 'X', attributes: [{ id: 'GTIN', value_name: '123' }] }), null)).toBeNull();
   });
 
+  it('gtinDoAnuncio (extra): GTIN inválido da variação cai no do anúncio; aceita EAN; dígito verificador errado e lista de códigos', () => {
+    const variacaoRuim = esquemaAnuncio.parse({ ...anuncio, variations: [{ id: 178234567890, attributes: [{ id: 'GTIN', value_name: '123' }] }] });
+    expect(gtinDoAnuncio(variacaoRuim, '178234567890')).toBe('7891234567895');
+    const soEan = esquemaAnuncio.parse({ id: 'X', attributes: [{ id: 'EAN', value_name: '789-1234-567895' }] });
+    expect(gtinDoAnuncio(soEan, null)).toBe('7891234567895');
+    const digitoErrado = esquemaAnuncio.parse({ id: 'X', attributes: [{ id: 'GTIN', value_name: '7891234567890' }] });
+    expect(gtinDoAnuncio(digitoErrado, null)).toBeNull();
+    const varios = esquemaAnuncio.parse({ id: 'X', attributes: [{ id: 'GTIN', value_name: '7891234567890, 7891234567888' }] });
+    expect(gtinDoAnuncio(varios, null)).toBe('7891234567888');
+  });
+
   it('quantidadeML entende "1.0", "2,0" e recusa zero', () => {
     expect(quantidadeML('1.0')).toBe(1);
     expect(quantidadeML('2,0')).toBe(2);
     expect(quantidadeML('0')).toBeNull();
     expect(quantidadeML(null)).toBeNull();
+  });
+});
+
+describe('produtoDoAnuncio (produtos do ML, extra)', () => {
+  const FOTO_1 = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
+  const FOTO_VARIACAO = 'https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg';
+  const MINIATURA = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-I.jpg';
+  const ler = (json: unknown, variacao: string | null = null) => produtoDoAnuncio(esquemaAnuncio.parse(json), variacao);
+
+  it('sem variação: título, GTIN do anúncio e a 1ª foto', () => {
+    expect(ler(anuncio)).toEqual({ mlItemId: 'MLB3456789012', descricao: 'Fone de Ouvido Bluetooth', ean: '7891234567895', fotoUrl: FOTO_1 });
+  });
+
+  it('com variação: GTIN e foto da variação (picture_ids[0] resolvido em pictures)', () => {
+    expect(ler(anuncio, '178234567890')).toMatchObject({ ean: '7891234567888', fotoUrl: FOTO_VARIACAO });
+  });
+
+  it('a foto da variação que não está em pictures cai na 1ª foto do anúncio', () => {
+    const json = { ...anuncio, variations: [{ ...anuncio.variations[0], picture_ids: ['nao-existe'] }] };
+    expect(ler(json, '178234567890').fotoUrl).toBe(FOTO_1);
+  });
+
+  it('só https: foto sem secure_url cai na secure_thumbnail; nada https → sem foto', () => {
+    const soHttp = { ...anuncio, pictures: [{ id: 'P1', url: 'http://http2.mlstatic.com/D_P1-O.jpg' }] };
+    expect(ler(soHttp).fotoUrl).toBe(MINIATURA);
+    expect(ler({ ...soHttp, secure_thumbnail: 'http://http2.mlstatic.com/D_P1-I.jpg' }).fotoUrl).toBeNull();
+    expect(ler({ ...anuncio, pictures: [{ id: 'P1', secure_url: 'javascript:alert(1)' }], secure_thumbnail: null }).fotoUrl).toBeNull();
+    expect(ler({ ...anuncio, pictures: [{ id: 'P1', secure_url: 'https://' }], secure_thumbnail: 'data:image/png;base64,AAAA' }).fotoUrl).toBeNull();
+  });
+
+  it('título: espaços juntados e no máximo 200 caracteres (o limite da descrição do cadastro)', () => {
+    expect(ler({ id: 'MLB1', title: '  Fone   de\nOuvido  ' }).descricao).toBe('Fone de Ouvido');
+    expect(ler({ id: 'MLB1', title: 'x'.repeat(250) }).descricao).toHaveLength(200);
+  });
+
+  it('sem nada: só o id do anúncio', () => {
+    expect(ler({ id: 'MLB1' })).toEqual({ mlItemId: 'MLB1', descricao: null, ean: null, fotoUrl: null });
+    expect(ler({ id: 'MLB1', title: '   ', pictures: [], attributes: [], variations: [] })).toEqual({ mlItemId: 'MLB1', descricao: null, ean: null, fotoUrl: null });
+  });
+
+  it('campos fora do formato não derrubam o anúncio (a devolução continua sendo lida)', () => {
+    expect(ler({ id: 'MLB1', title: 123, pictures: 'x', secure_thumbnail: 5, variations: [{ id: 1, picture_ids: 'y', attributes: [] }] })).toEqual({
+      mlItemId: 'MLB1',
+      descricao: null,
+      ean: null,
+      fotoUrl: null,
+    });
   });
 });
 
