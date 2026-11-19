@@ -40,7 +40,21 @@ Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main
           - liga os itens das devoluções antigas na próxima atualização delas;
           - migração `0015` (`produtos.foto_url` e `produtos.ml_item_id`);
           - a fotinha aparece no cartão, na conferência, no detalhe e em Cadastros.
-        - Só os produtos que aparecem nas devoluções. Para trazer o catálogo inteiro, a rota do Bitbrain precisaria liberar a lista de anúncios, o que fica para depois, se o usuário pedir.
+        - Só os produtos que aparecem nas devoluções. O catálogo inteiro é a frente abaixo.
+      - **Frentes em paralelo (19/11, depois da entrega), cada uma no seu worktree:**
+
+        | Frente | Branch | Worktree | Bancos | Porta |
+        |---|---|---|---|---|
+        | Produtos do ML com foto (extra) | `produtos-do-ml` | `C:/Users/idmpc/devolucoes-wt/bitbrain` | `devolucoes_test_f7` | 3107 |
+        | Catálogo inteiro do ML (extra) | `catalogo-ml` | `C:/Users/idmpc/devolucoes-wt/catalogo` | só documentos por enquanto | — |
+        | Filtro "Afetam a reputação" (extra) | `filtro-reputacao` | `C:/Users/idmpc/devolucoes-wt/reputacao` | `devolucoes_f8` e `devolucoes_test_f8` | 3108 |
+
+        - **Catálogo inteiro:**
+          - primeiro saem o texto para a sessão do Bitbrain e o desenho e o plano do nosso lado, em `docs/integracao/bitbrain-rota-catalogo.md`, `specs/2026-11-19-catalogo-ml-design.md` e `plans/2026-11-19-catalogo-ml.md`;
+          - o texto pede liberar `/users/{seller}/items/search` e o multiget `/items?ids=`, e leva junto o adendo do `logistic`;
+          - a construção só começa depois que `produtos-do-ml` entrar no `main`.
+        - **Filtro de reputação:** o usuário escolheu o botão vermelho "Afetam a reputação · N" ao lado de Filtros, que só aparece quando há alguma, mais uma opção dentro de Filtros.
+        - **Ordem de junção no `main`:** `produtos-do-ml` primeiro, depois `filtro-reputacao`. As duas mexem em `busca.ts`, mas em partes diferentes.
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
   - **Conector "Bitbrain" do claude.ai: autorizado e explorado em 18/11.**
     - **O que é:** o painel das lojas no ML, só de leitura.
