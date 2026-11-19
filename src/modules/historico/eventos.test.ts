@@ -34,6 +34,8 @@ const RESERVADAS: Record<string, string[]> = {
     'ml_resultado_ok_enviado', 'ml_resultado_ok_recusado', 'ml_resultado_sem_vinculo',
     'ml_conta_conectada', 'ml_conta_reconectar', 'ml_conta_desconectada',
     'ml_conta_bitbrain_marcada', 'ml_conta_bitbrain_desmarcada', 'ml_resposta_manual_pendente', 'ml_ok_respondido_a_mao', 'ml_contestacao_respondida_a_mao',
+    // Produtos do ML (emenda E22, extra)
+    'ml_produto_criado', 'ml_produto_completado',
     'contestacao_criada', 'contestacao_revisada', 'contestacao_enviada', 'contestacao_falhou',
   ],
   fiscal: [

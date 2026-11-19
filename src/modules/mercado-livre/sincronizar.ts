@@ -1,4 +1,5 @@
 import { and, asc, eq, isNull, ne, notInArray, sql } from 'drizzle-orm';
+import { logErroML } from '@/conectores/marketplace/mercadolivre/erros';
 import { ErroFormatoML } from '@/conectores/marketplace/mercadolivre/mapeamento';
 import type { DadosDevolucaoML } from '@/conectores/marketplace/mercadolivre/tipos';
 import type { DevolucaoExterna } from '@/conectores/marketplace/tipos';
@@ -11,8 +12,10 @@ import { normalizarRastreio } from '@/modules/devolucoes/rastreio';
 import { exigirTransicao } from '@/modules/devolucoes/transicoes';
 import type { Fila } from '@/modules/fila/fila';
 import { registrarEvento } from '@/modules/historico/eventos';
+import { mensagemDoErro } from '@/lib/log';
 import { rotuloStatusML } from './dominio';
 import { motivoEmCache } from './motivos';
+import { cadastrarProdutosDosAnuncios, ligarItensSemProduto } from './produtos-anuncio';
 import { ANTES_DA_CHEGADA, encerradaNoML, proximoStatusML } from './status';
 
 const ENCERRADAS: StatusDevolucao[] = ['CANCELADA', 'EXTRAVIADA', 'CONCLUIDA'];
@@ -253,6 +256,18 @@ async function aplicarStatus(tx: DbOuTx, alvo: Atual, d: DevolucaoExterna, agora
 }
 
 /**
+ * Produtos do ML (extra, emenda E22) num savepoint: um erro aqui fica no log e não impede a devolução de sincronizar.
+ */
+async function produtosDosAnuncios(tx: DbOuTx, dados: DadosDevolucaoML, agora: Date): Promise<void> {
+  if (dados.produtos.length === 0) return;
+  try {
+    await tx.transaction((sp) => cadastrarProdutosDosAnuncios(sp, dados.produtos, agora, { reclamacaoId: dados.reclamacaoId }));
+  } catch (erro) {
+    logErroML('produtos do anúncio', new Error(mensagemDoErro(erro)), { reclamacaoId: dados.reclamacaoId });
+  }
+}
+
+/**
  * Aplica no sistema o que o ML mostra de uma reclamação (contrato §5.5). Numa transação com trava por reclamação
  * (espaço 3 das travas do sistema: o 1 é do rastreio e o 2 da gestão de usuários).
  */
@@ -275,17 +290,23 @@ export async function aplicarReclamacao(db: DbOuTx, dados: DadosDevolucaoML, ago
     let alvoId: string;
     if (existente) {
       await atualizar(tx, existente, d, motivo, agora);
+      await produtosDosAnuncios(tx, dados, agora);
+      await ligarItensSemProduto(tx, existente.id);
       acao = 'atualizada';
       alvoId = existente.id;
     } else {
       const manual = d.semEnvioFisico ? null : await manualDoPedido(tx, d.pedidos);
       if (manual && (await vincular(tx, manual, d, motivo, agora))) {
+        await produtosDosAnuncios(tx, dados, agora);
+        await ligarItensSemProduto(tx, manual.id);
         acao = 'vinculada';
         alvoId = manual.id;
       } else if (d.semEnvioFisico || encerradaNoML(d)) {
         await gravarReclamacao(tx, dados, null, agora, conta);
         return { acao: 'so_consulta', motivo: d.semEnvioFisico ? 'low_cost' : 'encerrada_no_ml' };
       } else {
+        // Antes dos itens: assim eles já nascem com o produto esperado (criarDevolucao procura pelo SKU).
+        await produtosDosAnuncios(tx, dados, agora);
         const criada = await criarDevolucao(tx, dadosNovaDevolucao(d, motivo), { origem: 'API', usuario: null, canal: dadosCanal(d), agora });
         if (d.entregueEm) await evento(tx, criada.id, 'ml_entregue', agora, { dados: { entregueEm: d.entregueEm.toISOString() } });
         acao = 'criada';
