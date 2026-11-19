@@ -20,7 +20,7 @@ export function CartaoDevolucao({ devolucao: d }: { devolucao: ResumoDevolucao }
       href={`/fluxo/devolucoes/${d.codigo}`}
       className="flex min-h-11 flex-col gap-1.5 rounded-xl border border-borda bg-superficie p-3 hover:border-destaque"
     >
-      <span className="flex items-center justify-between gap-2">
+      <span className="flex w-0 min-w-full items-center justify-between gap-2">
         <span className="shrink-0 font-mono text-[13px] font-semibold">{d.codigo}</span>
         <span className="min-w-0 truncate text-xs font-semibold text-texto-2" title={canal}>
           {canal}

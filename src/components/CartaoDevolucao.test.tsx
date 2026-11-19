@@ -76,3 +76,15 @@ describe('CartaoDevolucao: conta do Bitbrain (D18)', () => {
     expect(screen.getByText('Mercado Livre')).toBeTruthy();
   });
 });
+
+describe('CartaoDevolucao: conta com nome longo (e2e do Bitbrain)', () => {
+  it('a linha do código e do canal não alarga o cartão (w-0 min-w-full) e o canal trunca', () => {
+    const longo = 'IDM COMERCIO DE PRODUTOS ELETRONICOS LTDA';
+    render(<CartaoDevolucao devolucao={{ ...BASE, canal: 'MERCADO_LIVRE', contaML: longo }} />);
+    const canal = screen.getByText(new RegExp(longo));
+    expect(canal.className).toContain('truncate');
+    const linha = canal.parentElement as HTMLElement;
+    expect(linha.className).toContain('w-0');
+    expect(linha.className).toContain('min-w-full');
+  });
+});
