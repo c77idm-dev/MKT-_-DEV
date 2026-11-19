@@ -75,7 +75,9 @@ test('(extra) "Afetam a reputação · N" ao lado de Filtros: conta as em andame
     // A caixa do painel liga o filtro de novo.
     await caixa.check();
     await page.getByRole('button', { name: 'Buscar' }).click();
-    await expect(page).toHaveURL(/\/fluxo\/busca\?reputacao=1$/);
+    // O formulário GET manda também os campos vazios.
+    await expect(page).toHaveURL(/\/fluxo\/busca\?.*\breputacao=1\b/);
+    await expect(page.getByRole('link', { name: 'Remover filtro: Afetam a reputação' })).toBeVisible();
     await expect(page.getByText('2 devoluções', { exact: true })).toBeVisible();
 
     // N = 0: o botão some.
