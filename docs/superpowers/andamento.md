@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 18/11/2026 (integração com o Bitbrain: spec e contrato da rota na branch integracao-bitbrain; plano sendo escrito). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 19/11/2026 (integração com o Bitbrain: rota do Bitbrain no ar; nosso lado com as Tarefas 1 a 3 de 14 prontas). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
@@ -35,9 +35,18 @@ Atualizado em 18/11/2026 (integração com o Bitbrain: spec e contrato da rota n
     - bancos `devolucoes_f7` e `devolucoes_test_f7`, criados com o superusuário `postgres` (a senha está em `C:\Users\idmpc\.postgres-superusuario.txt`), porque o papel `devolucoes` não cria bancos;
     - `PORTA_E2E=3107`.
   - **Próximos passos:**
-    1. Plano em `docs/superpowers/plans/2026-11-18-integracao-bitbrain.md`, na branch. Está sendo escrito.
-    2. Construir com o fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js), com os argumentos: `pasta` da worktree, `branch` `integracao-bitbrain`, `pref` `bb`, `porta` 3107, `bancoTeste` `devolucoes_test_f7`, e os briefs `bb-task-N-brief.md`. Depois rodar a revisão final ([workflows/fase-final.js](workflows/fase-final.js)) e juntar no `main`.
-    3. O usuário cola o texto do contrato na sessão do Bitbrain. Quando a rota estiver publicada:
+    1. ✅ **Plano pronto:** `docs/superpowers/plans/2026-11-18-integracao-bitbrain.md`, na branch, com 14 tarefas e as decisões D1–D21.
+    2. **Construção em andamento**, pelo fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js), no run `wf_064982fb-f9b`.
+       - **Argumentos:** `{"fase":"Bitbrain","pasta":"/c/Users/idmpc/devolucoes-wt/bitbrain","branch":"integracao-bitbrain","pref":"bb","tarefas":[1,…,14],"porta":3107,"bancoTeste":"devolucoes_test_f7"}`.
+       - **Os resumos** `bb-task-N-brief.md` são o preâmbulo do plano mais a tarefa.
+       - **19/11:** as Tarefas 1 a 3 estão prontas e aprovadas de primeira (`5c19ca4`).
+       - **A Tarefa 4 foi retomada** depois do fim da sessão. O commit `32a847d` já existia; o resumo ganhou uma nota de retomada, com base em `5c19ca4`.
+       - **Depois:** a revisão final ([workflows/fase-final.js](workflows/fase-final.js)) e a junção no `main`.
+    3. ✅ **A rota do Bitbrain está publicada** (Bitbrain `50afdf8`, https://app.bitbrain.com.br): devolve `401` sem token, e com token lista as 5 contas.
+       - O token já está no `.env` do Bitbrain na VPS.
+       - **Falta o adendo do Full na sessão do Bitbrain:** manter `logistic` (`mode`, `type`, `direction`) no filtro de `/shipments` e publicar de novo.
+       - Quem publica o Bitbrain é o usuário, com `cd ~/bitbrain-publicar && git pull --ff-only && scripts/deploy.sh` neste computador. Pela regra do Bitbrain, nenhuma sessão publica.
+       - Quando o nosso lado estiver publicado:
        - na VPS: `ML_CONECTOR=bitbrain`, `BITBRAIN_URL` e `BITBRAIN_TOKEN`;
        - no sistema, em Configurações › Mercado Livre: marcar as contas e "Sincronizar agora".
 - **Melhorias dos vídeos do adm (16/11), no `main` (`514add1`):** vieram da transcrição de 3 vídeos que o adm mandou. Cada uma tem spec e plano em `docs/superpowers/specs|plans/2026-11-16-*`, revisão independente aprovada e suíte inteira verde (762 de unidade, 453 de integração, 210 e2e).
