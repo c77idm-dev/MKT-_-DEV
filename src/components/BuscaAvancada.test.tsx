@@ -28,6 +28,28 @@ describe('BuscaAvancada (spec §6.7)', () => {
     expect(botao.getAttribute('aria-expanded')).toBe('true');
   });
 
+  it('(extra) caixa "Só as que afetam a reputação no ML" no painel; a etiqueta "Afetam a reputação" remove o filtro', () => {
+    const { unmount } = render(<BuscaAvancada acao="/fluxo/busca" filtros={{}} />);
+    const caixa = screen.getByRole('checkbox', { name: 'Só as que afetam a reputação no ML (extra)' }) as HTMLInputElement;
+    expect(caixa.name).toBe('reputacao');
+    expect(caixa.value).toBe('1');
+    expect(caixa.checked).toBe(false);
+    unmount();
+
+    render(<BuscaAvancada acao="/fluxo/busca" filtros={{ reputacao: '1', canal: 'MERCADO_LIVRE' }} />);
+    expect((screen.getByRole('checkbox', { name: 'Só as que afetam a reputação no ML (extra)' }) as HTMLInputElement).checked).toBe(true);
+    const etiqueta = screen.getByRole('link', { name: 'Remover filtro: Afetam a reputação' });
+    expect(etiqueta.textContent).toContain('Afetam a reputação');
+    expect(etiqueta.getAttribute('href')).toBe('/fluxo/busca?canal=MERCADO_LIVRE');
+  });
+
+  it('(extra) o atalho fica na mesma linha do botão "Filtros"', () => {
+    render(<BuscaAvancada acao="/fluxo/busca" filtros={{}} atalho={<a href="/fluxo/busca?reputacao=1">Atalho</a>} />);
+    const botao = screen.getByRole('button', { name: 'Filtros' });
+    const atalho = screen.getByRole('link', { name: 'Atalho' });
+    expect(atalho.parentElement).toBe(botao.parentElement);
+  });
+
   it('mostra os filtros ativos como etiquetas que se removem com um toque, e preenche o formulário', () => {
     render(<BuscaAvancada acao="/fluxo/busca" filtros={{ rastreio: 'BR1', canal: 'SHOPEE' }} />);
     expect(screen.getByRole('button', { name: 'Filtros (2)' })).toBeTruthy();
