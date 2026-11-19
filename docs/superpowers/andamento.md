@@ -21,7 +21,12 @@ Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main
   - **Testes (19/11):** unidade 823; integração 497 (7 pulados); e2e do modo `api`/falso 214 (8 pulados); e2e do modo Bitbrain 12 (6 testes nos projetos `computador` e `celular`). O e2e do modo Bitbrain roda à parte, com `npm run test:e2e:bitbrain`. Typecheck, lint e `build:scripts` limpos.
   - **Falta:**
     - a rota do Bitbrain já foi construída e confere com o contrato (base `https://app.bitbrain.com.br`, limite `DEVOLUCOES_RPM` de 120/min por empresa). Falta mandar a ela o adendo do `logistic.type` ([../integracao/bitbrain-rota-devolucoes.md](../integracao/bitbrain-rota-devolucoes.md)) e publicá-la, se ainda não estiver no ar;
-    - ligar na VPS, conforme `docs/operacao/deploy-vps.md`, seção "Ligar o modo Bitbrain".
+    - ✅ **Ligado na VPS em 19/11, às 16h45:**
+      - imagem `e578f6b`; `ML_CONECTOR=bitbrain`, com o token lido do `/home/bitbrain/bitbrain/.env` sem aparecer na tela;
+      - a rota respondeu 200, as migrações foram aplicadas e o `/api/saude` está ok;
+      - backup antes da atualização: `/root/backups-devolucoes/banco-antes-bitbrain_20261119-1945.dump`, e cópia do env em `.env.producao.antes-bitbrain_20261119-1945`.
+      - **Falta o usuário**, em Configurações › Mercado Livre: Atualizar contas, marcar as contas e "Sincronizar agora".
+      - **Arrumar depois:** o arquivo solto `/opt/devolucoes/backup-antes-fase1-20261112-1928.sql` deve ir para `~/backups-devolucoes`.
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
   - **Conector "Bitbrain" do claude.ai: autorizado e explorado em 18/11.**
     - **O que é:** o painel das lojas no ML, só de leitura.
