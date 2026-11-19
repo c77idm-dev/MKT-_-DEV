@@ -47,7 +47,7 @@ async function main() {
   const busca = (await chamar(
     cliente,
     'buscar reclamações',
-    `/post-purchase/v1/claims/search?players.user_id=${vendedor}&players.role=respondent&range=last_updated:after:${desde}&limit=50`,
+    `/post-purchase/v1/claims/search?player_user_id=${vendedor}&player_role=respondent&range=last_updated:after:${desde}&limit=50`,
     'claims-search.json',
   )) as { data?: ReclamacaoResumo[] } | null;
 

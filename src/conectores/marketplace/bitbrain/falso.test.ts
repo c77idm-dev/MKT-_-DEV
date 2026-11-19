@@ -64,7 +64,7 @@ describe('Bitbrain falso (D3)', () => {
     const c = cliente(loja1.empresa);
     await expect(c.get('/post-purchase/v1/returns/reasons?flow=seller_return_failed&claim_id=1')).rejects.toMatchObject({ motivo: 'caminho' });
     await expect(c.get(`/users/${loja2.seller_id}/invoices/orders/1`)).rejects.toMatchObject({ motivo: 'caminho' });
-    const busca = `/post-purchase/v1/claims/search?players.user_id=${loja1.seller_id}&players.role=respondent&range=last_updated:after:x&limit=100&offset=0`;
+    const busca = `/post-purchase/v1/claims/search?player_user_id=${loja1.seller_id}&player_role=respondent&range=last_updated:after:x&limit=100&offset=0`;
     await expect(c.get(`${busca}&status=opened`)).rejects.toBeInstanceOf(ErroBitbrain);
   });
 
@@ -80,7 +80,7 @@ describe('caminhoPermitido (os 12 da lista fechada)', () => {
   const ok = (c: string, s = '123') => caminhoPermitido(new URL(c, API_ML), s);
   it('aceita os 12 formatos', () => {
     for (const c of [
-      '/post-purchase/v1/claims/search?players.user_id=123&players.role=respondent&range=last_updated:after:2026-11-01T00:00:00.000-0300&limit=100&offset=9900',
+      '/post-purchase/v1/claims/search?player_user_id=123&player_role=respondent&range=last_updated:after:2026-11-01T00:00:00.000-0300&limit=100&offset=9900',
       '/post-purchase/v1/claims/5',
       '/post-purchase/v2/claims/5/returns',
       '/post-purchase/v1/claims/5/affects-reputation',
@@ -99,9 +99,9 @@ describe('caminhoPermitido (os 12 da lista fechada)', () => {
 
   it('recusa o resto', () => {
     for (const c of [
-      '/post-purchase/v1/claims/search?players.user_id=999&players.role=respondent&range=last_updated:after:x&limit=100&offset=0',
-      '/post-purchase/v1/claims/search?players.user_id=123&players.role=respondent&range=last_updated:after:x&limit=101&offset=0',
-      '/post-purchase/v1/claims/search?players.user_id=123&players.role=respondent&range=last_updated:after:x&limit=100&offset=9901',
+      '/post-purchase/v1/claims/search?player_user_id=999&player_role=respondent&range=last_updated:after:x&limit=100&offset=0',
+      '/post-purchase/v1/claims/search?player_user_id=123&player_role=respondent&range=last_updated:after:x&limit=101&offset=0',
+      '/post-purchase/v1/claims/search?player_user_id=123&player_role=respondent&range=last_updated:after:x&limit=100&offset=9901',
       '/post-purchase/v1/returns/reasons',
       '/post-purchase/v1/claims/5?x=1',
       '/items/ABC123',

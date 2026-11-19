@@ -21,11 +21,11 @@ const cliente = (fetchFn: unknown, extra: Record<string, unknown> = {}) =>
 describe('criarClienteViaBitbrain (ClienteML pela rota do Bitbrain)', () => {
   it('GET vai à rota com a empresa e o caminho (com a query) e o Bearer do Bitbrain', async () => {
     const fetchFn = emSequencia(resposta({ id: 1 }));
-    expect(await cliente(fetchFn).get('/post-purchase/v1/claims/search?players.role=respondent&offset=0', { 'x-format-new': 'true' })).toEqual({ id: 1 });
+    expect(await cliente(fetchFn).get('/post-purchase/v1/claims/search?player_role=respondent&offset=0', { 'x-format-new': 'true' })).toEqual({ id: 1 });
     const [url, init] = fetchFn.mock.calls[0] as unknown as Chamada;
     const u = new URL(url);
     expect(`${u.origin}${u.pathname}`).toBe(`https://bitbrain.exemplo.com.br${CAMINHO_ML}`);
-    expect(Object.fromEntries(u.searchParams)).toEqual({ empresa: 'megadino', caminho: '/post-purchase/v1/claims/search?players.role=respondent&offset=0' });
+    expect(Object.fromEntries(u.searchParams)).toEqual({ empresa: 'megadino', caminho: '/post-purchase/v1/claims/search?player_role=respondent&offset=0' });
     expect(init.headers).toMatchObject({ authorization: `Bearer ${TOKEN}` });
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });

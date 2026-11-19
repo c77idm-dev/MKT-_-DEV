@@ -145,8 +145,8 @@ describe('ConectorML: varredura (spec §7.2)', () => {
     expect(vistas).toEqual(['5292183123']);
     const consulta = new URL(String(fetchFn.mock.calls[0][0])).searchParams;
     expect(Object.fromEntries(consulta)).toEqual({
-      'players.user_id': '123456789',
-      'players.role': 'respondent',
+      'player_user_id': '123456789',
+      'player_role': 'respondent',
       range: 'last_updated:after:2026-11-01T09:00:00.000-0300',
       limit: '100',
       offset: '0',
