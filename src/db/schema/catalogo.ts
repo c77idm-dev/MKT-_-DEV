@@ -31,6 +31,9 @@ export const produtos = pgTable(
     ncm: text('ncm'),
     custo: numeric('custo', { precision: 12, scale: 2 }),
     unidade: text('unidade'),
+    /** Produtos do ML (extra, emenda E22): foto principal do anúncio (só https) e o id do anúncio (MLB...). A sincronização só preenche vazios. */
+    fotoUrl: text('foto_url'),
+    mlItemId: text('ml_item_id'),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
     atualizadoEm: timestamp('atualizado_em', { withTimezone: true }).notNull().defaultNow(),
   },
