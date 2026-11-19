@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { sql } from 'drizzle-orm';
 import { contasBitbrain, evidencias, reclamacoesMl } from '../../src/db/schema';
 import { configML, type ConfigML } from '../../src/modules/mercado-livre/config';
 import { processarResultadoConferencia } from '../../src/modules/mercado-livre/resultado';
@@ -22,6 +23,12 @@ export async function semContasBitbrain(): Promise<void> {
 /** As contas do Bitbrain falso no banco, com só esta marcada. */
 export async function marcarContaFalsa(empresa: string): Promise<void> {
   await comBanco((db) => contasFalsasTeste(db, { recebe: [empresa] }));
+}
+
+/** Tira da fila as tarefas por reclamação já enfileiradas (a deduplicação por minuto da produção não muda): um job de outro teste,
+ * que rodou depois de as contas mudarem, termina sem devolução e bloquearia a nova tarefa da mesma reclamação até o minuto seguinte. */
+export async function semTarefasDeReclamacao(): Promise<void> {
+  await comBanco((db) => db.execute(sql`delete from pgboss.job where name = 'ml.sincronizar-reclamacao'`));
 }
 
 /** Devolução do ML conferida sem problema, da Loja Falsa 1, com o "OK" pendente (modo bitbrain, §4.6). */
