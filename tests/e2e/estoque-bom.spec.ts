@@ -19,6 +19,8 @@ async function prepararVolta() {
     await criarProdutoTeste(db, { sku: skuDev, descricao: 'Fone que voltou' });
     const produtoRet = await criarProdutoTeste(db, { sku: skuRet, descricao: 'Carregador do Full' });
     const dev = await criarDevolucaoNoEstoqueTeste(db, gestor, {
+      // 2 s atrás: a conferência fica estritamente antes da retirada (datas no mesmo milissegundo deixavam a ordem ao acaso).
+      agora: new Date(Date.now() - 2000),
       unidades: [
         { sku: skuDev, destino: 'BOM', serial: 'SN-VOLTA' },
         { sku: skuDev, destino: 'AUSENTE' },
