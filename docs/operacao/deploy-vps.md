@@ -122,6 +122,12 @@ Se `nginx -t` acusar erro, não recarregue e confira o arquivo.
 
 Pré-requisito: a sessão do Bitbrain publicou a rota (`docs/integracao/bitbrain-rota-devolucoes.md`), e o Nathan gerou o `DEVOLUCOES_TOKEN` (`openssl rand -hex 32`) e o pôs no `.env` do Bitbrain.
 
+Antes de começar, defina o atalho `dc` (rode de novo se abrir outro terminal):
+
+```bash
+cd /opt/devolucoes && dc() { docker compose --env-file .env.producao -f docker-compose.prod.yml "$@"; }
+```
+
 1. Confira a rota, sem gravar o token no histórico:
    ```bash
    read -rs TOKEN && curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" https://app.bitbrain.com.br/integracao/devolucoes/empresas; unset TOKEN

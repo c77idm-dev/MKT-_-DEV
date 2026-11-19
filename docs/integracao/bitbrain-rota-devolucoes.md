@@ -107,6 +107,8 @@ Resumo:
 2. GET /integracao/devolucoes/ml?empresa=<slug>&caminho=<caminho do ML>: repasse SÓ DE LEITURA, com LISTA FECHADA
    de 12 caminhos da API do ML. O bitbrain chama o ML com o token da empresa e devolve a resposta como veio, com o
    mesmo código HTTP e sem os dados pessoais (pedido e envio só com os campos listados; endereço da devolução tirado).
+   Em /shipments/{id}, mantenha também `logistic` só com `mode`, `type` e `direction` (não é dado pessoal; veja a seção
+   "Adendo (18/11…)" do contrato).
    O XML da NF de venda vai inteiro. Caminho fora da lista dá 403 sem chamar o ML.
 3. Autenticação: Authorization: Bearer <DEVOLUCOES_TOKEN>, uma variável nova no .env, comparada em tempo constante,
    igual à da /estudio/ml. Token vazio = rota desligada (404).
@@ -118,4 +120,10 @@ aba Devoluções. Quando terminar, me diga:
 - o endereço público da rota (domínio do bitbrain);
 - os passos para o Nathan gerar o DEVOLUCOES_TOKEN e publicar.
 O token eu ponho depois, à mão, no .env do sistema de devoluções.
+```
+
+### Adendo para colar agora (a rota já está no ar)
+
+```
+A rota /integracao/devolucoes/ml já está no ar. Falta o adendo de 18/11 do contrato (docs/integracao/bitbrain-rota-devolucoes.md): em /shipments/{id}, além dos campos já liberados, mantenha o objeto `logistic` só com `mode`, `type` e `direction`. Com x-format-new: true o ML põe o tipo logístico (ex.: fulfillment) em logistic.type. Acrescente um teste: /shipments traz logistic.{mode,type,direction} e continua sem endereços, nomes e telefones.
 ```

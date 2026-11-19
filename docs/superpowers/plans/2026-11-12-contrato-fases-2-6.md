@@ -604,4 +604,5 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
     - entidade `conta_bitbrain`;
     - chaves `ml_conta_bitbrain_marcada`, `ml_conta_bitbrain_desmarcada`, `ml_resposta_manual_pendente`, `ml_ok_respondido_a_mao` e `ml_contestacao_respondida_a_mao`.
   - **Alertas:** `respostas_ml` e `conta_bitbrain_indisponivel`.
+  - **e2e (D4):** script `test:e2e:bitbrain` no `package.json`; `playwright.config.ts` exporta `configE2E(modo)` e ganha `playwright.bitbrain.config.ts`; `tests/e2e/global-setup.ts` lê `metadata.modoML`; `tests/e2e/dados.ts` ganha `ambienteE2E(modo)`.
   - **Motivo:** as devoluções do ML passam a vir pelo Bitbrain (decisão do usuário de 16/11), e os arquivos são congelados.
