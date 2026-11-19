@@ -2,10 +2,11 @@ import { and, asc, eq, inArray, isNull, like, notInArray, or, sql } from 'drizzl
 import { ehRecusaDefinitiva, logErroML, mensagemErroML } from '@/conectores/marketplace/mercadolivre/erros';
 import type { MotivoCanal } from '@/conectores/marketplace/tipos';
 import type { DbOuTx } from '@/db/client';
-import { contestacoesCanal, devolucoes, eventosHistorico, evidencias, itensDevolucao } from '@/db/schema';
+import { contestacoesCanal, devolucoes, eventosHistorico, evidencias, itensDevolucao, reclamacoesMl } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
 import type { DestinoItem, MotivoItem, StatusItem } from '@/modules/devolucoes/dominio';
 import { registrarEvento } from '@/modules/historico/eventos';
+import { configML, type ConfigML } from './config';
 import { obterConectorML } from './conector';
 import { ErroContaML } from './contas';
 import { motivoCanalML } from './dominio';
@@ -98,6 +99,8 @@ export type ResultadoProcessamento =
   | 'ok_enviado'
   | 'ok_ja_enviado'
   | 'ok_recusado'
+  | 'ok_pendente_manual'
+  | 'ok_pendente_ja_registrado'
   | 'contestacao_criada'
   | 'contestacao_existente';
 
@@ -107,7 +110,12 @@ export type ResultadoProcessamento =
  * - a contestação é uma por devolução (índice único).
  * Lança (nova tentativa) só em erro passageiro ou sem conta conectada.
  */
-export async function processarResultadoConferencia(db: DbOuTx, devolucaoId: string, agora: Date): Promise<ResultadoProcessamento> {
+export async function processarResultadoConferencia(
+  db: DbOuTx,
+  devolucaoId: string,
+  agora: Date,
+  config: ConfigML = configML(),
+): Promise<ResultadoProcessamento> {
   if (!ehUuid(devolucaoId)) return 'sem_devolucao';
   const [dev] = await db
     .select({
@@ -115,6 +123,7 @@ export async function processarResultadoConferencia(db: DbOuTx, devolucaoId: str
       codigo: devolucoes.codigo,
       canal: devolucoes.canal,
       devolucaoExternaId: devolucoes.devolucaoExternaId,
+      reclamacaoId: devolucoes.reclamacaoId,
       prazo: devolucoes.prazoConferenciaCanal,
     })
     .from(devolucoes)
@@ -177,6 +186,9 @@ export async function processarResultadoConferencia(db: DbOuTx, devolucaoId: str
     });
   }
 
+  // §4.6: no modo bitbrain o sistema não escreve no ML; o "OK" fica pendente para o Gestor responder à mão.
+  if (config.modo === 'bitbrain') return registrarOkPendente(db, { id: dev.id, reclamacaoId: dev.reclamacaoId }, agora);
+
   return db.transaction(async (tx): Promise<ResultadoProcessamento> => {
     await tx.execute(sql`select pg_advisory_xact_lock(3, hashtext(${`resultado:${dev.id}`}))`);
     if (await jaTemEvento(tx, dev.id, 'ml_resultado_ok_enviado')) return 'ok_ja_enviado';
@@ -199,5 +211,35 @@ export async function processarResultadoConferencia(db: DbOuTx, devolucaoId: str
     }
     await registrarEvento(tx, { entidade: 'devolucao', entidadeId: dev.id, acao: 'ml_resultado_ok_enviado', usuarioId: null, em: agora });
     return 'ok_enviado';
+  });
+}
+
+/**
+ * Modo bitbrain (§4.6): grava resposta_pendente = 'OK' na reclamação e o evento ml_resposta_manual_pendente.
+ * Idempotente pelo evento: rodar de novo (inclusive depois de "Marcar como respondido") não volta a pendência.
+ */
+export async function registrarOkPendente(
+  db: DbOuTx,
+  dev: { id: string; reclamacaoId: string | null },
+  agora: Date,
+): Promise<'ok_pendente_manual' | 'ok_pendente_ja_registrado' | 'sem_vinculo'> {
+  const reclamacaoId = dev.reclamacaoId;
+  if (!reclamacaoId) return 'sem_vinculo';
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(3, hashtext(${`resultado:${dev.id}`}))`);
+    if (await jaTemEvento(tx, dev.id, 'ml_resposta_manual_pendente')) return 'ok_pendente_ja_registrado';
+    await tx
+      .insert(reclamacoesMl)
+      .values({ claimId: reclamacaoId, devolucaoId: dev.id, sincronizadaEm: agora, respostaPendente: 'OK' })
+      .onConflictDoUpdate({ target: reclamacoesMl.claimId, set: { respostaPendente: 'OK' } });
+    await registrarEvento(tx, {
+      entidade: 'devolucao',
+      entidadeId: dev.id,
+      acao: 'ml_resposta_manual_pendente',
+      usuarioId: null,
+      dados: { resposta: 'OK' },
+      em: agora,
+    });
+    return 'ok_pendente_manual';
   });
 }

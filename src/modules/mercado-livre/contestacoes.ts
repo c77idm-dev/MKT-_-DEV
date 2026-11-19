@@ -1,8 +1,9 @@
 import { and, asc, count, eq, inArray, isNull, like, notInArray, sql } from 'drizzle-orm';
+import { ErroRespostaManual, MENSAGEM_RESPOSTA_MANUAL } from '@/conectores/marketplace/bitbrain/cliente';
 import { ehRecusaDefinitiva, ErroMotivoIndisponivel, logErroML, mensagemErroML } from '@/conectores/marketplace/mercadolivre/erros';
 import type { MotivoCanal } from '@/conectores/marketplace/tipos';
 import type { DbOuTx } from '@/db/client';
-import { contestacoesCanal, devolucoes, evidencias, itensDevolucao, usuarios } from '@/db/schema';
+import { contasBitbrain, contestacoesCanal, devolucoes, evidencias, itensDevolucao, reclamacoesMl, usuarios } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
 import { pode } from '@/modules/auth/permissoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
@@ -11,6 +12,7 @@ import type { Fila } from '@/modules/fila/fila';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { armazenamentoDoProvedor, provedorAtual } from '@/modules/midia/armazenamento';
 import { ehTipoEvidencia, ROTULO_EVIDENCIA } from '@/modules/midia/dominio';
+import { configML, type ConfigML } from './config';
 import { obterConectorML } from './conector';
 import { ErroContaML } from './contas';
 import { ehMotivoCanal, MOTIVOS_COM_FOTO_OBRIGATORIA, ROTULO_MOTIVO_CANAL, type StatusContestacao } from './dominio';
@@ -142,6 +144,8 @@ export type DetalheContestacao = {
   enviadaEm: Date | null;
   itensProblema: { unidade: number; sku: string; motivoTexto: string; observacao: string | null }[];
   fotos: FotoCandidata[];
+  /** Nome da conta do Bitbrain (ou a empresa); nulo no modo api. */
+  conta: string | null;
 };
 
 export async function obterContestacao(db: DbOuTx, id: string, agora: Date = new Date()): Promise<DetalheContestacao | null> {
@@ -163,10 +167,13 @@ export async function obterContestacao(db: DbOuTx, id: string, agora: Date = new
       erro: contestacoesCanal.erro,
       enviadaEm: contestacoesCanal.enviadaEm,
       evidencias: contestacoesCanal.evidencias,
+      conta: sql<string | null>`coalesce(${contasBitbrain.nome}, ${reclamacoesMl.conta})`,
     })
     .from(contestacoesCanal)
     .innerJoin(devolucoes, eq(devolucoes.id, contestacoesCanal.devolucaoId))
     .leftJoin(usuarios, eq(usuarios.id, contestacoesCanal.revisadoPor))
+    .leftJoin(reclamacoesMl, eq(reclamacoesMl.claimId, devolucoes.reclamacaoId))
+    .leftJoin(contasBitbrain, eq(contasBitbrain.empresa, reclamacoesMl.conta))
     .where(eq(contestacoesCanal.id, id));
   if (!c) return null;
   const itens = await db
@@ -214,6 +221,7 @@ export async function obterContestacao(db: DbOuTx, id: string, agora: Date = new
       provedor: f.provedor,
       selecionada: c.evidencias.includes(f.id),
     })),
+    conta: c.conta,
   };
 }
 
@@ -241,8 +249,14 @@ export function validarRevisao(e: EntradaRevisao, fotosPermitidas: ReadonlySet<s
  * O Gestor revisa (motivo, mensagem e fotos, D8) e pede o envio (spec §6.6). Vale de AGUARDANDO_GESTOR sem envio pedido
  * e de FALHOU. Na mesma transação: grava, registra e enfileira ml.enviar-contestacao.
  */
-export async function revisarEEnviar(db: DbOuTx, fila: Fila, id: string, e: EntradaRevisao, usuario: UsuarioSessao, agora: Date): Promise<void> {
+export async function revisarEEnviar(db: DbOuTx, fila: Fila, id: string, e: EntradaRevisao, usuario: UsuarioSessao,
+  agora: Date,
+  config: ConfigML = configML(),
+): Promise<void> {
   if (!pode(usuario.perfil, 'administrar')) throw new ErroContestacao(['Só o Gestor envia contestações ao Mercado Livre.']);
+  if (config.modo === 'bitbrain') {
+    throw new ErroContestacao(['No modo Bitbrain a contestação é respondida à mão no ML: use "Marcar como respondida".']);
+  }
   if (!ehUuid(id)) throw new ErroContestacao(['Contestação não encontrada.']);
   const [c] = await db
     .select({ status: contestacoesCanal.status, revisadoPor: contestacoesCanal.revisadoPor, devolucaoId: contestacoesCanal.devolucaoId })
@@ -304,7 +318,7 @@ export type ResultadoEnvio = 'enviada' | 'falhou' | 'ignorada';
  * Recusa definitiva do ML → FALHOU com o motivo. Erro passageiro → lança (nova tentativa); na última tentativa → FALHOU
  * (decisão 9 do plano).
  */
-export async function enviarContestacao(db: DbOuTx, id: string, o: { agora: Date; ultimaTentativa: boolean }): Promise<ResultadoEnvio> {
+export async function enviarContestacao(db: DbOuTx, id: string, o: { agora: Date; ultimaTentativa: boolean; config?: ConfigML }): Promise<ResultadoEnvio> {
   if (!ehUuid(id)) return 'ignorada';
   const [c] = await db
     .select({
@@ -342,6 +356,7 @@ export async function enviarContestacao(db: DbOuTx, id: string, o: { agora: Date
     throw erro;
   };
 
+  if ((o.config ?? configML()).modo === 'bitbrain') return falhar(MENSAGEM_RESPOSTA_MANUAL);
   if (!c.devolucaoExternaId || !c.reclamacaoId) return falhar('A devolução não está ligada a uma devolução do Mercado Livre.');
   const motivo = motivoValido(c.motivo);
   const fotos =
@@ -378,6 +393,7 @@ export async function enviarContestacao(db: DbOuTx, id: string, o: { agora: Date
   try {
     await conector.enviarResultadoConferencia(c.devolucaoExternaId, { tipo: 'PROBLEMA', reclamacaoId: c.reclamacaoId, motivo, mensagem: c.mensagem, anexos });
   } catch (erro) {
+    if (erro instanceof ErroRespostaManual) return falhar(erro.message);
     if (erro instanceof ErroMotivoIndisponivel) return falhar(erro.message);
     logErroML('enviar contestação', erro, { contestacaoId: id });
     if (ehRecusaDefinitiva(erro)) return falhar(`O Mercado Livre recusou o envio: ${mensagemErroML(erro)}`);
