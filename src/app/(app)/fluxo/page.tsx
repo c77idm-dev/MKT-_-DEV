@@ -1,21 +1,46 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { AlertasPainel, ALERTAS_NO_PAINEL } from '@/components/acabamento/AlertasPainel';
 import { BuscaAvancada } from '@/components/BuscaAvancada';
 import { EtapasCelular } from '@/components/EtapasCelular';
+import { MenuAcoesFluxo, type AcaoFluxo } from '@/components/MenuAcoesFluxo';
 import { QuadroFluxo } from '@/components/QuadroFluxo';
-import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, LINK_VOLTAR, VAZIO } from '@/components/estilos';
+import { VAZIO } from '@/components/estilos';
 import { DivisaoEstoque } from '@/components/fiscal/DivisaoEstoque';
 import { CartaoLote } from '@/components/lotes/CartaoLote';
 import { obterDb } from '@/db';
 import { primeiroValor, type ParametrosBusca } from '@/lib/parametros';
 import { carregarAlertas } from '@/modules/acabamento/alertas';
-import { pode } from '@/modules/auth/permissoes';
+import { pode, type Acao } from '@/modules/auth/permissoes';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { montarQuadro } from '@/modules/devolucoes/quadro';
 
 export const metadata: Metadata = { title: 'Fluxo · Gestão de Devoluções' };
+
+/**
+ * Opção C (decisão do usuário em 19/11/2026): o menu "O que você quer fazer?" substitui as 4 entradas soltas no topo
+ * (Recebimento, Nova devolução, Retiradas do Full e Planilha Volta ao armazém). Cada perfil vê só o que pode usar;
+ * o Fiscal chega às Retiradas do Full ((extra), melhoria 3) e à planilha por aqui.
+ */
+const ACOES_FLUXO: (AcaoFluxo & { permissao: Acao })[] = [
+  {
+    permissao: 'operar_devolucoes',
+    href: '/fluxo/recebimento',
+    quando: 'Chegou um pacote na bancada',
+    rotulo: 'Receber pacote',
+    icone: 'pacote',
+    destaque: true,
+  },
+  { permissao: 'operar_devolucoes', href: '/fluxo/devolucoes/nova', quando: 'Vai chegar uma devolução', rotulo: 'Nova devolução', icone: 'mais' },
+  { permissao: 'ver_listas', href: '/fluxo/retiradas-full', quando: 'Voltou do armazém do ML', rotulo: 'Retiradas do Full', icone: 'caminhao' },
+  {
+    permissao: 'ver_listas',
+    href: '/fluxo/estoque-bom',
+    quando: 'Ver o que volta para venda',
+    rotulo: 'Planilha Volta ao armazém',
+    icone: 'planilha',
+  },
+];
 
 export default async function PaginaFluxo({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   const usuario = await exigirPermissao('ver_listas');
@@ -49,32 +74,13 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
   const estoque = quadro.find((c) => c.numero === 4)?.estoque;
   // Sem etapa válida na URL, o celular abre a primeira etapa que tem devoluções (ou a 1).
   const selecionada = ETAPAS.some((e) => e.numero === pedida) ? pedida : (colunas.find((c) => c.total > 0)?.numero ?? 1);
-  const podeOperar = pode(usuario.perfil, 'operar_devolucoes');
+  const acoes = ACOES_FLUXO.filter((a) => pode(usuario.perfil, a.permissao));
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Fluxo de devoluções</h1>
-        {podeOperar && (
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-            <Link href="/fluxo/recebimento" className={BOTAO_PRIMARIO}>
-              Recebimento
-            </Link>
-            <Link href="/fluxo/devolucoes/nova" className={BOTAO_SECUNDARIO}>
-              Nova devolução
-            </Link>
-          </div>
-        )}
-      </div>
-      {/* (extra) Melhoria 3: quem não passa pelo Recebimento (o Fiscal) também chega às retiradas do Full. Discreto: não é devolução. */}
-      {/* Melhoria 4: a planilha do que volta ao armazém, ao lado (também só leitura). */}
-      <div className="-mt-2 flex flex-wrap gap-x-5">
-        <Link href="/fluxo/retiradas-full" className={`${LINK_VOLTAR} w-fit`}>
-          Retiradas do Full
-        </Link>
-        <Link href="/fluxo/estoque-bom" className={`${LINK_VOLTAR} w-fit`}>
-          Planilha Volta ao armazém
-        </Link>
+        <MenuAcoesFluxo acoes={acoes} />
       </div>
       <AlertasPainel alertas={alertas} limite={ALERTAS_NO_PAINEL} />
       <BuscaAvancada acao="/fluxo/busca" filtros={{}} />
