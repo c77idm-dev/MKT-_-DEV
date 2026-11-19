@@ -48,6 +48,7 @@ Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main
         | Produtos do ML com foto (extra) | `produtos-do-ml` | `C:/Users/idmpc/devolucoes-wt/bitbrain` | `devolucoes_test_f7` | 3107 |
         | Catálogo inteiro do ML (extra) | `catalogo-ml` | `C:/Users/idmpc/devolucoes-wt/catalogo` | só documentos por enquanto | — |
         | Filtro "Afetam a reputação" (extra) | `filtro-reputacao` | `C:/Users/idmpc/devolucoes-wt/reputacao` | `devolucoes_f8` e `devolucoes_test_f8` | 3108 |
+        | Dossiê de provas (PDF) (extra) | `dossie-provas` | `C:/Users/idmpc/devolucoes-wt/dossie` | `devolucoes_f9` e `devolucoes_test_f9` | 3109 |
 
         - **Catálogo inteiro:**
           - primeiro saem o texto para a sessão do Bitbrain e o desenho e o plano do nosso lado, em `docs/integracao/bitbrain-rota-catalogo.md`, `specs/2026-11-19-catalogo-ml-design.md` e `plans/2026-11-19-catalogo-ml.md`;
@@ -56,7 +57,7 @@ Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main
           - o texto passa por uma conferência em equipe antes de ir para o usuário (run `wf_436d321e-291`), porque o ML trocou o `/items?ids=` pelo `/items/bulk` e o `include_attributes=all` faz falta;
           - **decisões do usuário (19/11):** reimportação toda segunda às 4h, só nas contas já importadas; descrição com o nome da variação ("Título — Azul / M"), regra que vale também para `produtos-do-ml`; só anúncios ativos e pausados, sem os encerrados.
         - **Filtro de reputação:** o usuário escolheu o botão vermelho "Afetam a reputação · N" ao lado de Filtros, que só aparece quando há alguma, mais uma opção dentro de Filtros.
-        - **Ordem de junção no `main`:** `produtos-do-ml` primeiro, depois `filtro-reputacao`. As duas mexem em `busca.ts`, mas em partes diferentes.
+        - **Ordem de junção no `main`:** `produtos-do-ml` primeiro, depois `filtro-reputacao` e por último `dossie-provas`. As duas primeiras mexem em `busca.ts`, mas em partes diferentes; o dossiê mexe no detalhe e no "Responda no ML". **O dossiê de provas foi aprovado em 19/11 e roda no fluxo `wf_56f87cc3-2eb`**, que constrói, revisa por 3 olhares com verificação cética, corrige e envia. A foto do anúncio entra no dossiê depois de `produtos-do-ml`.
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
   - **Conector "Bitbrain" do claude.ai: autorizado e explorado em 18/11.**
     - **O que é:** o painel das lojas no ML, só de leitura.
