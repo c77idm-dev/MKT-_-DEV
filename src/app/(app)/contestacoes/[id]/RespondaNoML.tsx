@@ -1,5 +1,6 @@
 'use client';
 
+import { BotaoDossie } from '@/components/dossie/BotaoDossie';
 import { ListaErros } from '@/components/ListaErros';
 import { BOTAO_PRIMARIO, CARTAO, ROTULO } from '@/components/estilos';
 import { BotaoConfirmar } from '@/components/mercado-livre/BotaoConfirmar';
@@ -20,10 +21,12 @@ type Props = {
   rotuloMotivo: string;
   mensagem: string;
   fotos: Foto[];
+  /** (extra) Link temporário do Vídeo de Prova pronto; null quando não há. */
+  video: string | null;
 };
 
 /** Modo bitbrain (§4.6, D14): o sistema não envia ao ML; o Gestor responde à mão e marca aqui. */
-export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motivo, rotuloMotivo, mensagem, fotos }: Props) {
+export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motivo, rotuloMotivo, mensagem, fotos, video }: Props) {
   const [estado, aoEnviar, pendente] = useEnvioFormulario(acao, { erros: [] }, 'erros-responda');
   const prontas = fotos.filter((f): f is Foto & { url: string } => f.url !== null);
   return (
@@ -61,6 +64,18 @@ export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motiv
               </li>
             ))}
           </ul>
+        )}
+        <BotaoDossie codigo={codigo} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <h3 className={ROTULO}>Vídeo de Prova</h3>
+        <p className="text-sm text-texto-2">O vídeo vai separado: o ML não aceita vídeo dentro do PDF.</p>
+        {video ? (
+          <a href={video} download={`${codigo}-video.mp4`} className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-destaque underline">
+            Baixar vídeo
+          </a>
+        ) : (
+          <p className="text-sm text-texto-2">Nenhum vídeo pronto desta devolução.</p>
         )}
       </div>
       <form onSubmit={aoEnviar} className="flex flex-col gap-2 border-t border-borda pt-3">

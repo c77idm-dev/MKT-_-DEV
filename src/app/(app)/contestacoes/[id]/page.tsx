@@ -9,6 +9,7 @@ import { obterDb } from '@/db';
 import { formatarDataHora } from '@/lib/formatar';
 import { primeiroValor } from '@/lib/parametros';
 import { exigirPermissao } from '@/modules/auth/servidor';
+import { linkDoVideoDeProva } from '@/modules/dossie/video';
 import { configML } from '@/modules/mercado-livre/config';
 import { obterContestacao } from '@/modules/mercado-livre/contestacoes';
 import { ROTULO_MOTIVO_CANAL, ROTULO_STATUS_CONTESTACAO } from '@/modules/mercado-livre/dominio';
@@ -45,6 +46,8 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
     })),
   );
   const podeEditar = (c.status === 'AGUARDANDO_GESTOR' && !c.enviando) || c.status === 'FALHOU';
+  // (extra) "Baixar vídeo" do bloco "Responda no ML": o vídeo vai separado do dossiê em PDF.
+  const video = modoBitbrain && podeEditar ? await linkDoVideoDeProva(obterDb(), c.devolucaoId) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
@@ -158,6 +161,7 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
             rotuloMotivo={ROTULO_MOTIVO_CANAL[c.motivo]}
             mensagem={c.mensagem}
             fotos={fotos.map(({ id, rotulo, url }) => ({ id, rotulo, url }))}
+            video={video}
           />
         ) : (
           <FormularioContestacao acao={enviarAcao.bind(null, c.id)} motivo={c.motivo} mensagem={c.mensagem} limiteMensagem={LIMITE_MENSAGEM} fotos={fotos} />

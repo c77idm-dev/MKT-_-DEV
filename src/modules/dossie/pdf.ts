@@ -382,6 +382,7 @@ async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem
   async function secaoDaUnidade(u: UnidadeDossie): Promise<void> {
     const ausente = u.motivo === 'AUSENTE' || u.status === 'AUSENTE';
     if (ausente) e.quadro('Não veio no pacote (ausente)', { negrito: true });
+    // A foto do anúncio no ML (produtos.foto_url, da branch produtos-do-ml) entra aqui, ao lado do produto esperado.
     e.campo('Produto esperado', `${u.sku} · ${u.descricao ?? 'SKU fora do cadastro de produtos'}`);
     e.campo('EAN esperado', u.eanEsperado ?? '—');
     if (!ausente) {
