@@ -107,3 +107,13 @@ export async function abrirBusca(page: Page) {
   }
   await expect(painel).toBeVisible();
 }
+
+/** Abre o menu "O que você quer fazer?" do topo do Fluxo (opção C) depois da hidratação e devolve o painel. */
+export async function abrirMenuAcoes(page: Page): Promise<Locator> {
+  const gatilho = page.getByRole('button', { name: 'O que você quer fazer?' });
+  await aguardarHidratacao(gatilho);
+  await gatilho.click();
+  const menu = page.getByRole('dialog', { name: 'O que você quer fazer?' });
+  await expect(menu).toBeVisible();
+  return menu;
+}

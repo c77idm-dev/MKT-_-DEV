@@ -7,7 +7,7 @@ import { criarProdutoTeste } from '../helpers/fabricas';
 import { criarDevolucaoNoEstoqueTeste } from '../helpers/fabricas-fiscal';
 import { criarRetiradaTeste } from '../helpers/fabricas-retiradas';
 import { paraArrayBuffer } from '../helpers/xlsx';
-import { codigoUnico, comBanco, entrarComo, naFrente, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { abrirMenuAcoes, codigoUnico, comBanco, entrarComo, naFrente, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { URL_E2E, USUARIOS_E2E } from './dados';
 
 /** Uma unidade BOM (e uma AUSENTE, que não entra) e uma retirada do Full Conferida com 2 unidades, hoje. SKUs únicos. */
@@ -96,7 +96,8 @@ test('Estoque Bom: período inválido mostra o alerta com o foco e não oferece 
 
 test('Estoque Bom: o Painel leva à página e, sem sessão, a planilha não baixa', async ({ page, browser }) => {
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.getByRole('link', { name: 'Planilha Volta ao armazém' }).click();
+  const menu = await abrirMenuAcoes(page);
+  await menu.getByRole('link', { name: 'Planilha Volta ao armazém' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Estoque Bom' })).toBeVisible();
 
   const anonimo = await browser.newContext({ baseURL: URL_E2E });
