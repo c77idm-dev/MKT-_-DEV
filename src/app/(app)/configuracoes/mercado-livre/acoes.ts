@@ -17,6 +17,7 @@ export type EstadoConta = { erros: string[] };
 export async function conectarAcao(): Promise<EstadoConta> {
   const usuario = await exigirPermissao('administrar');
   const config = configML();
+  if (config.modo === 'bitbrain') return { erros: ['No modo Bitbrain não há conexão direta com o Mercado Livre.'] };
   const faltas = faltasConfigML(config);
   if (faltas.length > 0) return { erros: [`Faltam no servidor: ${faltas.join(', ')}.`] };
   let destino: string;

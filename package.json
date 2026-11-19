@@ -16,6 +16,7 @@
     "worker": "node --env-file=.env --import tsx scripts/worker.ts",
     "usuario:criar": "node --env-file=.env --import tsx scripts/criar-usuario.ts",
     "test:e2e": "playwright test",
+    "test:e2e:bitbrain": "playwright test -c playwright.bitbrain.config.ts",
     "ml:autorizar": "node --env-file=.env --import tsx scripts/ml/autorizar.ts",
     "ml:trocar-codigo": "node --env-file=.env --import tsx scripts/ml/trocar-codigo.ts",
     "ml:spike": "node --env-file=.env --import tsx scripts/ml/spike.ts",
