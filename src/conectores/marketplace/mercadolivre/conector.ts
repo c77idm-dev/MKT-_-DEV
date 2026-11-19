@@ -97,8 +97,9 @@ export class ConectorML implements ConectorMercadoLivre {
   async *reclamacoesAtualizadasDesde(desde: Date): AsyncGenerator<ReclamacaoAtualizada> {
     for (let offset = 0; offset + ITENS_POR_PAGINA < LIMITE_OFFSET_BUSCA; offset += ITENS_POR_PAGINA) {
       const consulta = new URLSearchParams({
-        'players.user_id': this.sellerId,
-        'players.role': 'respondent',
+        // Nomes conferidos na API real (a aba Devoluções do Bitbrain, 10/10/2026). Com players.user_id/players.role o ML responde 400 (VPS, 19/11).
+        player_user_id: this.sellerId,
+        player_role: 'respondent',
         range: `last_updated:after:${formatarDataML(desde)}`,
         limit: String(ITENS_POR_PAGINA),
         offset: String(offset),

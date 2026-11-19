@@ -36,7 +36,7 @@ const SIMPLES: RegExp[] = [
   /^\/invoices\/orders\/\d+$/,
 ];
 const DO_VENDEDOR: RegExp[] = [/^\/users\/(\d+)\/invoices\/orders\/\d+$/, /^\/users\/(\d+)\/invoices\/documents\/xml\/[A-Za-z0-9_-]+\/authorized$/];
-const PARAMETROS_BUSCA = new Set(['players.user_id', 'players.role', 'range', 'limit', 'offset']);
+const PARAMETROS_BUSCA = new Set(['player_user_id', 'player_role', 'range', 'limit', 'offset']);
 
 /** A lista fechada do contrato: 12 formatos, só GET, {seller} igual ao da empresa e só os parâmetros da busca. */
 export function caminhoPermitido(alvo: URL, sellerId: string): boolean {
@@ -47,8 +47,8 @@ export function caminhoPermitido(alvo: URL, sellerId: string): boolean {
     const limite = Number(q.get('limit') ?? '');
     const offset = Number(q.get('offset') ?? '0');
     return (
-      q.get('players.user_id') === sellerId &&
-      q.get('players.role') === 'respondent' &&
+      q.get('player_user_id') === sellerId &&
+      q.get('player_role') === 'respondent' &&
       /^last_updated:after:.+$/.test(q.get('range') ?? '') &&
       Number.isInteger(limite) &&
       limite >= 1 &&
