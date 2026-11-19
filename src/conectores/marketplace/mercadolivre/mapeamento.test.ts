@@ -51,7 +51,7 @@ describe('mapearReclamacao (spec §7.2 e §7.3)', () => {
         {
           sku: 'fone-01',
           mlItemId: 'MLB3456789012',
-          descricao: 'Fone de Ouvido Bluetooth',
+          descricao: 'Fone de Ouvido Bluetooth — Preto',
           ean: '7891234567888',
           fotoUrl: 'https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg',
         },
@@ -63,6 +63,13 @@ describe('mapearReclamacao (spec §7.2 e §7.3)', () => {
     expect(mapearReclamacao({ ...COMPLETA, anuncios: [] }).produtos).toEqual([]);
     const semDevolucao = mapearReclamacao({ reclamacao: { ...reclamacao, related_entities: [] }, devolucao: null, pedidos: [], anuncios: [], envio: null });
     expect(semDevolucao.produtos).toEqual([]);
+  });
+
+  it('produtos (extra): sem variation_id na devolução, vale o do item do pedido (order_items[].item.variation_id)', () => {
+    const semVariacao = { ...devolucao, orders: devolucao.orders.map((o) => ({ ...o, variation_id: null })) };
+    expect(mapearReclamacao({ ...COMPLETA, devolucao: semVariacao }).produtos).toEqual([
+      expect.objectContaining({ descricao: 'Fone de Ouvido Bluetooth — Preto', fotoUrl: 'https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg' }),
+    ]);
   });
 
   it('reclamação sem devolução (só mediação): devolucao null', () => {
@@ -206,6 +213,37 @@ describe('produtoDoAnuncio (produtos do ML, extra)', () => {
 
   it('com variação: GTIN e foto da variação (picture_ids[0] resolvido em pictures)', () => {
     expect(ler(anuncio, '178234567890')).toMatchObject({ ean: '7891234567888', fotoUrl: FOTO_VARIACAO });
+  });
+
+  it('com variação: a descrição leva o nome da variação ("<título> — <valores>", attribute_combinations)', () => {
+    const camiseta = {
+      id: 'MLB1',
+      title: 'Camiseta Básica',
+      variations: [
+        {
+          id: 11,
+          attribute_combinations: [
+            { id: 'COLOR', name: 'Cor', value_name: 'Azul' },
+            { id: 'SIZE', name: 'Tamanho', value_name: ' M ' },
+            { id: 'X', name: 'Vazio', value_name: null },
+          ],
+        },
+        { id: 12, attribute_combinations: [{ id: 'COLOR', name: 'Cor', value_name: 'Verde' }] },
+      ],
+    };
+    expect(ler(camiseta, '11').descricao).toBe('Camiseta Básica — Azul / M');
+    expect(ler(camiseta, '12').descricao).toBe('Camiseta Básica — Verde');
+    // Variação que não está no anúncio, ou sem variação: só o título.
+    expect(ler(camiseta, '99').descricao).toBe('Camiseta Básica');
+    expect(ler(camiseta, null).descricao).toBe('Camiseta Básica');
+    // Variação sem attribute_combinations: só o título; sem título não sai descrição só com a variação.
+    expect(ler({ ...camiseta, variations: [{ id: 11 }] }, '11').descricao).toBe('Camiseta Básica');
+    expect(ler({ ...camiseta, title: null }, '11').descricao).toBeNull();
+  });
+
+  it('variação sem `attributes` (o /items sem include_attributes=all): GTIN do anúncio e a foto da variação', () => {
+    const json = { ...anuncio, variations: [{ id: 178234567890, picture_ids: ['622222-MLB70000000002_072026'] }] };
+    expect(ler(json, '178234567890')).toMatchObject({ ean: '7891234567895', fotoUrl: FOTO_VARIACAO });
   });
 
   it('a foto da variação que não está em pictures cai na 1ª foto do anúncio', () => {

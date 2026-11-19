@@ -105,7 +105,16 @@ export const esquemaAnuncio = z.looseObject({
   thumbnail: textoTolerante,
   pictures: lista(z.looseObject({ id: idOuNulo.catch(null), url: textoTolerante, secure_url: textoTolerante })).catch([]),
   attributes: atributos,
-  variations: lista(z.looseObject({ id: idOuNulo, attributes: atributos, picture_ids: lista(idOuNulo).catch([]) })),
+  // Sem include_attributes=all o ML não manda os `attributes` da variação (GTIN, SELLER_SKU): eles podem faltar.
+  // `attribute_combinations` (Cor, Tamanho...) e `picture_ids` vêm sempre.
+  variations: lista(
+    z.looseObject({
+      id: idOuNulo,
+      attributes: atributos,
+      attribute_combinations: lista(z.looseObject({ value_name: textoTolerante })).catch([]),
+      picture_ids: lista(idOuNulo).catch([]),
+    }),
+  ),
 });
 export type AnuncioJson = z.output<typeof esquemaAnuncio>;
 

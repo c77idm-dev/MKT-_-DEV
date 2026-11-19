@@ -94,28 +94,40 @@ function urlHttps(valor: string | null | undefined): string | null {
 /** O limite da descrição no cadastro de produtos (interpretarLinhaProduto). */
 const MAX_DESCRICAO = 200;
 
+const juntarEspacos = (texto: string | null | undefined) => (texto ?? '').replace(/\s+/g, ' ').trim();
+
 /**
- * Produtos do ML (extra), função pura: o que o anúncio diz do produto. Foto: a 1ª da variação (picture_ids[0] em
- * pictures), senão a 1ª do anúncio, senão a miniatura; só https.
+ * Produtos do ML (extra), função pura: o que o anúncio diz do produto.
+ * - Descrição: o título; com variação, "<título> — <valores>" (attribute_combinations, ex.: "Camiseta Básica — Azul / M";
+ *   decisão do usuário, 19/11). Só serve para CADASTRAR: a descrição de um produto que já existe nunca muda.
+ * - Foto: a 1ª da variação (picture_ids[0] em pictures), senão a 1ª do anúncio, senão a miniatura; só https.
  */
 export function produtoDoAnuncio(a: AnuncioJson, variacao: string | null): Omit<ProdutoDoAnuncioML, 'sku'> {
-  const titulo = (a.title ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_DESCRICAO).trimEnd();
-  const idFotoVariacao = variacaoDoAnuncio(a, variacao)?.picture_ids[0] ?? null;
+  const daVariacao = variacaoDoAnuncio(a, variacao);
+  const titulo = juntarEspacos(a.title);
+  const valores = (daVariacao?.attribute_combinations ?? []).map((c) => juntarEspacos(c.value_name)).filter((v) => v !== '');
+  const descricao = (titulo && valores.length > 0 ? `${titulo} — ${valores.join(' / ')}` : titulo).slice(0, MAX_DESCRICAO).trimEnd();
+  const idFotoVariacao = daVariacao?.picture_ids[0] ?? null;
   const fotoVariacao = idFotoVariacao ? a.pictures.find((p) => p.id === idFotoVariacao) : undefined;
   const primeira = a.pictures[0];
   const candidatas = [fotoVariacao?.secure_url, fotoVariacao?.url, primeira?.secure_url, primeira?.url, a.secure_thumbnail, a.thumbnail];
   return {
     mlItemId: a.id,
-    descricao: titulo || null,
+    descricao: descricao || null,
     ean: gtinDoAnuncio(a, variacao),
     fotoUrl: candidatas.map(urlHttps).find((u) => u !== null) ?? null,
   };
 }
 
-export function skuDoPedido(p: PedidoJson | undefined, itemId: string | null, variacao: string | null): string | null {
-  if (!p) return null;
+/** A linha do pedido do item (a da variação, quando a devolução diz qual; senão a 1ª do item). */
+function linhaDoPedido(p: PedidoJson | undefined, itemId: string | null, variacao: string | null) {
+  if (!p) return undefined;
   const doItem = p.order_items.filter((l) => l.item.id === itemId);
-  const linha = doItem.find((l) => variacao === null || l.item.variation_id === null || l.item.variation_id === variacao) ?? doItem[0];
+  return doItem.find((l) => variacao === null || l.item.variation_id === null || l.item.variation_id === variacao) ?? doItem[0];
+}
+
+export function skuDoPedido(p: PedidoJson | undefined, itemId: string | null, variacao: string | null): string | null {
+  const linha = linhaDoPedido(p, itemId, variacao);
   const sku = (linha?.item.seller_sku || linha?.item.seller_custom_field || '').trim();
   return sku || null;
 }
@@ -263,11 +275,16 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
   const pedidos = [...new Set(d.orders.map((o) => o.order_id))];
   if (pedidos.length === 0 && r.resource_id) pedidos.push(r.resource_id);
 
-  const linhas = d.orders.map((o) => ({
-    o,
-    anuncio: anuncios.find((a) => a.id === o.item_id) ?? null,
-    sku: skuDoPedido(pedidosJson.find((p) => p.id === o.order_id), o.item_id, o.variation_id) ?? o.item_id ?? `PEDIDO-${o.order_id}`,
-  }));
+  const linhas = d.orders.map((o) => {
+    const pedido = pedidosJson.find((p) => p.id === o.order_id);
+    return {
+      o,
+      anuncio: anuncios.find((a) => a.id === o.item_id) ?? null,
+      sku: skuDoPedido(pedido, o.item_id, o.variation_id) ?? o.item_id ?? `PEDIDO-${o.order_id}`,
+      // A variação vendida: a da devolução ou, sem ela, a do item do pedido (order_items[].item.variation_id).
+      variacao: o.variation_id ?? linhaDoPedido(pedido, o.item_id, null)?.item.variation_id ?? null,
+    };
+  });
   const devolucao: DevolucaoExterna = {
     canal: 'MERCADO_LIVRE',
     devolucaoExternaId: d.id,
@@ -283,14 +300,14 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
     entregueEm,
     prazoConferencia: prazoDaReclamacao(r),
     atualizadaEm,
-    itens: linhas.map(({ o, anuncio, sku }) => ({
+    itens: linhas.map(({ o, anuncio, sku, variacao }) => ({
       pedido: o.order_id,
       sku,
-      ean: anuncio ? gtinDoAnuncio(anuncio, o.variation_id) : null,
+      ean: anuncio ? gtinDoAnuncio(anuncio, variacao) : null,
       quantidade: quantidadeML(o.return_quantity) ?? quantidadeML(o.total_quantity) ?? 1,
     })),
   };
-  const produtos = linhas.flatMap(({ o, anuncio, sku }) => (anuncio ? [{ sku, ...produtoDoAnuncio(anuncio, o.variation_id) }] : []));
+  const produtos = linhas.flatMap(({ anuncio, sku, variacao }) => (anuncio ? [{ sku, ...produtoDoAnuncio(anuncio, variacao) }] : []));
   const extras = extrasDaReclamacao({
     reclamacao: r,
     devolucao: d,

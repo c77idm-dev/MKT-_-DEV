@@ -26,6 +26,7 @@
   "variations": [
     {
       "id": 178234567890,
+      "attribute_combinations": [{ "id": "COLOR", "name": "Cor", "value_id": "52049", "value_name": "Preto" }],
       "picture_ids": ["622222-MLB70000000002_072026"],
       "attributes": [{ "id": "GTIN", "name": "Código universal de produto", "value_name": "7891234567888" }]
     }

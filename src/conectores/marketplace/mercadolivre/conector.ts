@@ -71,6 +71,9 @@ export class ConectorML implements ConectorMercadoLivre {
     }
     const anuncios: unknown[] = [];
     for (const item of new Set(d.orders.flatMap((o) => (o.item_id ? [o.item_id] : [])))) {
+      // Sem `?include_attributes=all` de propósito: a rota do Bitbrain recusa (403) qualquer query em /items. Sem ele, a
+      // variação não traz `attributes` (GTIN, SELLER_SKU): os produtos do ML (extra) usam o GTIN do anúncio. Acrescentar
+      // quando a rota aceitar (adendo do contrato na branch `catalogo-ml`).
       const a = await this.opcional(`/items/${encodeURIComponent(item)}`);
       if (a !== null) anuncios.push(a);
     }
