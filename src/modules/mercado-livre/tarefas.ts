@@ -1,3 +1,4 @@
+import { ErroBitbrain } from '@/conectores/marketplace/bitbrain/cliente';
 import { ehRecusaDefinitiva, logErroML } from '@/conectores/marketplace/mercadolivre/erros';
 import type { DadosDevolucaoML } from '@/conectores/marketplace/mercadolivre/tipos';
 import type { DbOuTx } from '@/db/client';
@@ -6,7 +7,8 @@ import { CONFIG_TAREFAS, type NomeTarefa } from '@/modules/fila/tarefas';
 import { configML } from './config';
 import { obterConectorML } from './conector';
 import { ErroContaReconectar, marcarSincronizacao, obterContaML, renovarContasAVencer } from './contas';
-import { fetchDoML } from './fabrica-conector';
+import { marcarContaIndisponivel } from './contas-bitbrain';
+import { contaDaReclamacao, fetchDoML } from './fabrica-conector';
 import { garantirTextoMotivo } from './motivos';
 import { chaveTarefaReclamacao, marcarNotificacoesProcessadas } from './notificacoes';
 import { aplicarReclamacao, type ResultadoAplicacao } from './sincronizar';
@@ -20,15 +22,30 @@ export function ehUltimaTentativa(nome: NomeTarefa, tentativa: number): boolean 
   return tentativa >= CONFIG_TAREFAS[nome].tentativas;
 }
 
-/** Tarefa ml.sincronizar-reclamacao. Sem conta ATIVA, ou com recusa definitiva do ML, termina sem erro. */
-export async function sincronizarReclamacao(db: DbOuTx, fila: Fila, reclamacaoId: string, agora: Date): Promise<ResultadoAplicacao | null> {
-  const conector = await obterConectorML(db);
+/** Tarefa ml.sincronizar-reclamacao. No modo bitbrain, pela conta da tarefa ou da reclamação já gravada (§4.4); sem conta, nada. */
+export async function sincronizarReclamacao(
+  db: DbOuTx,
+  fila: Fila,
+  reclamacaoId: string,
+  agora: Date,
+  conta: string | null = null,
+): Promise<ResultadoAplicacao | null> {
+  const bitbrain = configML().modo === 'bitbrain';
+  const contaUsada = bitbrain ? (conta ?? (await contaDaReclamacao(db, reclamacaoId))) : null;
+  if (bitbrain && !contaUsada) return null;
+  const conector = await obterConectorML(db, { conta: contaUsada });
   if (!conector) return null;
   let dados: DadosDevolucaoML;
   try {
     dados = await conector.obterReclamacao(reclamacaoId);
   } catch (erro) {
     if (erro instanceof ErroContaReconectar) return null;
+    // D21: "empresa sem conta do ML" não melhora tentando de novo: a conta fica indisponível e o Gestor é avisado.
+    if (erro instanceof ErroBitbrain && erro.motivo === 'empresa' && contaUsada) {
+      logErroML('sincronizar reclamação', erro, { reclamacaoId });
+      await marcarContaIndisponivel(db, contaUsada);
+      return null;
+    }
     if (!ehRecusaDefinitiva(erro)) throw erro;
     logErroML('sincronizar reclamação', erro, { reclamacaoId });
     await marcarNotificacoesProcessadas(db, reclamacaoId, agora);
@@ -36,7 +53,7 @@ export async function sincronizarReclamacao(db: DbOuTx, fila: Fila, reclamacaoId
   }
   // Antes da transação: a consulta do texto do motivo não segura a trava nem derruba a sincronização se falhar.
   await garantirTextoMotivo(db, conector, dados.motivoId, agora);
-  const resultado = await aplicarReclamacao(db, dados, agora, fila);
+  const resultado = await aplicarReclamacao(db, dados, agora, fila, contaUsada);
   await marcarNotificacoesProcessadas(db, reclamacaoId, agora);
   return resultado;
 }

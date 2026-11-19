@@ -5,8 +5,8 @@ import type { Manipuladores } from '../tipos';
 
 /** Fase 3 (contrato §5.1). Cada manipulador é idempotente; lançar = nova tentativa. */
 export const manipuladoresMercadoLivre: Manipuladores = {
-  'ml.sincronizar-reclamacao': async ({ claimId }, ctx) => {
-    await sincronizarReclamacao(ctx.db, ctx.fila, claimId, ctx.agora);
+  'ml.sincronizar-reclamacao': async ({ claimId, conta }, ctx) => {
+    await sincronizarReclamacao(ctx.db, ctx.fila, claimId, ctx.agora, conta ?? null);
   },
   'ml.varredura': async (_dados, ctx) => {
     await varrerReclamacoes(ctx.db, ctx.fila, ctx.agora);

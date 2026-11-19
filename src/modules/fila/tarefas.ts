@@ -3,7 +3,7 @@ export type DadosTarefa = {
   'midia.processar-foto': { evidenciaId: string }; // 2: hash, carimbo (extra), envio ao armazenamento final
   'midia.transcodificar': { evidenciaId: string }; // 2: ffmpeg H.264 720p (spec §9)
   'limpeza.temporarios': Record<string, never>; // 2 (extra): uploads tus abandonados e importações não confirmadas
-  'ml.sincronizar-reclamacao': { claimId: string }; // 3
+  'ml.sincronizar-reclamacao': { claimId: string; conta?: string }; // 3 (conta: empresa do Bitbrain no modo bitbrain, D1)
   'ml.varredura': Record<string, never>; // 3
   'ml.renovar-token': Record<string, never>; // 3
   'ml.enviar-resultado': { devolucaoId: string }; // 3 (enviada pela 2 ao concluir)

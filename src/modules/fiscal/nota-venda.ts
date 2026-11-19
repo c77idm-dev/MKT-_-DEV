@@ -131,7 +131,7 @@ export async function buscarNotaVendaNoCanal(
   exigirFiscal(usuario);
   const [d] = await db.select({ canal: devolucoes.canal, pedidos: devolucoes.pedidosExternos }).from(devolucoes).where(eq(devolucoes.id, devolucaoId));
   if (!d || d.canal !== 'MERCADO_LIVRE') return { consultou: false, encontradas: 0 };
-  const conector = await obterConector(db, 'MERCADO_LIVRE');
+  const conector = await obterConector(db, 'MERCADO_LIVRE', { devolucaoId });
   if (!conector) return { consultou: false, encontradas: 0 };
   let encontradas = 0;
   for (const pedido of d.pedidos) {

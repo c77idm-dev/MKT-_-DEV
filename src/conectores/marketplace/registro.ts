@@ -1,15 +1,15 @@
 import type { DbOuTx } from '@/db/client';
 import type { Canal } from '@/modules/devolucoes/dominio';
-import { criarConectorMLDaConta } from '@/modules/mercado-livre/fabrica-conector';
+import { criarConectorML, type ContextoConectorML } from '@/modules/mercado-livre/fabrica-conector';
 import type { MarketplaceConnector } from './tipos';
 
 const substitutos = new Map<Canal, MarketplaceConnector>();
 
-/** Contrato §5.3: o conector do canal, ou null sem integração ou sem conta ATIVA. Hoje só o Mercado Livre tem integração. */
-export async function obterConector(db: DbOuTx, canal: Canal): Promise<MarketplaceConnector | null> {
+/** Contrato §5.3. No modo bitbrain, o contexto diz a conta (ou a devolução de onde ela sai); no modo api ele é ignorado. */
+export async function obterConector(db: DbOuTx, canal: Canal, contexto: ContextoConectorML = {}): Promise<MarketplaceConnector | null> {
   const substituto = substitutos.get(canal);
   if (substituto) return substituto;
-  if (canal === 'MERCADO_LIVRE') return criarConectorMLDaConta(db);
+  if (canal === 'MERCADO_LIVRE') return criarConectorML(db, contexto);
   return null;
 }
 
