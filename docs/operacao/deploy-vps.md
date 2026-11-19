@@ -117,3 +117,22 @@ sed -i 's/client_max_body_size 1m;/client_max_body_size 6m;/' /etc/nginx/sites-a
 nginx -t && systemctl reload nginx
 ```
 Se `nginx -t` acusar erro, não recarregue e confira o arquivo.
+
+## Ligar o modo Bitbrain (devoluções do ML pelo Bitbrain)
+
+Pré-requisito: a sessão do Bitbrain publicou a rota (`docs/integracao/bitbrain-rota-devolucoes.md`), e o Nathan gerou o `DEVOLUCOES_TOKEN` (`openssl rand -hex 32`) e o pôs no `.env` do Bitbrain.
+
+1. Confira a rota, sem gravar o token no histórico:
+   ```bash
+   read -rs TOKEN && curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" https://app.bitbrain.com.br/integracao/devolucoes/empresas; unset TOKEN
+   ```
+   Esperado: `200`. `401` = token diferente; `404` = rota desligada; `429` = limite da rota (`DEVOLUCOES_RPM`): espere 1 minuto.
+2. No `.env.producao` do sistema (fora do git), troque ou acrescente:
+   ```
+   ML_CONECTOR=bitbrain
+   BITBRAIN_URL=https://app.bitbrain.com.br
+   BITBRAIN_TOKEN=<o mesmo DEVOLUCOES_TOKEN>
+   ```
+3. Suba de novo só o web e o worker: `dc up -d web worker`. Confira `dc ps` (healthy) e `curl -s https://<domínio do sistema>/api/saude`. O log nunca mostra o token.
+4. No sistema, em Configurações › Mercado Livre (Gestor): "Atualizar contas", marque as contas que mandam devoluções para a bancada e toque em "Sincronizar agora".
+5. **Para voltar atrás:** `ML_CONECTOR=api` no `.env.producao` e `dc up -d web worker`. Os dados ficam, e as contas e os extras continuam guardados.

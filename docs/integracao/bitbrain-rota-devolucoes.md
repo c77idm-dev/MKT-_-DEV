@@ -58,6 +58,9 @@ Nos JSON, devolver **só** os campos abaixo, mais o que já não é dado de pess
 - **Os outros JSON** (reclamação, busca, reputação, revisões, motivo, anúncio, nota) podem ir como vieram.
 - **O XML da NF de venda** vai inteiro: a NF de devolução precisa do destinatário. O sistema de devoluções guarda o XML com acesso restrito, como já faz hoje.
 
+### Adendo (18/11, plano do sistema de devoluções, D9)
+- Em `/shipments/{id}`, mantenha também `logistic` só com `mode`, `type` e `direction`. Não é dado pessoal. Com `x-format-new: true`, o ML põe o tipo logístico (ex.: `fulfillment`, a venda Full) em `logistic.type`, e não em `logistic_type`. Sem esse campo, o sistema não sabe se a venda foi Full.
+
 ### Limites e registro
 - **Respeitar o ritmo do ML** como as outras rotinas do Bitbrain. O sistema de devoluções faz cerca de 1 busca por conta a cada 15 minutos e algumas leituras por devolução nova ou alterada.
 - **No registro** vão só a empresa, o caminho **sem a query** e o código HTTP. Nunca o corpo nem o token.

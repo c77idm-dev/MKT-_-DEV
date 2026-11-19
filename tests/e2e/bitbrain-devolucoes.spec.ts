@@ -8,6 +8,7 @@ import { alvosDeToque44 } from './apoio-ml';
 import { USUARIOS_E2E } from './dados';
 
 test('a varredura pela conta cria a devolução com a conta e os selos; o detalhe mostra a conta e os extras', async ({ page }) => {
+  test.setTimeout(130_000); // o poll abaixo espera até 100 s (as tarefas por reclamação são cortadas por minuto)
   const [reclamacaoId] = RECLAMACOES_FALSAS_POR_EMPRESA['loja-falsa-1'];
   await marcarContaFalsa('loja-falsa-1');
   await entrarComo(page, USUARIOS_E2E.gestor);

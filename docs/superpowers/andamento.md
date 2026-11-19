@@ -1,8 +1,20 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 18/11/2026 (conector Bitbrain do claude.ai explorado: não traz devoluções; o Bitbrain precisa expor uma API para o sistema). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 19/11/2026 (integração pelo Bitbrain pronta na branch `integracao-bitbrain`; falta ligar na VPS). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
+- **Integração pelo Bitbrain (18/11), na branch `integracao-bitbrain`:** spec [specs/2026-11-18-integracao-bitbrain-design.md](specs/2026-11-18-integracao-bitbrain-design.md) e plano [plans/2026-11-18-integracao-bitbrain.md](plans/2026-11-18-integracao-bitbrain.md).
+  - **O que entregou:**
+    - `ML_CONECTOR=bitbrain`, com `BITBRAIN_URL` e `BITBRAIN_TOKEN`;
+    - tabela `contas_bitbrain` e migração `0014_bitbrain_contas_extras`;
+    - varredura conta por conta;
+    - 5 extras nos dois modos;
+    - respostas ao ML à mão: "Responda no ML" e "OK para responder no ML".
+  - **Testes (19/11):** unidade 823; integração 497 (7 pulados); e2e do modo `api`/falso 214 (8 pulados); e2e do modo Bitbrain 12 (6 testes nos projetos `computador` e `celular`). O e2e do modo Bitbrain roda à parte, com `npm run test:e2e:bitbrain`. Typecheck, lint e `build:scripts` limpos.
+  - **Falta:**
+    - a rota do Bitbrain já foi construída e confere com o contrato (base `https://app.bitbrain.com.br`, limite `DEVOLUCOES_RPM` de 120/min por empresa). Falta mandar a ela o adendo do `logistic.type` ([../integracao/bitbrain-rota-devolucoes.md](../integracao/bitbrain-rota-devolucoes.md)) e publicá-la, se ainda não estiver no ar;
+    - ligar na VPS, conforme `docs/operacao/deploy-vps.md`, seção "Ligar o modo Bitbrain";
+    - a integração no `main`, pelo controlador.
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
   - **Conector "Bitbrain" do claude.ai: autorizado e explorado em 18/11.**
     - **O que é:** o painel das lojas no ML, só de leitura.
@@ -88,6 +100,7 @@ Atualizado em 18/11/2026 (conector Bitbrain do claude.ai explorado: não traz de
   - Quando o time termina as tarefas, rode o fluxo [workflows/fase-final.js](workflows/fase-final.js) na fase. Ele faz a revisão final (servidor e telas), as correções, a re-revisão e o push. Argumentos: os mesmos do outro fluxo, mais `"base":"<commit do main de onde a fase partiu>"`, `"plano":"docs/superpowers/plans/<plano da fase>.md"` e, se precisar, `"decisoes"`.
 - **Atenção ao publicar na VPS:** antes de atualizar a imagem, acrescente `SEGREDO_LINKS` ao `.env.producao` (contrato E17). Sem isso, o sistema dá erro 500. As variáveis do backup vão num arquivo **separado**, o `.env.backup` (contrato E20), nunca no `.env.producao`.
 - **Próximos passos, em ordem:**
+  0. Ligar o modo Bitbrain na VPS depois que o Bitbrain publicar a rota; testar com uma conta marcada e conferir A16–A19 com dados reais.
   1. ~~Publicação na VPS~~ **feita em 15/11.** Falta o usuário testar no celular (câmera real no Android e no iPhone, Foto 1, Falhas, Alertas). Texto antigo: **Publicação na VPS de tudo de uma vez** (Fases 2 a 6; decisão do usuário em 14/11). Passe ao usuário o texto pronto para colar, que está no plano da Fase 6, seção "Depois da fase", item 1. Passos novos desde a Fase 1: `SEGREDO_LINKS` (E17), serviço `worker`, volume `/data`, `location /api/midia/` no nginx (só `nginx -t && systemctl reload nginx`), o `.env.backup` com as variáveis `BACKUP_*` (E20) e o serviço `backup`, mais um backup e uma restauração de teste (critério de pronto da spec §14). Antes, o usuário cria no B2 o bucket só de backup e a chave restrita a ele.
   2. Etapa **"Ligação das contas reais"**: ML, Focus NFe em homologação (certificado A1), B2 e domínio. O usuário deve separar o certificado A1, a conta da Focus e o app do ML. Depois, a passagem da NF-e para produção com a aprovação do contador (plano da Fase 6, "Depois da fase", item 2) e as conferências manuais que sobraram (item 3).
   3. A pergunta da Inscrição Estadual.
@@ -109,6 +122,7 @@ Atualizado em 18/11/2026 (conector Bitbrain do claude.ai explorado: não traz de
   - Alvos de toque de 44 px ou mais; contraste de 4,5:1 ou mais.
   - Escreva e2e nos projetos `computador` e `celular`.
 - **Processo (desenvolvimento guiado por subagentes):**
+  - O e2e tem duas rodadas: `npm run test:e2e` (modo `api`/falso) e `npm run test:e2e:bitbrain` (modo Bitbrain, arquivos `tests/e2e/bitbrain-*.spec.ts`).
   - Para cada tarefa do plano: um implementador; depois uma revisão da tarefa; depois rodadas de correção até a revisão ficar limpa.
   - No fim da fase: uma revisão final dividida em servidor e telas; depois uma onda de correções; depois o merge no `main` e o push.
   - Use TDD.
