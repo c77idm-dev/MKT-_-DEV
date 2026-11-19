@@ -14,6 +14,8 @@ type Props = {
   acao: (anterior: EstadoEnvio, dados: FormData) => Promise<EstadoEnvio>;
   codigo: string;
   conta: string | null;
+  pedidos: string;
+  reclamacaoId: string | null;
   motivo: MotivoCanal;
   rotuloMotivo: string;
   mensagem: string;
@@ -21,7 +23,7 @@ type Props = {
 };
 
 /** Modo bitbrain (§4.6, D14): o sistema não envia ao ML; o Gestor responde à mão e marca aqui. */
-export function RespondaNoML({ acao, codigo, conta, motivo, rotuloMotivo, mensagem, fotos }: Props) {
+export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motivo, rotuloMotivo, mensagem, fotos }: Props) {
   const [estado, aoEnviar, pendente] = useEnvioFormulario(acao, { erros: [] }, 'erros-responda');
   const prontas = fotos.filter((f): f is Foto & { url: string } => f.url !== null);
   return (
@@ -30,8 +32,9 @@ export function RespondaNoML({ acao, codigo, conta, motivo, rotuloMotivo, mensag
         Responda no ML
       </h2>
       <p className="text-sm text-texto-2">
-        No modo Bitbrain o sistema não envia ao Mercado Livre. Abra a devolução {codigo} no ML{conta ? `, na conta ${conta}` : ''}, escolha o
-        motivo, cole a mensagem e anexe as fotos. Depois, toque em &quot;Marcar como respondida&quot;.
+        No modo Bitbrain o sistema não envia ao Mercado Livre. Abra no ML a venda {pedidos}
+        {reclamacaoId ? ` (reclamação ${reclamacaoId})` : ''}
+        {conta ? `, na conta ${conta}` : ''}, escolha o motivo, cole a mensagem e anexe as fotos. Depois, toque em &quot;Marcar como respondida&quot;.
       </p>
       <dl className="grid gap-3">
         <Dado rotulo="Motivo">

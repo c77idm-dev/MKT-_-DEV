@@ -11,6 +11,8 @@ const FOTOS = [
 const props = {
   codigo: 'DEV-000001',
   conta: 'Loja 1',
+  pedidos: '2000001, 2000002',
+  reclamacaoId: '5200000001',
   motivo: 'SRF2' as const,
   rotuloMotivo: 'Produto avariado',
   mensagem: 'Na conferência da devolução DEV-000001 encontramos:\n- Unidade 1: avariado.',
@@ -28,6 +30,7 @@ describe('RespondaNoML (§4.6)', () => {
     expect(screen.getByText('SRF2')).toBeTruthy();
     expect(screen.getByText(/Produto avariado/)).toBeTruthy();
     expect(screen.getByText(/na conta Loja 1/)).toBeTruthy();
+    expect(screen.getByText(/Abra no ML a venda 2000001, 2000002 \(reclamação 5200000001\)/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copiar' })).toBeTruthy();
     const baixar = screen.getAllByRole('link', { name: /^Baixar/ });
     expect(baixar).toHaveLength(1);

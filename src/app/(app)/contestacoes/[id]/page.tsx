@@ -152,6 +152,8 @@ export default async function PaginaContestacao({ params, searchParams }: Props)
             acao={marcarRespondidaAcao.bind(null, c.id)}
             codigo={c.codigo}
             conta={c.conta}
+            pedidos={c.pedidos.join(', ')}
+            reclamacaoId={c.reclamacaoId}
             motivo={c.motivo}
             rotuloMotivo={ROTULO_MOTIVO_CANAL[c.motivo]}
             mensagem={c.mensagem}
