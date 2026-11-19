@@ -606,3 +606,13 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
   - **Alertas:** `respostas_ml` e `conta_bitbrain_indisponivel`.
   - **e2e (D4):** script `test:e2e:bitbrain` no `package.json`; `playwright.config.ts` exporta `configE2E(modo)` e ganha `playwright.bitbrain.config.ts`; `tests/e2e/global-setup.ts` lê `metadata.modoML`; `tests/e2e/dados.ts` ganha `ambienteE2E(modo)`.
   - **Motivo:** as devoluções do ML passam a vir pelo Bitbrain (decisão do usuário de 16/11), e os arquivos são congelados.
+- **E22. Produtos do ML (19/11, extra; "Pode fazer assim"):** branch `produtos-do-ml`.
+  - **O quê:** a sincronização do ML (modos `api` e `bitbrain`) cadastra pelo anúncio (`/items/{id}`, que o `ConectorML` já lia) o SKU que não está em `produtos`: descrição = título (com variação, "<título> — <valores>" das `attribute_combinations`, decisão do usuário de 19/11), EAN = GTIN válido (da variação, senão do anúncio; só se nenhum OUTRO produto tiver o mesmo), foto = a da variação, senão a 1ª do anúncio, senão a miniatura (só `https://`), e o id do anúncio. Sem fornecedor (o alerta "Sem fornecedor" já cobre).
+  - **Nunca sobrescreve:** no produto que já existe, só preenche `foto_url`, `ean` e `ml_item_id` vazios. Descrição, fornecedor, NCM, custo e unidade não mudam.
+  - **Onde:** na transação da sincronização, num savepoint, antes de criar os itens (`produto_esperado_id` já ligado). Na nova sincronização de uma devolução existente (ou vinculada, D9), os itens dela ainda sem produto são ligados pelo SKU.
+  - **Banco:** `produtos.foto_url` e `produtos.ml_item_id` (texto, anuláveis). Migração `0015_produtos_do_ml`.
+  - **Arquivos congelados que mudaram:** `src/db/schema/catalogo.ts` (as 2 colunas); `EntidadeHistorico` ganha `produto`; `rotulos/mercado-livre.ts` ganha `ml_produto_criado` e `ml_produto_completado`; `busca.ts` (`fotoProduto` no resumo), `detalhe.ts` (`fotoUrl` nos itens) e `CartaoDevolucao.tsx` (a foto ao lado do produto); componente novo `src/components/FotoProduto.tsx`.
+  - **Telas:** a foto aparece no cartão, na unidade da conferência, nos itens do detalhe e em Cadastros › Produtos ("Foto do anúncio do ML (extra)" no produto).
+  - **Falsos:** `tests/fixtures/ml-falso/cenarios.json` ganha `anuncios` (título, GTIN e foto por SKU); a foto é de um domínio reservado (`.example`) e o e2e responde a imagem com `page.route`.
+  - **Pendente:** `?include_attributes=all` no `/items` (o GTIN da variação), quando a rota do Bitbrain aceitar a query (adendo na branch `catalogo-ml`). Sem ele, vale o GTIN do anúncio.
+  - **Motivo:** o catálogo da produção foi apagado; sem produto, a bancada não tem foto para reconhecer o item nem EAN esperado para conferir.
