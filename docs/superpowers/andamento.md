@@ -39,8 +39,9 @@ Atualizado em 19/11/2026 (integração com o Bitbrain: rota do Bitbrain no ar; n
     2. **Construção em andamento**, pelo fluxo [workflows/fase-sdd.js](workflows/fase-sdd.js), no run `wf_064982fb-f9b`.
        - **Argumentos:** `{"fase":"Bitbrain","pasta":"/c/Users/idmpc/devolucoes-wt/bitbrain","branch":"integracao-bitbrain","pref":"bb","tarefas":[1,…,14],"porta":3107,"bancoTeste":"devolucoes_test_f7"}`.
        - **Os resumos** `bb-task-N-brief.md` são o preâmbulo do plano mais a tarefa.
-       - **19/11:** as Tarefas 1 a 3 estão prontas e aprovadas de primeira (`5c19ca4`).
-       - **A Tarefa 4 foi retomada** depois do fim da sessão. O commit `32a847d` já existia; o resumo ganhou uma nota de retomada, com base em `5c19ca4`.
+       - **19/11, 13h20:** as Tarefas 1 a 11 estão prontas e aprovadas de primeira, sem nenhuma rodada de correção (`9d315b3`, já no GitHub). A Tarefa 12 (selos, urgentes primeiro, extras no detalhe) está em andamento. Faltam a 13 (Contestações ML no modo bitbrain) e a 14 (documentos).
+       - **Para olhar na revisão final:** o e2e `estoque-bom.spec.ts:32` [celular] falhou nas rodadas completas das Tarefas 2 e 11, na checagem da ordem dos cartões. Nas duas vezes pareceu sem relação com a tarefa. Conferir se falha também no `main`.
+       - **Se o fluxo parar com commit parcial:** pôr a nota de retomada no topo do `bb-task-N-brief.md`, como foi feito na Tarefa 4, e retomar com `resumeFromRunId`.
        - **Depois:** a revisão final ([workflows/fase-final.js](workflows/fase-final.js)) e a junção no `main`.
     3. ✅ **A rota do Bitbrain está publicada** (Bitbrain `50afdf8`, https://app.bitbrain.com.br): devolve `401` sem token, e com token lista as 5 contas.
        - O token já está no `.env` do Bitbrain na VPS.
