@@ -16,10 +16,12 @@ type Props = {
   total: number;
   pagina: number;
   acoes?: ReactNode;
+  /** Aviso curto sob a contagem (ex.: ordenação extra). */
+  nota?: string;
 };
 
 /** Lista de devoluções em cartões (mobile-first), com a Busca Avançada no topo (spec §6.7: "disponível em todas as listas"). */
-export function ListaDevolucoes({ titulo, acaoBusca, filtros, devolucoes, total, pagina, acoes }: Props) {
+export function ListaDevolucoes({ titulo, acaoBusca, filtros, devolucoes, total, pagina, acoes, nota }: Props) {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
       <Link href="/fluxo" className={`${LINK_VOLTAR} -mb-2 self-start`}>
@@ -33,6 +35,7 @@ export function ListaDevolucoes({ titulo, acaoBusca, filtros, devolucoes, total,
       <p className="text-sm text-texto-2">
         {total} {total === 1 ? 'devolução' : 'devoluções'}
       </p>
+      {nota && <p className="text-xs text-texto-2">{nota}</p>}
       {devolucoes.length === 0 ? (
         <p className={VAZIO}>Nenhuma devolução encontrada.</p>
       ) : (

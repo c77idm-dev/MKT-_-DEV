@@ -201,5 +201,6 @@ test('nas etapas 2 e 3 as urgentes vêm primeiro (extra)', async ({ page }) => {
   const primeiro = page.locator('main a[href^="/fluxo/devolucoes/DEV-"]').first();
   await expect(primeiro).toHaveAttribute('href', `/fluxo/devolucoes/${urgente.codigo}`);
   await expect(primeiro).toContainText('Urgente');
+  await expect(page.getByText('Urgentes do ML primeiro (extra).')).toBeVisible();
   await semRolagemLateral(page);
 });

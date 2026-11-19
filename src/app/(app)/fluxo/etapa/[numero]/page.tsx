@@ -93,6 +93,7 @@ export default async function PaginaEtapa({ params, searchParams }: Props) {
       devolucoes={devolucoes}
       total={total}
       pagina={pagina}
+      nota={etapa.numero === 2 || etapa.numero === 3 ? 'Urgentes do ML primeiro (extra).' : undefined}
       acoes={acoesDaEtapa(etapa.numero, pode(usuario.perfil, 'operar_devolucoes'))}
     />
   );
