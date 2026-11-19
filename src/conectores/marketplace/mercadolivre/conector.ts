@@ -3,7 +3,7 @@ import type { ClienteML } from './cliente';
 import { formatarDataML } from './datas';
 import { ehRecusaDefinitiva, ErroMotivoIndisponivel, logErroML } from './erros';
 import { esquemaArquivoEnviado, esquemaBuscaReclamacoes, esquemaDevolucao, esquemaMotivos, esquemaNotaVenda, esquemaReclamacao } from './esquemas';
-import { analisar, ErroFormatoML, escolherEnvio, mapearReclamacao, temDevolucao, textoMotivoReclamacao } from './mapeamento';
+import { analisar, ErroFormatoML, escolherEnvio, idEnvioDaVenda, mapearReclamacao, temDevolucao, textoMotivoReclamacao } from './mapeamento';
 import type { ConectorMercadoLivre, DadosDevolucaoML, ReclamacaoAtualizada } from './tipos';
 
 /** Spec §7.2: `limit` no máximo 100 e `offset + limit` abaixo de 10000. */
@@ -76,7 +76,12 @@ export class ConectorML implements ConectorMercadoLivre {
     }
     const envioDevolucao = escolherEnvio(d);
     const envio = envioDevolucao ? await this.opcional(`/shipments/${encodeURIComponent(envioDevolucao.shipment_id)}`, NOVO_FORMATO) : null;
-    return mapearReclamacao({ reclamacao, devolucao, pedidos, anuncios, envio });
+    // Extras (integração Bitbrain §4.5): leituras opcionais, depois das que já existiam; recusa → null.
+    const reputacao = await this.opcional(`/post-purchase/v1/claims/${id}/affects-reputation`);
+    const revisoes = d.related_entities.includes('reviews') ? await this.opcional(`/post-purchase/v1/returns/${encodeURIComponent(d.id)}/reviews`) : null;
+    const envioVendaId = idEnvioDaVenda(pedidos);
+    const envioVenda = envioVendaId ? await this.opcional(`/shipments/${encodeURIComponent(envioVendaId)}`, NOVO_FORMATO) : null;
+    return mapearReclamacao({ reclamacao, devolucao, pedidos, anuncios, envio, reputacao, revisoes, envioVenda });
   }
 
   async obter(reclamacaoId: string): Promise<DevolucaoExterna> {

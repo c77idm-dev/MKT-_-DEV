@@ -9,8 +9,14 @@ import envio from '../../../../tests/fixtures/ml/doc/envio.json';
 import pedido from '../../../../tests/fixtures/ml/doc/pedido.json';
 import motivoReclamacao from '../../../../tests/fixtures/ml/doc/motivo-reclamacao.json';
 import reclamacao from '../../../../tests/fixtures/ml/doc/reclamacao.json';
-import { esquemaAnuncio, esquemaReclamacao } from './esquemas';
-import { ErroFormatoML, gtinDoAnuncio, mapearReclamacao, prazoDaReclamacao, quantidadeML, temDevolucao, textoMotivoReclamacao } from './mapeamento';
+import { esquemaAnuncio, esquemaDevolucao, esquemaReclamacao } from './esquemas';
+import {
+  ErroFormatoML,
+  EXTRAS_VAZIOS,
+  extrasDaReclamacao,
+  gtinDoAnuncio,
+  idEnvioDaVenda,
+  mapearReclamacao, prazoDaReclamacao, quantidadeML, temDevolucao, textoMotivoReclamacao } from './mapeamento';
 
 const COMPLETA = { reclamacao, devolucao, pedidos: [pedido], anuncios: [anuncio], envio };
 
@@ -40,6 +46,7 @@ describe('mapearReclamacao (spec §7.2 e §7.3)', () => {
         atualizadaEm: new Date('2026-11-09T14:20:00.000-03:00'),
         itens: [{ pedido: '2000008003035430', sku: 'fone-01', ean: '7891234567888', quantidade: 1 }],
       },
+      extras: { ...EXTRAS_VAZIOS, acaoPendente: 'return_review_ok', urgente: false, dinheiro: 'RETIDO' },
     });
   });
 
@@ -173,5 +180,94 @@ describe('textoMotivoReclamacao (suposição A15: GET /post-purchase/v1/claims/r
 
   it('corta o texto em 500 caracteres (o mesmo limite do motivo manual e da planilha)', () => {
     expect(textoMotivoReclamacao({ detail: `  ${'a'.repeat(600)}  ` })).toBe('a'.repeat(500));
+  });
+});
+
+describe('extrasDaReclamacao (integração Bitbrain §4.5)', () => {
+  const r = esquemaReclamacao.parse(reclamacao);
+  const d = esquemaDevolucao.parse(devolucao);
+  const f = (m: Partial<Parameters<typeof extrasDaReclamacao>[0]> = {}) =>
+    extrasDaReclamacao({ reclamacao: r, devolucao: d, reputacao: null, revisoes: null, envioVenda: null, ...m });
+
+  it('só a reclamação e a devolução: a revisão com prazo, não urgente, e o dinheiro do status_money', () => {
+    expect(f()).toEqual({ ...EXTRAS_VAZIOS, acaoPendente: 'return_review_ok', urgente: false, dinheiro: 'RETIDO' });
+  });
+
+  it('ação obrigatória (mandatory) da loja → urgente, com a ação de prazo mais curto (A19, D7)', () => {
+    const urgente = esquemaReclamacao.parse({
+      ...reclamacao,
+      players: [
+        {
+          role: 'respondent',
+          type: 'seller',
+          user_id: 1,
+          available_actions: [
+            { action: 'send_message_to_complainant', due_date: '2026-11-22T10:00:00.000-03:00', mandatory: true },
+            { action: 'return_review_fail', due_date: '2026-11-19T10:00:00.000-03:00', mandatory: true },
+          ],
+        },
+      ],
+    });
+    expect(f({ reclamacao: urgente })).toMatchObject({ acaoPendente: 'return_review_fail', urgente: true });
+  });
+
+  it('sem a loja entre os players: ação e urgente nulos (o ML não informou)', () => {
+    const semLoja = esquemaReclamacao.parse({ ...reclamacao, players: [{ role: 'complainant', type: 'buyer', user_id: 2, available_actions: [] }] });
+    expect(f({ reclamacao: semLoja })).toMatchObject({ acaoPendente: null, urgente: null });
+  });
+
+  it('reputação: affected/not_affected/not_applies; valor estranho ou resposta ruim → nulo (A17)', () => {
+    expect(f({ reputacao: { affects_reputation: 'affected' } }).afetaReputacao).toBe('AFETA');
+    expect(f({ reputacao: { affects_reputation: 'not_affected' } }).afetaReputacao).toBe('NAO_AFETA');
+    expect(f({ reputacao: { affects_reputation: 'not_applies' } }).afetaReputacao).toBe('NAO_SE_APLICA');
+    expect(f({ reputacao: { affects_reputation: 'talvez' } }).afetaReputacao).toBeNull();
+    expect(f({ reputacao: 'x' }).afetaReputacao).toBeNull();
+  });
+
+  it('Full pelo logistic_type ou pelo logistic.type (A18); outro tipo → false; sem envio → nulo', () => {
+    expect(f({ envioVenda: { id: 1, logistic_type: 'fulfillment' } }).ehFull).toBe(true);
+    expect(f({ envioVenda: { id: 1, logistic: { mode: 'me2', type: 'fulfillment' } } }).ehFull).toBe(true);
+    expect(f({ envioVenda: { id: 1, logistic_type: 'drop_off' } }).ehFull).toBe(false);
+    expect(f({ envioVenda: { id: 1 } }).ehFull).toBeNull();
+    expect(f({ envioVenda: null }).ehFull).toBeNull();
+  });
+
+  it('triagem: a última revisão com product_condition, em { reviews } ou em lista (A16)', () => {
+    const revisoes = {
+      reviews: [
+        { resource_reviews: [{ product_condition: 'saleable', stage: 'pending' }] },
+        { resource_reviews: [{ product_condition: null, stage: 'x' }, { product_condition: 'unsaleable', stage: 'closed' }] },
+      ],
+    };
+    expect(f({ revisoes })).toMatchObject({ triagemCondicao: 'NAO_VENDAVEL', triagemEtapa: 'closed' });
+    expect(f({ revisoes: revisoes.reviews })).toMatchObject({ triagemCondicao: 'NAO_VENDAVEL', triagemEtapa: 'closed' });
+    expect(f({ revisoes: { reviews: [] } })).toMatchObject({ triagemCondicao: null, triagemEtapa: null });
+  });
+
+  it('dinheiro: retained/refunded/available; sem devolução → nulo', () => {
+    expect(f({ devolucao: esquemaDevolucao.parse({ ...devolucao, status_money: 'refunded' }) }).dinheiro).toBe('DEVOLVIDO');
+    expect(f({ devolucao: esquemaDevolucao.parse({ ...devolucao, status_money: 'available' }) }).dinheiro).toBe('LIBERADO');
+    expect(f({ devolucao: null }).dinheiro).toBeNull();
+  });
+
+  it('idEnvioDaVenda: o shipping.id do 1º pedido que tiver; nenhum → nulo', () => {
+    expect(idEnvioDaVenda([pedido])).toBe('41800000001');
+    expect(idEnvioDaVenda([{ id: 1, order_items: [] }])).toBeNull();
+    expect(idEnvioDaVenda([])).toBeNull();
+  });
+
+  it('mapearReclamacao devolve os extras nos dois retornos', () => {
+    const semDevolucao = mapearReclamacao({ reclamacao: { ...reclamacao, related_entities: [] }, devolucao: null, pedidos: [], anuncios: [], envio: null });
+    expect(semDevolucao.extras).toMatchObject({ acaoPendente: 'return_review_ok', urgente: false, dinheiro: null });
+    const comTudo = mapearReclamacao({
+      reclamacao,
+      devolucao,
+      pedidos: [pedido],
+      anuncios: [],
+      envio: null,
+      reputacao: { affects_reputation: 'affected' },
+      envioVenda: { id: 41800000001, logistic_type: 'fulfillment' },
+    });
+    expect(comTudo.extras).toMatchObject({ afetaReputacao: 'AFETA', ehFull: true, dinheiro: 'RETIDO' });
   });
 });

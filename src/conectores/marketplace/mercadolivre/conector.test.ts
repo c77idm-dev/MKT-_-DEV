@@ -44,6 +44,8 @@ const ROTAS_RECLAMACAO: Record<string, Rota> = {
   'GET /orders/2000008003035430': json(pedido),
   'GET /items/MLB3456789012': json(anuncio),
   'GET /shipments/41896532561': json(envio),
+  'GET /post-purchase/v1/claims/5292183123/affects-reputation': json({ affects_reputation: 'affected', has_incentive: false }),
+  'GET /shipments/41800000001': json({ ...envio, id: 41800000001, logistic_type: 'fulfillment' }),
 };
 
 describe('ConectorML.obterReclamacao (spec §7.2: reclamação → devolução → pedidos → anúncio → envio)', () => {
@@ -63,8 +65,35 @@ describe('ConectorML.obterReclamacao (spec §7.2: reclamação → devolução �
       'GET /orders/2000008003035430',
       'GET /items/MLB3456789012',
       'GET /shipments/41896532561',
+      'GET /post-purchase/v1/claims/5292183123/affects-reputation',
+      'GET /shipments/41800000001',
     ]);
     expect(fetchFn.mock.calls[4][1]?.headers).toMatchObject({ 'x-format-new': 'true' });
+    expect(dados.extras).toMatchObject({ afetaReputacao: 'AFETA', ehFull: true, dinheiro: 'RETIDO', urgente: false });
+    expect(fetchFn.mock.calls[6][1]?.headers).toMatchObject({ 'x-format-new': 'true' });
+  });
+
+  it('revisões (triagem) só quando a devolução tem "reviews" em related_entities', async () => {
+    const { conector, chamadas } = montar({
+      ...ROTAS_RECLAMACAO,
+      'GET /post-purchase/v2/claims/5292183123/returns': json({ ...devolucao, related_entities: ['reviews'] }),
+      'GET /post-purchase/v1/returns/14958493/reviews': json({ reviews: [{ resource_reviews: [{ product_condition: 'discard', stage: 'closed' }] }] }),
+    });
+    const dados = await conector.obterReclamacao('5292183123');
+    expect(dados.extras).toMatchObject({ triagemCondicao: 'DESCARTE', triagemEtapa: 'closed' });
+    expect(chamadas()).toContain('GET /post-purchase/v1/returns/14958493/reviews');
+  });
+
+  it('leituras dos extras recusadas (403/404) não impedem: extras nulos', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { conector } = montar({
+      ...ROTAS_RECLAMACAO,
+      'GET /post-purchase/v1/claims/5292183123/affects-reputation': json({ message: 'forbidden' }, 403),
+      'GET /shipments/41800000001': json({ message: 'not_found' }, 404),
+    });
+    const dados = await conector.obterReclamacao('5292183123');
+    expect(dados.devolucao).not.toBeNull();
+    expect(dados.extras).toMatchObject({ afetaReputacao: null, ehFull: null });
   });
 
   it('reclamação sem devolução: não busca mais nada', async () => {

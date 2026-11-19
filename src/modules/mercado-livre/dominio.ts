@@ -83,3 +83,65 @@ export function rotuloStatusML(statusCanal: string | null): string {
   const devolucao = statusCanal.split('/')[0];
   return ROTULO_STATUS_ML[devolucao] ?? devolucao;
 }
+
+/** Extras do ML (integração Bitbrain §4.5), nos modos api e bitbrain. Nulo = o ML não informou. */
+export const AFETA_REPUTACAO = ['AFETA', 'NAO_AFETA', 'NAO_SE_APLICA'] as const;
+export type AfetaReputacao = (typeof AFETA_REPUTACAO)[number];
+export const AFETA_REPUTACAO_DO_ML: Record<string, AfetaReputacao> = { affected: 'AFETA', not_affected: 'NAO_AFETA', not_applies: 'NAO_SE_APLICA' };
+export const ROTULO_AFETA_REPUTACAO: Record<AfetaReputacao, string> = {
+  AFETA: 'Afeta a reputação',
+  NAO_AFETA: 'Não afeta a reputação',
+  NAO_SE_APLICA: 'Não se aplica',
+};
+
+export const CONDICOES_TRIAGEM = ['VENDAVEL', 'NAO_VENDAVEL', 'DESCARTE', 'FALTANDO'] as const;
+export type CondicaoTriagem = (typeof CONDICOES_TRIAGEM)[number];
+export const CONDICAO_TRIAGEM_DO_ML: Record<string, CondicaoTriagem> = {
+  saleable: 'VENDAVEL',
+  unsaleable: 'NAO_VENDAVEL',
+  discard: 'DESCARTE',
+  missing: 'FALTANDO',
+};
+export const ROTULO_CONDICAO_TRIAGEM: Record<CondicaoTriagem, string> = {
+  VENDAVEL: 'Vendável',
+  NAO_VENDAVEL: 'Não vendável',
+  DESCARTE: 'Descarte',
+  FALTANDO: 'Faltando',
+};
+
+export const SITUACOES_DINHEIRO = ['RETIDO', 'DEVOLVIDO', 'LIBERADO'] as const;
+export type SituacaoDinheiro = (typeof SITUACOES_DINHEIRO)[number];
+export const DINHEIRO_DO_ML: Record<string, SituacaoDinheiro> = { retained: 'RETIDO', refunded: 'DEVOLVIDO', available: 'LIBERADO' };
+export const ROTULO_DINHEIRO: Record<SituacaoDinheiro, string> = { RETIDO: 'retido', DEVOLVIDO: 'devolvido ao comprador', LIBERADO: 'liberado' };
+
+/** Selos do cartão, das listas e da Busca: só os extras que importam (§4.5). */
+export const SELO_URGENTE = 'Urgente';
+export const SELO_AFETA_REPUTACAO = 'Afeta reputação';
+export const SELO_FULL = 'Full';
+
+const ROTULO_ACAO_ML: Record<string, string> = {
+  return_review: 'Revisar a devolução',
+  return_review_ok: 'Revisar a devolução',
+  return_review_fail: 'Revisar a devolução',
+  send_message_to_complainant: 'Responder ao comprador',
+  send_message_to_mediator: 'Responder à mediação',
+  refund: 'Devolver o dinheiro',
+  allow_return: 'Aceitar a devolução',
+  open_dispute: 'Abrir disputa',
+};
+/** Ação pendente da loja no ML, em português; ação desconhecida aparece crua. */
+export function rotuloAcaoML(acao: string | null): string {
+  if (!acao) return '—';
+  return ROTULO_ACAO_ML[acao] ?? acao;
+}
+
+/** Suposição A17: a etapa da triagem do ML. */
+const ROTULO_ETAPA_TRIAGEM: Record<string, string> = { pending: 'em andamento', closed: 'concluída' };
+export function rotuloEtapaTriagem(etapa: string | null): string | null {
+  if (!etapa) return null;
+  return ROTULO_ETAPA_TRIAGEM[etapa] ?? etapa;
+}
+
+/** Modo bitbrain (§4.6): o "OK" que falta responder no ML à mão. A contestação tem a tabela dela. */
+export const RESPOSTAS_PENDENTES = ['OK'] as const;
+export type RespostaPendente = (typeof RESPOSTAS_PENDENTES)[number];

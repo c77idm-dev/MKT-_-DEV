@@ -46,7 +46,7 @@ export const esquemaReclamacao = z.looseObject({
       role: textoOuNulo,
       type: textoOuNulo,
       user_id: idOuNulo,
-      available_actions: lista(z.looseObject({ action: z.string(), due_date: dataOuNula })),
+      available_actions: lista(z.looseObject({ action: z.string(), due_date: dataOuNula, mandatory: z.boolean().nullish().catch(null) })),
     }),
   ),
   date_created: dataOuNula,
@@ -79,11 +79,14 @@ export const esquemaDevolucao = z.looseObject({
   ),
   date_created: dataOuNula,
   last_updated: dataOuNula,
+  status_money: textoOuNulo.catch(null),
+  related_entities: lista(z.string()).catch([]),
 });
 export type DevolucaoJson = z.output<typeof esquemaDevolucao>;
 
 export const esquemaPedido = z.looseObject({
   id,
+  shipping: z.looseObject({ id: idOuNulo }).nullish().catch(null),
   order_items: lista(
     z.looseObject({
       item: z.looseObject({ id: idOuNulo, seller_sku: textoOuNulo, seller_custom_field: textoOuNulo, variation_id: idOuNulo }),
@@ -122,3 +125,18 @@ export const esquemaMotivoReclamacao = z.looseObject({ detail: z.unknown().optio
 export const esquemaMotivos = z.array(z.looseObject({ id: z.string() }));
 export const esquemaArquivoEnviado = z.looseObject({ file_name: z.string().min(1) });
 export const esquemaNotaVenda = z.looseObject({ id });
+
+/** Suposição A17: GET /post-purchase/v1/claims/{id}/affects-reputation. */
+export const esquemaReputacao = z.looseObject({ affects_reputation: textoOuNulo });
+
+const esquemaRevisao = z.looseObject({
+  resource_reviews: lista(z.looseObject({ product_condition: textoOuNulo, stage: textoOuNulo })),
+});
+/** Suposição A16: GET /post-purchase/v1/returns/{id}/reviews traz { reviews: [...] } ou a lista direto. Sai sempre a lista. */
+export const esquemaRevisoes = z.union([z.array(esquemaRevisao), z.looseObject({ reviews: lista(esquemaRevisao) }).transform((v) => v.reviews)]);
+
+/** Suposição A18: envio da venda; logistic_type no formato antigo, logistic.type no novo (x-format-new). */
+export const esquemaEnvioVenda = z.looseObject({
+  logistic_type: textoOuNulo,
+  logistic: z.looseObject({ type: textoOuNulo }).nullish().catch(null),
+});

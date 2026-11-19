@@ -1,4 +1,16 @@
+import type { AfetaReputacao, CondicaoTriagem, SituacaoDinheiro } from '@/modules/mercado-livre/dominio';
 import type { DevolucaoExterna, MarketplaceConnector } from '../tipos';
+
+/** Os 5 extras (integração Bitbrain §4.5). Nulo = o ML não informou. */
+export type ExtrasML = {
+  acaoPendente: string | null;
+  urgente: boolean | null;
+  afetaReputacao: AfetaReputacao | null;
+  ehFull: boolean | null;
+  triagemCondicao: CondicaoTriagem | null;
+  triagemEtapa: string | null;
+  dinheiro: SituacaoDinheiro | null;
+};
 
 /** O que o sistema sabe de uma reclamação do ML. `devolucao` é null quando a reclamação não tem devolução. */
 export type DadosDevolucaoML = {
@@ -10,6 +22,7 @@ export type DadosDevolucaoML = {
   statusDevolucao: string | null;
   atualizadaEm: Date | null;
   devolucao: DevolucaoExterna | null;
+  extras: ExtrasML;
 };
 
 export type ReclamacaoAtualizada = { reclamacaoId: string; atualizadaEm: Date | null };

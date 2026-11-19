@@ -48,6 +48,16 @@ describe('ML falso: o ConectorML real sobre as respostas da documentação', () 
     expect(dados.devolucao?.entregueEm).toBeInstanceOf(Date);
   });
 
+  it('cenário 2: urgente, afeta a reputação e Full (extras, D17)', async () => {
+    const dados = await conector().obterReclamacao(novo(2).id);
+    expect(dados.extras).toMatchObject({ urgente: true, acaoPendente: 'return_review_ok', afetaReputacao: 'AFETA', ehFull: true, dinheiro: 'RETIDO' });
+  });
+
+  it('cenário 5: triagem do ML; cenário 1: não urgente, não afeta a reputação, não é Full', async () => {
+    expect((await conector().obterReclamacao(novo(5).id)).extras).toMatchObject({ triagemCondicao: 'NAO_VENDAVEL', triagemEtapa: 'closed' });
+    expect((await conector().obterReclamacao(novo(1).id)).extras).toMatchObject({ urgente: false, afetaReputacao: 'NAO_AFETA', ehFull: false, triagemCondicao: null });
+  });
+
   it('cenário 3: low_cost, sem envio físico', async () => {
     const dados = await conector().obterReclamacao(novo(3).id);
     expect(dados.subtipo).toBe('low_cost');
