@@ -1,10 +1,12 @@
 import { and, eq } from 'drizzle-orm';
+import { fetchBitbrainFalso } from '@/conectores/marketplace/bitbrain/falso';
 import { criarClienteML } from '@/conectores/marketplace/mercadolivre/cliente';
 import { ConectorML } from '@/conectores/marketplace/mercadolivre/conector';
 import { fetchFalsoML } from '@/conectores/marketplace/mercadolivre/falso';
 import type { ConectorMercadoLivre } from '@/conectores/marketplace/mercadolivre/tipos';
 import type { DbOuTx } from '@/db/client';
 import { contasMarketplace } from '@/db/schema';
+import { URL_BITBRAIN_FALSO } from '@/lib/env';
 import { configML, type ConfigML } from './config';
 import { tokenValido } from './contas';
 
@@ -33,4 +35,9 @@ export async function criarConectorMLDaConta(
     fetchFn,
   });
   return new ConectorML({ sellerId: conta.sellerId, cliente });
+}
+
+/** D3: o Bitbrain falso só com a URL de testes E PERMITIR_FALSOS=1; fora disso, o fetch de verdade (a URL .invalid não resolve). */
+export function fetchDoBitbrain(config: ConfigML): typeof fetch {
+  return config.bitbrainUrl === URL_BITBRAIN_FALSO && config.permitirFalsos ? fetchBitbrainFalso : fetch;
 }

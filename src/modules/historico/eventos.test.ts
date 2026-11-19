@@ -33,6 +33,7 @@ const RESERVADAS: Record<string, string[]> = {
     'ml_vinculada', 'ml_status_atualizado', 'ml_entregue', 'ml_no_cd', 'ml_reenviada_ao_vendedor', 'ml_status_apos_chegada',
     'ml_resultado_ok_enviado', 'ml_resultado_ok_recusado', 'ml_resultado_sem_vinculo',
     'ml_conta_conectada', 'ml_conta_reconectar', 'ml_conta_desconectada',
+    'ml_conta_bitbrain_marcada', 'ml_conta_bitbrain_desmarcada', 'ml_resposta_manual_pendente', 'ml_ok_respondido_a_mao', 'ml_contestacao_respondida_a_mao',
     'contestacao_criada', 'contestacao_revisada', 'contestacao_enviada', 'contestacao_falhou',
   ],
   fiscal: [

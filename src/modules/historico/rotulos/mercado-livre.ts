@@ -12,6 +12,12 @@ export const ROTULOS_MERCADO_LIVRE: Record<string, string> = {
   ml_conta_conectada: 'Conta do Mercado Livre conectada',
   ml_conta_reconectar: 'Conta do Mercado Livre precisa ser reconectada',
   ml_conta_desconectada: 'Conta do Mercado Livre desconectada',
+  // Integração Bitbrain (emenda E21)
+  ml_conta_bitbrain_marcada: 'Conta do Bitbrain passou a mandar devoluções',
+  ml_conta_bitbrain_desmarcada: 'Conta do Bitbrain deixou de mandar devoluções',
+  ml_resposta_manual_pendente: 'Falta responder "OK" no Mercado Livre (à mão)',
+  ml_ok_respondido_a_mao: '"OK" respondido à mão no Mercado Livre',
+  ml_contestacao_respondida_a_mao: 'Contestação respondida à mão no Mercado Livre',
   contestacao_criada: 'Contestação criada',
   contestacao_revisada: 'Contestação revisada pelo Gestor',
   contestacao_enviada: 'Contestação enviada ao Mercado Livre',
