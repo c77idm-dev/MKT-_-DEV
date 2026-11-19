@@ -25,8 +25,14 @@ Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main
       - imagem `e578f6b`; `ML_CONECTOR=bitbrain`, com o token lido do `/home/bitbrain/bitbrain/.env` sem aparecer na tela;
       - a rota respondeu 200, as migrações foram aplicadas e o `/api/saude` está ok;
       - backup antes da atualização: `/root/backups-devolucoes/banco-antes-bitbrain_20261119-1945.dump`, e cópia do env em `.env.producao.antes-bitbrain_20261119-1945`.
-      - **Falta o usuário**, em Configurações › Mercado Livre: Atualizar contas, marcar as contas e "Sincronizar agora".
-      - **Arrumar depois:** o arquivo solto `/opt/devolucoes/backup-antes-fase1-20261112-1928.sql` deve ir para `~/backups-devolucoes`.
+      - ✅ **As 5 contas foram marcadas e sincronizadas.** Na primeira tentativa a busca deu 400 em todas, porque o ML não aceita `players.user_id`/`players.role`. Corrigido para `player_user_id`/`player_role` (`2aafd82`, no ar às 17h10).
+      - **Às 17h15:** 61 reclamações lidas, 13 devoluções do ML criadas, e cerca de 1.100 leituras ainda na fila, que vai andando sozinha.
+      - Na VPS: opção C no ar (`1901f0d`). DEV-000002 a 000005, que eram de teste, foram apagadas; backup antes em `/root/backups-devolucoes/banco-antes-apagar-testes_20261119-1957.dump`. Sobrou só a DEV-000001, cancelada.
+      - **Depois da entrega (19/11):**
+        1. O ML devolve 401 em `/post-purchase/v2/claims/5614557128/returns`, numa reclamação só. Investigar; talvez a conta não seja a dona da devolução.
+        2. Pedir o adendo do `logistic` à sessão do Bitbrain, para o selo Full funcionar.
+        3. Apagar as fotos que ficaram sem dono no armazenamento, das antigas DEV-000004 e 000005, e perguntar ao usuário se apaga também a DEV-000001.
+        4. Mover o arquivo solto `/opt/devolucoes/backup-antes-fase1-20261112-1928.sql` para `~/backups-devolucoes`.
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
   - **Conector "Bitbrain" do claude.ai: autorizado e explorado em 18/11.**
     - **O que é:** o painel das lojas no ML, só de leitura.
