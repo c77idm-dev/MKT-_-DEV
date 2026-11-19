@@ -52,7 +52,9 @@ Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main
         - **Catálogo inteiro:**
           - primeiro saem o texto para a sessão do Bitbrain e o desenho e o plano do nosso lado, em `docs/integracao/bitbrain-rota-catalogo.md`, `specs/2026-11-19-catalogo-ml-design.md` e `plans/2026-11-19-catalogo-ml.md`;
           - o texto pede liberar `/users/{seller}/items/search` e o multiget `/items?ids=`, e leva junto o adendo do `logistic`;
-          - a construção só começa depois que `produtos-do-ml` entrar no `main`.
+          - a construção só começa depois que `produtos-do-ml` entrar no `main`;
+          - o texto passa por uma conferência em equipe antes de ir para o usuário (run `wf_436d321e-291`), porque o ML trocou o `/items?ids=` pelo `/items/bulk` e o `include_attributes=all` faz falta;
+          - **decisões do usuário (19/11):** reimportação toda segunda às 4h, só nas contas já importadas; descrição com o nome da variação ("Título — Azul / M"), regra que vale também para `produtos-do-ml`; só anúncios ativos e pausados, sem os encerrados.
         - **Filtro de reputação:** o usuário escolheu o botão vermelho "Afetam a reputação · N" ao lado de Filtros, que só aparece quando há alguma, mais uma opção dentro de Filtros.
         - **Ordem de junção no `main`:** `produtos-do-ml` primeiro, depois `filtro-reputacao`. As duas mexem em `busca.ts`, mas em partes diferentes.
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
