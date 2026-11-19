@@ -124,6 +124,8 @@ O token eu ponho depois, à mão, no .env do sistema de devoluções.
 
 ### Adendo para colar agora (a rota já está no ar)
 
+> **Substituído em 19/11** pelo texto único de [bitbrain-rota-catalogo.md](bitbrain-rota-catalogo.md), que já traz este `logistic` junto com o catálogo. Cole aquele, não este.
+
 ```
 A rota /integracao/devolucoes/ml já está no ar. Falta o adendo de 18/11 do contrato (docs/integracao/bitbrain-rota-devolucoes.md): em /shipments/{id}, além dos campos já liberados, mantenha o objeto `logistic` só com `mode`, `type` e `direction`. Com x-format-new: true o ML põe o tipo logístico (ex.: fulfillment) em logistic.type. Acrescente um teste: /shipments traz logistic.{mode,type,direction} e continua sem endereços, nomes e telefones.
 ```
