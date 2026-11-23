@@ -50,6 +50,15 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
              - o rótulo `cancelamento_desfeito`;
              - a emenda E24.
            - **O usuário recusou** o botão "Registrar chegada" no detalhe e o "Procurar pelo produto" no Recebimento.
+        6. **Pacotes que voltam do armazém do ML (23/11, aprovado: "blz"):**
+           - **Achado:** das 454 devoluções, 345 estão "No CD do marketplace", e o ML está mandando esses pacotes de volta à loja. Eles falhavam por dois motivos:
+             - o leitor pega da etiqueta o número do pedido do ML ou o número do envio, e não o rastreio. Exemplo: o Wahl era a DEV-000071, pedido `2000018992531744`, e a etiqueta dava `000018992531744`;
+             - a chegada de "No CD do marketplace" era bloqueada.
+           - **Correção** no run `wf_3edf03c1-3f8`, branch `recebimento-ml` no worktree `bitbrain` (porta 3107):
+             - **A:** o Receber pacote acha também pelo pedido do ML (exato, ou "2" + 15 dígitos) e pelo número do envio dentro do rastreio (`MM…BR…`, `MEL…FM…`);
+             - **B:** qualquer pessoa que opera pode dar chegada numa "No CD do marketplace", que vai para a etapa 2 com "voltou do armazém do ML (extra)". Emenda E25.
+           - **Segurado, não feito (C):** buscar 120 dias para trás traria centenas de devoluções antigas que já chegaram antes do sistema.
+           - **O pacote da JBL** (Reparo Driver RPD220Ti, envio `48515208229`) não está no sistema. Caminho atual: "Registrar pacote não identificado" e depois o Gestor identifica.
         5. **Foto do anúncio no dossiê (o usuário disse "sim" em 23/11):** roda no run `wf_5ca65cea-604`, branch `dossie-foto-anuncio` no worktree `dossie` (porta 3109). O servidor baixa a foto do CDN do ML com lista de hosts, prazo de 5 s e teto de 3 MB; ela entra como referência ("o que foi vendido"), sem SHA-256.
       - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `70801df`). **Revisado em equipe, junto no `main` e publicado na VPS em 23/11 (`97f1fdb`).**
         - **Testes:**
