@@ -106,7 +106,10 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
             - com o login vencido, o `<a download>` salvava a tela de login como .pdf.
           - **Junção:** o `main` foi juntado na branch (`42733b7`); a emenda do dossiê virou **E23** porque a E22 é dos produtos do ML. A bateria com as três frentes passou: unidade 909, integração 557, e2e 227 (9 pulados), Bitbrain 16.
           - **O usuário viu o PDF de exemplo e aprovou ("ficou bom demais"). Junto no `main` em `a274ecb`.** Sem migração nem variável nova.
-          - **Falta:** publicar na VPS com o bloco de 120 s no nginx (`docs/operacao/deploy-vps.md`, seção "Dossiê de provas"), só no site das devoluções.
+          - **Publicado na VPS em 23/11, 16h30** (imagem `a274ecb`, saúde ok; a rota sem sessão dá 307):
+            - o nginx ganhou o bloco de 120 s só no `server` 443 de `/etc/nginx/sites-available/devolucoes`, antes do `location /`, com as linhas `Upgrade`/`Connection` copiadas do `location /`, agora também no modelo `docker/nginx/devolucoes.conf`;
+            - cópia de antes em `~/backups-devolucoes/nginx-devolucoes-antes-dossie_20261123-1630.conf`;
+            - imagens guardadas: `a274ecb` (atual), `0200335` (para voltar atrás); a `97f1fdb` pode sair.
           - **Pergunta aberta ao usuário:** pôr a foto do anúncio do ML no dossiê, ao lado do produto esperado. É um passo à parte: o servidor teria que baixar a imagem do CDN do ML, com lista de hosts, prazo e teto de tamanho, e precisa de revisão própria.
       - **Se esta sessão cair:**
         - os fluxos e agentes em segundo plano param, mas as branches estão no GitHub;
