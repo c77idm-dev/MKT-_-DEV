@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { contestacoesCanal, devolucoes, itensDevolucao, motivosReclamacaoMl, reclamacoesMl } from '@/db/schema';
 import { EXTRAS_VAZIOS } from '@/conectores/marketplace/mercadolivre/mapeamento';
 import { obterContestacao } from './contestacoes';
+import { receberPorRastreio } from '@/modules/devolucoes/recebimento';
 import { FilaMemoria } from '@/modules/fila/fila';
 import { listarEventos } from '@/modules/historico/eventos';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
@@ -186,6 +187,31 @@ describe('aplicarReclamacao (contrato §5.5, spec §7.2 e §7.3)', () => {
     await aplicarReclamacao(db, dadosDevolucaoMLTeste({ ...d, statusCanal: 'cancelled/cancelled', rastreio: 'OUTRO' }), AGORA);
     expect(await devolucao(devolucaoId)).toMatchObject({ status: 'AGUARDANDO_CONFERENCIA', rastreio: 'LIDO123' });
     expect((await acoes(devolucaoId)).at(-1)).toBe('ml_status_apos_chegada');
+  });
+
+  it('(E25) No CD do ML que chegou pelo Recebimento: a sincronização nunca a devolve ao CD nem à etapa 1', async () => {
+    const pedido = '2000018992531744';
+    const d = devolucaoExternaTeste({ pedidos: [pedido], rastreio: 'MM48351759365BRSP06', itens: [{ pedido, sku: 'SKU-ML-1', ean: null, quantidade: 1 }] });
+    const { devolucaoId } = comDevolucao(await aplicarReclamacao(db, dadosDevolucaoMLTeste(d), AGORA));
+    const noCd = { ...d, destinoEnvio: 'CD_MARKETPLACE' as const, statusCanal: 'delivered/delivered' };
+    await aplicarReclamacao(db, dadosDevolucaoMLTeste(noCd), AGORA);
+    expect((await devolucao(devolucaoId)).status).toBe('NO_CD_MARKETPLACE');
+
+    // O ML mandou o pacote de volta; a etiqueta trazia o pedido sem o "2" do começo.
+    const operador = await criarUsuarioTeste(db, 'OPERADOR');
+    expect(await receberPorRastreio(db, '000018992531744', operador)).toMatchObject({ tipo: 'recebidas', achadaPor: 'PEDIDO_ML', doArmazemML: [expect.any(String)] });
+    const depoisDaChegada = await acoes(devolucaoId);
+
+    // A mesma reclamação de novo, ainda com destino armazém: nada muda, nem evento novo.
+    expect(await aplicarReclamacao(db, dadosDevolucaoMLTeste(noCd), AGORA)).toMatchObject({ acao: 'atualizada', status: 'AGUARDANDO_CONFERENCIA' });
+    expect(await devolucao(devolucaoId)).toMatchObject({ status: 'AGUARDANDO_CONFERENCIA', rastreio: 'MM48351759365BRSP06' });
+    expect(await acoes(devolucaoId)).toEqual(depoisDaChegada);
+
+    // O reenvio da triagem com rastreio novo, depois da chegada, também não move: só vira ml_status_apos_chegada.
+    const triagem = { ...d, destinoEnvio: 'VENDEDOR' as const, reenvioDaTriagem: true, rastreio: 'TRIAGEM123BR', statusCanal: 'shipped/shipped' };
+    expect(await aplicarReclamacao(db, dadosDevolucaoMLTeste(triagem), AGORA)).toMatchObject({ status: 'AGUARDANDO_CONFERENCIA' });
+    expect(await devolucao(devolucaoId)).toMatchObject({ status: 'AGUARDANDO_CONFERENCIA', rastreio: 'MM48351759365BRSP06' });
+    expect(await acoes(devolucaoId)).toEqual([...depoisDaChegada, 'ml_status_apos_chegada']);
   });
 
   it('aviso e varredura ao mesmo tempo: uma devolução só (trava por reclamação)', async () => {

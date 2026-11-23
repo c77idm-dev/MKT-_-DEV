@@ -35,6 +35,13 @@ describe('proximoStatusML (spec §7.3)', () => {
   it('no CD do ML, cancelamento não muda o status (a tabela da spec §5.2 não tem essa linha)', () => {
     expect(proximoStatusML('NO_CD_MARKETPLACE', aoVendedor('cancelled'))).toBeNull();
   });
+
+  it('(E25) o pacote que voltou do armazém e chegou na recepção não volta ao CD nem à etapa 1', () => {
+    for (const atual of ['AGUARDANDO_CONFERENCIA', 'EM_CONFERENCIA', 'AGUARDANDO_NF', 'CONCLUIDA'] as const) {
+      expect(proximoStatusML(atual, { statusCanal: 'delivered/delivered', destinoEnvio: 'CD_MARKETPLACE', reenvioDaTriagem: false })).toBeNull();
+      expect(proximoStatusML(atual, { statusCanal: 'shipped/shipped', destinoEnvio: 'VENDEDOR', reenvioDaTriagem: true })).toBeNull();
+    }
+  });
 });
 
 describe('statusDaDevolucaoML e encerradaNoML', () => {
