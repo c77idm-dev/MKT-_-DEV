@@ -22,7 +22,9 @@ export type EntidadeHistorico =
   /** Melhoria 3: a retirada do Full (as fotos dela gravam evidencia_* aqui). */
   | 'retirada_full'
   /** Integração Bitbrain: a conta (id = empresa do Bitbrain). */
-  | 'conta_bitbrain';
+  | 'conta_bitbrain'
+  /** Produtos do ML (extra, emenda E22): o produto cadastrado ou completado pelo anúncio (id = id do produto). */
+  | 'produto';
 
 export type NovoEvento = {
   entidade: EntidadeHistorico;

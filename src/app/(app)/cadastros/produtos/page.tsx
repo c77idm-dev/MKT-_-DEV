@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { FotoProduto } from '@/components/FotoProduto';
 import { Paginacao } from '@/components/Paginacao';
 import { ITEM_LISTA, VAZIO } from '@/components/estilos';
 import { obterDb } from '@/db';
@@ -41,10 +42,16 @@ export default async function PaginaProdutos({ searchParams }: { searchParams: P
                   </span>
                   <span className="shrink-0 text-sm font-semibold">{formatarMoeda(p.custo)}</span>
                 </span>
-                <span className="text-[15px]">{p.descricao}</span>
-                <span className="text-xs text-texto-2">
-                  {p.fornecedor ?? 'Sem fornecedor'}
-                  {p.ean ? <span className="font-mono"> · EAN {p.ean}</span> : null}
+                {/* Produtos do ML (extra): a foto do anúncio ao lado da descrição. w-0 + min-w-full: a linha não alarga o cartão. */}
+                <span className="flex w-0 min-w-full items-center gap-3">
+                  <FotoProduto url={p.fotoUrl} descricao={p.descricao} />
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="break-words text-[15px]">{p.descricao}</span>
+                    <span className="text-xs text-texto-2">
+                      {p.fornecedor ?? 'Sem fornecedor'}
+                      {p.ean ? <span className="font-mono"> · EAN {p.ean}</span> : null}
+                    </span>
+                  </span>
                 </span>
               </Link>
             </li>

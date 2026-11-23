@@ -65,6 +65,10 @@
     "PDD9939": "O produto tem defeito ou não funciona",
     "PDD9944": "O produto é diferente do anunciado"
   },
+  "anuncios": {
+    "MLF-FONE-01": { "titulo": "Fone de Ouvido Bluetooth MLF", "gtin": "7891234567895", "foto": "https://imagens.ml-falso.example/mlf-fone-01.png" },
+    "MLF-CABO-02": { "titulo": "Cabo USB-C 1 m MLF", "gtin": "7891234567888", "foto": "https://imagens.ml-falso.example/mlf-cabo-02.png" }
+  },
   "notaVenda": {
     "cnpjEmitente": "11222333000181",
     "ncm": "85183000",

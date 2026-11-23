@@ -96,10 +96,25 @@ export const esquemaPedido = z.looseObject({
 export type PedidoJson = z.output<typeof esquemaPedido>;
 
 const atributos = lista(z.looseObject({ id: z.string(), value_name: textoOuNulo }));
+/** Produtos do ML (extra): título, fotos e miniatura. Campo fora do formato vira vazio, sem derrubar a devolução. */
+const textoTolerante = textoOuNulo.catch(null);
 export const esquemaAnuncio = z.looseObject({
   id,
+  title: textoTolerante,
+  secure_thumbnail: textoTolerante,
+  thumbnail: textoTolerante,
+  pictures: lista(z.looseObject({ id: idOuNulo.catch(null), url: textoTolerante, secure_url: textoTolerante })).catch([]),
   attributes: atributos,
-  variations: lista(z.looseObject({ id: idOuNulo, attributes: atributos })),
+  // Sem include_attributes=all o ML não manda os `attributes` da variação (GTIN, SELLER_SKU): eles podem faltar.
+  // `attribute_combinations` (Cor, Tamanho...) e `picture_ids` vêm sempre.
+  variations: lista(
+    z.looseObject({
+      id: idOuNulo,
+      attributes: atributos,
+      attribute_combinations: lista(z.looseObject({ value_name: textoTolerante })).catch([]),
+      picture_ids: lista(idOuNulo).catch([]),
+    }),
+  ),
 });
 export type AnuncioJson = z.output<typeof esquemaAnuncio>;
 

@@ -88,3 +88,30 @@ describe('CartaoDevolucao: conta com nome longo (e2e do Bitbrain)', () => {
     expect(linha.className).toContain('min-w-full');
   });
 });
+
+describe('CartaoDevolucao: foto do produto (produtos do ML, extra)', () => {
+  const FOTO = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
+
+  it('mostra a foto pequena (44 px) ao lado do nome do produto, com a descrição no alt', () => {
+    render(<CartaoDevolucao devolucao={{ ...BASE, fotoProduto: FOTO }} />);
+    const foto = screen.getByRole('img', { name: 'Fone Bluetooth' });
+    expect(foto.getAttribute('src')).toBe(FOTO);
+    expect(foto.className).toContain('size-11');
+    // Foto e nome na mesma linha, que não alarga o cartão; o nome pode quebrar (min-w-0).
+    const nome = screen.getByText('Fone Bluetooth + 2 unidades');
+    expect(nome.className).toContain('min-w-0');
+    expect(nome.parentElement).toBe(foto.parentElement);
+    expect((nome.parentElement as HTMLElement).className).toContain('w-0');
+    expect((nome.parentElement as HTMLElement).className).toContain('min-w-full');
+  });
+
+  it('produto sem foto: o ícone neutro no lugar', () => {
+    render(<CartaoDevolucao devolucao={{ ...BASE, fotoProduto: null }} />);
+    expect(screen.getByRole('img', { name: 'Sem foto do produto' })).toBeTruthy();
+  });
+
+  it('sem itens: nem foto nem ícone', () => {
+    render(<CartaoDevolucao devolucao={{ ...BASE, produto: null, unidades: 0, fotoProduto: FOTO }} />);
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+});

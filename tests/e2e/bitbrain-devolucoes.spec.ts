@@ -5,6 +5,7 @@ import { contasBitbrain, devolucoes } from '../../src/db/schema';
 import { comBanco, entrarComo, semRolagemLateral } from './apoio';
 import { marcarContaFalsa, semTarefasDeReclamacao } from './apoio-bitbrain';
 import { alvosDeToque44 } from './apoio-ml';
+import { FOTO_FONE_FALSO, fotoCarregada, produtoDoSku, responderFotosML, TITULO_FONE_FALSO } from './apoio-produtos-ml';
 import { USUARIOS_E2E } from './dados';
 
 const NOME_LONGO = 'IDM COMERCIO DE PRODUTOS ELETRONICOS E ACESSORIOS PARA CELULARES E INFORMATICA DO BRASIL LTDA';
@@ -53,4 +54,32 @@ test('a varredura pela conta cria a devolução com a conta e os selos; o detalh
   await expect(secao.getByText('retido')).toBeVisible();
   await semRolagemLateral(page);
   await alvosDeToque44(secao);
+});
+
+test.describe('produtos do ML (extra, emenda E22)', () => {
+  // O service worker do PWA não pode ficar entre a página e o page.route das fotos.
+  test.use({ serviceWorkers: 'block' });
+
+  test('a devolução que veio pelo Bitbrain cadastra o produto pelo anúncio e o cartão mostra a foto', async ({ page }) => {
+    const [reclamacaoId] = RECLAMACOES_FALSAS_POR_EMPRESA['loja-falsa-1'];
+    await marcarContaFalsa('loja-falsa-1');
+    await semTarefasDeReclamacao();
+    await entrarComo(page, USUARIOS_E2E.gestor);
+    await page.goto('/configuracoes/mercado-livre');
+    await page.getByRole('button', { name: 'Sincronizar agora' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Sincronização pedida.' })).toBeVisible();
+    await expect.poll(async () => (await produtoDoSku('MLF-FONE-01'))?.fotoUrl ?? null, { timeout: 30_000, intervals: [500] }).toBe(FOTO_FONE_FALSO);
+    expect(await produtoDoSku('MLF-FONE-01')).toMatchObject({ descricao: TITULO_FONE_FALSO, ean: '7891234567895', fornecedorId: null });
+    const codigo = await comBanco(async (db) => {
+      const [d] = await db.select({ codigo: devolucoes.codigo }).from(devolucoes).where(eq(devolucoes.reclamacaoId, reclamacaoId));
+      return d.codigo;
+    });
+
+    await responderFotosML(page);
+    await page.goto(`/fluxo/busca?reclamacao=${reclamacaoId}`);
+    const cartao = page.getByRole('link', { name: new RegExp(codigo) });
+    await expect(cartao).toContainText(TITULO_FONE_FALSO);
+    await fotoCarregada(cartao.getByRole('img', { name: TITULO_FONE_FALSO }));
+    await semRolagemLateral(page);
+  });
 });

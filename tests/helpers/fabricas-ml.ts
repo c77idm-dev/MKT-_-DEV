@@ -99,6 +99,7 @@ export function dadosDevolucaoMLTeste(
     atualizadaEm: new Date(),
     devolucao,
     extras: EXTRAS_VAZIOS,
+    produtos: [],
     ...extra,
   };
 }

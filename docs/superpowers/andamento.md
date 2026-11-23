@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main`; falta ligar na VPS). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Integração pelo Bitbrain: no `main` desde 19/11.** Spec [specs/2026-11-18-integracao-bitbrain-design.md](specs/2026-11-18-integracao-bitbrain-design.md) e plano [plans/2026-11-18-integracao-bitbrain.md](plans/2026-11-18-integracao-bitbrain.md).
@@ -33,14 +33,76 @@ Atualizado em 19/11/2026 (integração pelo Bitbrain revisada e juntada no `main
         2. Pedir o adendo do `logistic` à sessão do Bitbrain, para o selo Full funcionar.
         3. Apagar as fotos que ficaram sem dono no armazenamento, das antigas DEV-000004 e 000005, e perguntar ao usuário se apaga também a DEV-000001.
         4. Mover o arquivo solto `/opt/devolucoes/backup-antes-fase1-20261112-1928.sql` para `~/backups-devolucoes`.
-      - **Em construção (aprovado em 19/11): produtos do ML com foto (extra)**, na branch `produtos-do-ml`, no mesmo worktree.
+      - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `70801df`). **Revisado em equipe, junto no `main` e publicado na VPS em 23/11 (`97f1fdb`).**
+        - **Testes:**
+          - unidade: 853;
+          - integração: 513 (7 pulados);
+          - typecheck e lint limpos;
+          - e2e novo `produtos-ml.spec.ts`: 6 de 6;
+          - e2e do modo Bitbrain: 14 de 14.
+        - **Bateria e2e completa:** 221 passaram e 1 falhou (`texto-longo` no celular: a foto alargava o detalhe). Corrigido em `f2f5595` (lista dos itens com coluna fixa e quebra de texto); o reteste deu 7 de 7.
+        - **Prints (23/11):** `scratchpad\produtos-ml\etapa-1-cartoes-com-foto.png` e `conferencia-unidade-com-foto.png`.
+        - **Revisão final (run `wf_61044862-f3c`): aprovada.** Corrigiu um IMPORTANTE em `a178e64`: o produto criado pelo ML ligava só a devolução sincronizada, e outra devolução com o mesmo SKU dava divergência falsa na bancada. Agora liga os itens de todas as devoluções ainda não lidas, dentro do savepoint. Também: o EAN livre ignora zeros à esquerda, há um teste provando que um erro no cadastro do produto não trava a sincronização, e a E22 lista o detalhe. Os menores ficaram para o adendo do catálogo: alt repetido no leitor de tela, não dá para trocar a foto pela tela, a foto de 64 px não amplia com um toque.
+        - **Aviso das revisões:** e2e e `test:int` não podem rodar ao mesmo tempo no mesmo worktree e banco, porque o `limparTabelas` apaga os usuários do e2e.
+        - **Na VPS (23/11, 13h50 UTC):**
+          - imagem `97f1fdb`, 16 migrações, web e worker healthy, `/api/saude` ok;
+          - backup antes em `~/backups-devolucoes/banco-antes-produtos-ml_20261123-1350.dump`; a imagem anterior `2aafd82` ficou para voltar atrás;
+          - **reprocessamento:** a sincronização só busca o que mudou desde a última vez, então as devoluções antigas não criavam produto. Foi zerado `contas_bitbrain.ultima_sincronizacao_em` das 5 contas e pedido "Sincronizar agora": a varredura voltou 30 dias, com 176 tarefas certas e **36 produtos criados, todos com foto**;
+          - erros: a reclamação 5614557128 (conta general) segue dando 401 em `/returns` e foi para Falhas; houve dois 429 do ML, que voltam sozinhos na nova tentativa.
+        - **O que se desviou do pedido, de propósito:**
+          - a foto aparece só no passo da unidade da conferência, não na legenda do destino;
+          - o GTIN só vale se passar no `normalizarEan`, que confere o dígito verificador;
+          - a criação do produto roda num savepoint: se falhar, a devolução sincroniza do mesmo jeito;
+          - eventos novos: `ml_produto_criado` e `ml_produto_completado`;
+          - a emenda E22 está no contrato.
+        - **Sem `include_attributes=all` por enquanto.** A rota do Bitbrain ainda recusa esse parâmetro. Ele entra quando o adendo do catálogo for publicado; até lá, o GTIN da variação nem sempre vem.
         - O que faz:
           - quando chega uma devolução do ML com um SKU não cadastrado, cria o produto com o título, o EAN (GTIN) e a foto principal do anúncio, sem fornecedor;
           - se o produto já existe, só preenche o que estiver vazio;
           - liga os itens das devoluções antigas na próxima atualização delas;
           - migração `0015` (`produtos.foto_url` e `produtos.ml_item_id`);
           - a fotinha aparece no cartão, na conferência, no detalhe e em Cadastros.
-        - Só os produtos que aparecem nas devoluções. Para trazer o catálogo inteiro, a rota do Bitbrain precisaria liberar a lista de anúncios, o que fica para depois, se o usuário pedir.
+        - Só os produtos que aparecem nas devoluções. O catálogo inteiro é a frente abaixo.
+      - **Frentes em paralelo (19/11, depois da entrega), cada uma no seu worktree:**
+
+        | Frente | Branch | Worktree | Bancos | Porta |
+        |---|---|---|---|---|
+        | Produtos do ML com foto (extra) | `produtos-do-ml` | `C:/Users/idmpc/devolucoes-wt/bitbrain` | `devolucoes_test_f7` | 3107 |
+        | Catálogo inteiro do ML (extra) | `catalogo-ml` | `C:/Users/idmpc/devolucoes-wt/catalogo` | só documentos por enquanto | — |
+        | Filtro "Afetam a reputação" (extra) | `filtro-reputacao` | `C:/Users/idmpc/devolucoes-wt/reputacao` | `devolucoes_f8` e `devolucoes_test_f8` | 3108 |
+        | Dossiê de provas (PDF) (extra) | `dossie-provas` | `C:/Users/idmpc/devolucoes-wt/dossie` | `devolucoes_f9` e `devolucoes_test_f9` | 3109 |
+
+        - **Catálogo inteiro:**
+          - primeiro saem o texto para a sessão do Bitbrain e o desenho e o plano do nosso lado, em `docs/integracao/bitbrain-rota-catalogo.md`, `specs/2026-11-19-catalogo-ml-design.md` e `plans/2026-11-19-catalogo-ml.md`;
+          - **o texto foi conferido em equipe e entregue ao usuário em 19/11** (run `wf_436d321e-291`, branch `catalogo-ml` em `fd542a4`). A versão final pede:
+            - o `logistic` no `/shipments`, para o selo Full;
+            - o `include_attributes=all` no `/items/MLB…`;
+            - o caminho 13, `/users/{seller}/items/search` com scan e `scroll_id`;
+            - o caminho 14, `/items/bulk`, que substitui o `/items?ids=` que o ML desligou;
+            - o limite de 2.000 caracteres;
+            - os testes;
+            - uma conferência ao vivo, as perguntas (a) e (b).
+          - **Correções da conferência:** a leitura esgota o scroll antes dos lotes, porque o `scroll_id` vence em 5 minutos; a trava de páginas não corta mais o catálogo; a conferência (b) testa a chamada exata, com 20 ids e os 8 campos.
+          - **Esperando:** o usuário colar o texto na sessão do Bitbrain e devolver as respostas (a) e (b), e o Nathan publicar. Depois, ajustar a spec e o plano com as respostas e construir, com `produtos-do-ml` já no `main`;
+          - **decisões do usuário (19/11):** reimportação toda segunda às 4h, só nas contas já importadas; descrição com o nome da variação ("Título — Azul / M"), regra que vale também para `produtos-do-ml`; só anúncios ativos e pausados, sem os encerrados.
+        - **Filtro de reputação:** o usuário escolheu o botão vermelho "Afetam a reputação · N" ao lado de Filtros, que só aparece quando há alguma, mais uma opção dentro de Filtros.
+          - **Construído** na branch `filtro-reputacao` (`1a8b165` até `91707ce`, no GitHub).
+          - **Testes:** unidade 837; integração 501; typecheck e lint limpos; e2e dos specs afetados nos dois projetos.
+          - Corrigiu de quebra um bug antigo: depois de tirar um filtro pela etiqueta, o próximo "Buscar" trazia o filtro de volta. A correção foi um `key` no formulário.
+          - **Filtro de "Urgentes": o usuário dispensou por agora (23/11).** As urgentes do ML já aparecem primeiro nas etapas 2 e 3 e têm o selo "Urgente · até DD/MM". Se ele pedir depois, o desenho é o mesmo da reputação: botão "Urgentes · N" e opção em Filtros.
+          - **Decisão do usuário (19/11):** contar e listar também as devoluções "No CD do marketplace" (armazém do ML). Ficam de fora só as concluídas, canceladas e extraviadas.
+          - **Revisão final** no run `wf_1c1d7469-b37` (`fase-final.js`, `pref` `rep`, `base` `c58aea0`), com essa decisão como correção obrigatória. Parou em 19/11 depois da metade do servidor (`.superpowers/sdd/fases-2-6/rep-final-servidor.md`); retomada em 23/11 no mesmo run.
+        - **Ordem de junção no `main`:** `produtos-do-ml` primeiro, depois `filtro-reputacao` e por último `dossie-provas`. As duas primeiras mexem em `busca.ts`, mas em partes diferentes; o dossiê mexe no detalhe e no "Responda no ML". **O dossiê de provas foi aprovado em 19/11.** O primeiro fluxo (`wf_56f87cc3-2eb`) parou no limite de 5 horas com 3 commits locais (`823136e`, `fb831d0`, `696ebad`, ainda fora do GitHub) e os e2e pela metade. Retomado em 23/11 no run `wf_5f9f5de2-57b`, que continua a construção, revisa por 3 olhares com verificação cética, corrige e envia. A foto do anúncio entra no dossiê depois de `produtos-do-ml`.
+        - **Dossiê de provas (PDF) (extra):** o usuário precisa apresentar provas ao ML nas contestações.
+          - **Conteúdo do PDF:** capa (DEV, venda e reclamação do ML, rastreio, motivos, chegada e conferência), fotos do pacote, cada unidade (código de barras, nº de série, Fotos 3 e 4, avarias, destino), um quadro do vídeo, o histórico e um rodapé com o SHA-256 de cada arquivo.
+          - **Onde baixar:** botão "Baixar dossiê de provas (PDF)" no detalhe, depois da conferência, e no "Responda no ML".
+          - **Regras:** o vídeo vai à parte, porque o ML não aceita vídeo no PDF. Nenhum dado do comprador entra no documento. O PDF fica abaixo de 8 MB, reduzindo as fotos.
+          - **Ao terminar:** mostrar ao usuário o PDF de exemplo (`scratchpad\dossie\exemplo-dossie.pdf`).
+      - **Se esta sessão cair:**
+        - os fluxos e agentes em segundo plano param, mas as branches estão no GitHub;
+        - confira `git log` de cada branch da tabela acima e os arquivos `.superpowers/sdd/fases-2-6/progress-rep.md` e `progress-prod.md`;
+        - retome com `resumeFromRunId` usando os ids dos runs acima;
+        - nunca rode duas baterias e2e na mesma porta e no mesmo banco ao mesmo tempo.
 - **Mudança de rumo (16/11): integração pelo Bitbrain, não direto com o ML.** O usuário decidiu que, por enquanto, o sistema puxa devoluções, notas e o que precisar do **Bitbrain** (hub que já está ligado ao ML), em vez de ligar o app do ML. A configuração do app do ML foi interrompida antes de gravar as chaves na VPS (`ML_CLIENT_SECRET` não foi gravada). Plano: um **conector Bitbrain** no mesmo encaixe `MarketplaceConnector` (`src/conectores/marketplace/tipos.ts`), sem mexer nas telas.
   - **Conector "Bitbrain" do claude.ai: autorizado e explorado em 18/11.**
     - **O que é:** o painel das lojas no ML, só de leitura.
