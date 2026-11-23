@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mensagemChegada, notaAchada } from './mensagens';
+import { mensagemChegada, mensagemComNota, notaAchada } from './mensagens';
 
 const QUANDO = '23/11/2026 17:30';
 
@@ -32,5 +32,23 @@ describe('notaAchada (extra, E25)', () => {
     expect(notaAchada('PEDIDO_ML', 1)).toBe('Achada pelo número do pedido do ML (extra).');
     expect(notaAchada('ENVIO_ML', 1)).toBe('Achada pelo número do envio do ML (extra).');
     expect(notaAchada('PEDIDO_ML', 2)).toBe('Achadas pelo número do pedido do ML (extra).');
+  });
+});
+
+describe('mensagemComNota (anúncio do leitor de tela, extra E25)', () => {
+  it('sem nota, só a mensagem', () => {
+    expect(mensagemComNota('DEV-000001 · 23/11/2026 17:30', undefined)).toBe('DEV-000001 · 23/11/2026 17:30');
+  });
+
+  it('a mensagem que termina na hora ganha um ponto antes da nota (pausa na leitura)', () => {
+    expect(mensagemComNota('DEV-000071 · 23/11/2026 17:30', 'Achada pelo número do pedido do ML (extra).')).toBe(
+      'DEV-000071 · 23/11/2026 17:30. Achada pelo número do pedido do ML (extra).',
+    );
+  });
+
+  it('a mensagem que já termina em ponto leva só um espaço', () => {
+    expect(mensagemComNota('DEV-000071 já tinha chegado. Status: Aguardando conferência.', 'Achada pelo número do envio do ML (extra).')).toBe(
+      'DEV-000071 já tinha chegado. Status: Aguardando conferência. Achada pelo número do envio do ML (extra).',
+    );
   });
 });

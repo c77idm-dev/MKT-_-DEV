@@ -21,3 +21,12 @@ export function notaAchada(achadaPor: AchadaPor | undefined, quantas: number): s
   const achada = quantas > 1 ? 'Achadas' : 'Achada';
   return `${achada} pelo número do ${achadaPor === 'PEDIDO_ML' ? 'pedido' : 'envio'} do ML (extra).`;
 }
+
+/**
+ * (extra, E25) Mensagem e nota juntas para o anúncio do leitor de tela. A mensagem de chegada termina na hora, sem
+ * pontuação; o ponto no meio faz o leitor dar a pausa antes da nota.
+ */
+export function mensagemComNota(mensagem: string, nota: string | undefined): string {
+  if (!nota) return mensagem;
+  return `${mensagem}${/[.!?]$/.test(mensagem) ? ' ' : '. '}${nota}`;
+}

@@ -9,6 +9,7 @@ import { useLeitorCamera } from '@/components/leitor/useLeitorCamera';
 import { criarRetiradaAcao, type EstadoNovaRetirada } from '../retiradas-full/acoes';
 import { registrarChegadaAcao, type EstadoRecebimento } from './acoes';
 import { podeAceitarLeitura } from './guarda';
+import { mensagemComNota } from './mensagens';
 
 const INICIAL: EstadoRecebimento = { tipo: 'inicial' };
 const SEM_ERRO_RETIRADA: EstadoNovaRetirada = { erro: null };
@@ -108,7 +109,7 @@ function textoAnunciado(estado: EstadoRecebimento): string {
   switch (estado.tipo) {
     case 'sucesso':
     case 'aviso':
-      return `${estado.titulo}. ${estado.mensagem}${estado.nota ? ` ${estado.nota}` : ''}`;
+      return `${estado.titulo}. ${mensagemComNota(estado.mensagem, estado.nota)}`;
     case 'nao_encontrada':
       return `Rastreio não encontrado. Nenhuma devolução com o rastreio ${estado.rastreio}.`;
     case 'erro':
