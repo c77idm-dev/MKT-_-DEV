@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { addAbortSignal, type Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { lerEnv } from '@/lib/env';
 import { armazenamentoDoProvedor } from '@/modules/midia/armazenamento';
@@ -76,19 +76,26 @@ function abrir(e: EvidenciaDossie, prazo: AbortSignal): Promise<Readable> {
  * EIO no disco) e o sinal destrói o stream que trava. O sharp juntaria tudo na memória de qualquer jeito.
  */
 async function lerAteOLimite(fluxo: Readable, limite: number, prazo: AbortSignal): Promise<Buffer> {
-  addAbortSignal(prazo, fluxo);
-  const partes: Buffer[] = [];
-  let total = 0;
-  for await (const parte of fluxo) {
-    const b = Buffer.isBuffer(parte) ? parte : Buffer.from(parte);
-    total += b.length;
-    if (total > limite) {
-      fluxo.destroy();
-      throw new Error(`Arquivo acima de ${limite} bytes.`);
+  // O listener sai quando a leitura termina: o prazo de cada foto não segura o stream depois.
+  const desistir = () => fluxo.destroy(prazo.reason instanceof Error ? prazo.reason : new Error('Prazo da leitura esgotado.'));
+  if (prazo.aborted) desistir();
+  else prazo.addEventListener('abort', desistir, { once: true });
+  try {
+    const partes: Buffer[] = [];
+    let total = 0;
+    for await (const parte of fluxo) {
+      const b = Buffer.isBuffer(parte) ? parte : Buffer.from(parte);
+      total += b.length;
+      if (total > limite) {
+        fluxo.destroy();
+        throw new Error(`Arquivo acima de ${limite} bytes.`);
+      }
+      partes.push(b);
     }
-    partes.push(b);
+    return Buffer.concat(partes, total);
+  } finally {
+    prazo.removeEventListener('abort', desistir);
   }
-  return Buffer.concat(partes, total);
 }
 
 type Video = { quadro: Buffer | null; duracaoSegundos: number | null; sha256Calculado: string | null; problema: string | null };
