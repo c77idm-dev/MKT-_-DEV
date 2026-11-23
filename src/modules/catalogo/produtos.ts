@@ -30,6 +30,8 @@ export type ProdutoLista = {
   descricao: string;
   custo: string | null;
   fornecedor: string | null;
+  /** Produtos do ML (extra): a foto do anúncio. */
+  fotoUrl: string | null;
 };
 
 const CUSTO_MAXIMO = 9999999999.99; // numeric(12,2)
@@ -182,6 +184,7 @@ export async function listarProdutos(
       descricao: produtos.descricao,
       custo: produtos.custo,
       fornecedor: fornecedores.razaoSocial,
+      fotoUrl: produtos.fotoUrl,
     })
     .from(produtos)
     .leftJoin(fornecedores, eq(fornecedores.id, produtos.fornecedorId))
@@ -192,7 +195,10 @@ export async function listarProdutos(
   return { linhas, total };
 }
 
-export async function obterProduto(db: DbOuTx, id: string): Promise<(DadosProduto & { id: string }) | null> {
+/** Produtos do ML (extra): a foto e o id do anúncio vêm junto, só para mostrar (o formulário não os edita). */
+export type ProdutoDetalhe = DadosProduto & { id: string; fotoUrl: string | null; mlItemId: string | null };
+
+export async function obterProduto(db: DbOuTx, id: string): Promise<ProdutoDetalhe | null> {
   if (!ehUuid(id)) return null;
   const [p] = await db
     .select({
@@ -204,6 +210,8 @@ export async function obterProduto(db: DbOuTx, id: string): Promise<(DadosProdut
       ncm: produtos.ncm,
       custo: produtos.custo,
       unidade: produtos.unidade,
+      fotoUrl: produtos.fotoUrl,
+      mlItemId: produtos.mlItemId,
     })
     .from(produtos)
     .leftJoin(fornecedores, eq(fornecedores.id, produtos.fornecedorId))

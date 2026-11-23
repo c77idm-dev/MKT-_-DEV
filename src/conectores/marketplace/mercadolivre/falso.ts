@@ -39,6 +39,11 @@ type ArquivoCenarios = {
   cenarios: Record<string, CenarioFalso>;
   /** Textos da rota de motivos da reclamação (GET /post-purchase/v1/claims/reasons/{id}). */
   motivosReclamacao: Record<string, string>;
+  /**
+   * Produtos do ML (extra): o anúncio de cada SKU dos cenários (título, GTIN e foto). A foto é de um domínio reservado
+   * (.example), que nunca carrega: o e2e responde a imagem com page.route ou confere o ícone de "sem foto".
+   */
+  anuncios: Record<string, { titulo: string; gtin: string; foto: string }>;
   notaVenda: { cnpjEmitente: string; ncm: string; valorUnitario: string; ean: string; descricao: string };
 };
 
@@ -206,6 +211,31 @@ function pedidoFalso(ids: IdsFalsos, i: number) {
   };
 }
 
+/**
+ * GET /items/{id} do item i do cenário (anúncio MLB9<i><c><seq>), como o ML responde sem include_attributes=all: título,
+ * GTIN do anúncio, fotos e miniatura, sem variações. SKU sem anúncio nos cenários: o exemplo da documentação, sem fotos.
+ */
+function anuncioFalso(id: string, i: number, c: CenarioFalso | null) {
+  const base = doc('anuncio.json');
+  const sku = c?.itens?.[i]?.sku;
+  const a = sku ? arquivo().anuncios[sku] : undefined;
+  if (!a) return { ...base, id, pictures: [], secure_thumbnail: null, thumbnail: null, variations: [] };
+  const idFoto = `${id}-F`;
+  return {
+    ...base,
+    id,
+    title: a.titulo,
+    attributes: [
+      { id: 'BRAND', name: 'Marca', value_name: 'Marca Falsa' },
+      { id: 'GTIN', name: 'Código universal de produto', value_name: a.gtin },
+    ],
+    pictures: [{ id: idFoto, url: a.foto.replace(/^https:/, 'http:'), secure_url: a.foto, size: '500x500', max_size: '1200x1200' }],
+    thumbnail: a.foto.replace(/^https:/, 'http:'),
+    secure_thumbnail: a.foto,
+    variations: [],
+  };
+}
+
 function envioVendaFalso(ids: IdsFalsos, i: number, c: CenarioFalso, agora: Date) {
   const tipo = c.full ? 'fulfillment' : 'drop_off';
   return {
@@ -312,8 +342,8 @@ const ROTAS: Rota[] = [
   },
   {
     metodo: 'GET',
-    padrao: /^\/items\/(MLB9\d[1-9]\d{8})$/,
-    responder: (m) => respostaJson({ ...doc('anuncio.json'), id: m[1], variations: [] }),
+    padrao: /^\/items\/(MLB9(\d)([1-9])\d{8})$/,
+    responder: (m) => respostaJson(anuncioFalso(m[1], Number(m[2]), cenario(Number(m[3])))),
   },
   {
     metodo: 'GET',

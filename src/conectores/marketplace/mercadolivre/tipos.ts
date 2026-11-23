@@ -12,6 +12,23 @@ export type ExtrasML = {
   dinheiro: SituacaoDinheiro | null;
 };
 
+/**
+ * Produtos do ML (extra): o que o anúncio de um item da devolução diz do produto. A sincronização cadastra o SKU que falta
+ * e completa só os campos vazios do que já existe (modules/mercado-livre/produtos-anuncio.ts).
+ */
+export type ProdutoDoAnuncioML = {
+  /** O mesmo SKU do item da devolução (ainda sem a normalização do cadastro). */
+  sku: string;
+  /** Id do anúncio (MLB...). */
+  mlItemId: string;
+  /** Título do anúncio. */
+  descricao: string | null;
+  /** GTIN válido (variação primeiro, depois o anúncio). */
+  ean: string | null;
+  /** Foto principal, só https. */
+  fotoUrl: string | null;
+};
+
 /** O que o sistema sabe de uma reclamação do ML. `devolucao` é null quando a reclamação não tem devolução. */
 export type DadosDevolucaoML = {
   reclamacaoId: string;
@@ -23,6 +40,8 @@ export type DadosDevolucaoML = {
   atualizadaEm: Date | null;
   devolucao: DevolucaoExterna | null;
   extras: ExtrasML;
+  /** Um por item da devolução cujo anúncio foi lido (extra); vazio sem devolução. */
+  produtos: ProdutoDoAnuncioML[];
 };
 
 export type ReclamacaoAtualizada = { reclamacaoId: string; atualizadaEm: Date | null };

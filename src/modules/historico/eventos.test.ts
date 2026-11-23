@@ -36,6 +36,8 @@ const RESERVADAS: Record<string, string[]> = {
     'ml_resultado_ok_enviado', 'ml_resultado_ok_recusado', 'ml_resultado_sem_vinculo',
     'ml_conta_conectada', 'ml_conta_reconectar', 'ml_conta_desconectada',
     'ml_conta_bitbrain_marcada', 'ml_conta_bitbrain_desmarcada', 'ml_resposta_manual_pendente', 'ml_ok_respondido_a_mao', 'ml_contestacao_respondida_a_mao',
+    // Produtos do ML (emenda E22, extra)
+    'ml_produto_criado', 'ml_produto_completado',
     'contestacao_criada', 'contestacao_revisada', 'contestacao_enviada', 'contestacao_falhou',
   ],
   fiscal: [
@@ -52,7 +54,7 @@ const RESERVADAS: Record<string, string[]> = {
     'retirada_full_criada', 'retirada_full_item_incluido', 'retirada_full_quantidade_alterada', 'retirada_full_item_removido',
     'retirada_full_concluida',
   ],
-  // Dossiê de provas (PDF) (extra, 19/11; emenda E22): prefixo dossie_.
+  // Dossiê de provas (PDF) (extra, 19/11; emenda E23): prefixo dossie_.
   dossie: ['dossie_gerado'],
 };
 

@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { itensDevolucao } from '@/db/schema';
+import { itensDevolucao, produtos } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarFornecedorTeste, criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { obterDetalhe } from './detalhe';
@@ -45,6 +45,15 @@ describe('obterDetalhe', () => {
       expect.objectContaining({ unidade: 2, sku: 'SEM-CADASTRO', descricao: null, ean: null, fornecedor: null }),
     ]);
     expect(detalhe?.eventos.map((e) => e.acao)).toEqual(['criada', 'recebida']);
+  });
+
+  it('(extra) produtos do ML: cada item traz a foto do anúncio do produto; fora do cadastro, null', async () => {
+    const operador = await criarUsuarioTeste(db, 'OPERADOR');
+    const foto = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
+    await criarProdutoTeste(db, { sku: 'FONE-01' });
+    await db.update(produtos).set({ fotoUrl: foto }).where(eq(produtos.sku, 'FONE-01'));
+    const d = await criarDevolucaoTeste(db, operador, { itens: [{ sku: 'FONE-01', quantidade: 1 }, { sku: 'SEM-CADASTRO', quantidade: 1 }] });
+    expect((await obterDetalhe(db, d.codigo))?.itens.map((i) => i.fotoUrl)).toEqual([foto, null]);
   });
 
   it('pacote não identificado: sem canal, sem itens, com a marca e quem criou', async () => {

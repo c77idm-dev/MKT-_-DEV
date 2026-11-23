@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { contasBitbrain, devolucoes, itensDevolucao, reclamacoesMl } from '@/db/schema';
+import { contasBitbrain, devolucoes, itensDevolucao, produtos, reclamacoesMl } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarFornecedorTeste, criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { buscarDevolucoes, type OpcoesBusca } from './busca';
@@ -136,6 +136,16 @@ describe('buscarDevolucoes (Busca Avançada, spec §6.7)', () => {
       unidades: 1,
       selos: [],
     });
+  });
+
+  it('(extra) produtos do ML: o resumo traz a foto do produto da unidade 1; sem foto ou fora do cadastro, null', async () => {
+    const foto = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
+    await db.update(produtos).set({ fotoUrl: foto }).where(eq(produtos.sku, 'FONE-01'));
+    const { devolucoes: lista } = await buscarDevolucoes(db, {});
+    const porCodigo = new Map(lista.map((d) => [d.codigo, d.fotoProduto]));
+    expect(porCodigo.get(a.codigo)).toBe(foto);
+    expect(porCodigo.get(b.codigo)).toBeNull();
+    expect(porCodigo.get(c.codigo)).toBeNull();
   });
 
   it('% e _ digitados valem como texto, não como curinga do LIKE', async () => {

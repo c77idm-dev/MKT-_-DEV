@@ -75,7 +75,21 @@ describe('ML falso: o ConectorML real sobre as respostas da documentação', () 
     expect(dados.devolucao?.pedidos).toEqual(ids.pedidos);
     expect(dados.devolucao?.itens).toEqual([
       { pedido: ids.pedidos[0], sku: 'MLF-FONE-01', ean: '7891234567895', quantidade: 2 },
-      { pedido: ids.pedidos[1], sku: 'MLF-CABO-02', ean: '7891234567895', quantidade: 1 },
+      { pedido: ids.pedidos[1], sku: 'MLF-CABO-02', ean: '7891234567888', quantidade: 1 },
+    ]);
+  });
+
+  it('produtos do ML (extra): cada anúncio do cenário traz título, GTIN e foto https própria (sem variação)', async () => {
+    const { id, ids } = novo(7);
+    expect((await conector().obterReclamacao(id)).produtos).toEqual([
+      {
+        sku: 'MLF-FONE-01',
+        mlItemId: ids.itens[0],
+        descricao: 'Fone de Ouvido Bluetooth MLF',
+        ean: '7891234567895',
+        fotoUrl: 'https://imagens.ml-falso.example/mlf-fone-01.png',
+      },
+      { sku: 'MLF-CABO-02', mlItemId: ids.itens[1], descricao: 'Cabo USB-C 1 m MLF', ean: '7891234567888', fotoUrl: 'https://imagens.ml-falso.example/mlf-cabo-02.png' },
     ]);
   });
 

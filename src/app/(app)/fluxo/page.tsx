@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AlertasPainel, ALERTAS_NO_PAINEL } from '@/components/acabamento/AlertasPainel';
+import { AtalhoReputacao } from '@/components/AtalhoReputacao';
 import { BuscaAvancada } from '@/components/BuscaAvancada';
 import { EtapasCelular } from '@/components/EtapasCelular';
 import { MenuAcoesFluxo, type AcaoFluxo } from '@/components/MenuAcoesFluxo';
@@ -14,6 +15,7 @@ import { pode, type Acao } from '@/modules/auth/permissoes';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { montarQuadro } from '@/modules/devolucoes/quadro';
+import { contarAfetamReputacao } from '@/modules/devolucoes/reputacao';
 
 export const metadata: Metadata = { title: 'Fluxo · Gestão de Devoluções' };
 
@@ -46,7 +48,11 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
   const usuario = await exigirPermissao('ver_listas');
   const textoEtapa = primeiroValor((await searchParams).etapa);
   const pedida = /^\d+$/.test(textoEtapa) ? Number(textoEtapa) : 0;
-  const [quadro, alertas] = await Promise.all([montarQuadro(obterDb()), carregarAlertas(obterDb(), usuario.perfil)]);
+  const [quadro, alertas, afetamReputacao] = await Promise.all([
+    montarQuadro(obterDb()),
+    carregarAlertas(obterDb(), usuario.perfil),
+    contarAfetamReputacao(obterDb()),
+  ]);
   // Coluna 4: os links Estoque Bom e Estoque Problema substituem o "Ver lista" (spec §6.4, D16).
   // Coluna 5: os lotes por fornecedor (decisão 15), contados em "lotes".
   const colunas = quadro.map((c) => {
@@ -83,7 +89,8 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
         <MenuAcoesFluxo acoes={acoes} />
       </div>
       <AlertasPainel alertas={alertas} limite={ALERTAS_NO_PAINEL} />
-      <BuscaAvancada acao="/fluxo/busca" filtros={{}} />
+      {/* (extra) "Afetam a reputação · N" ao lado de "Filtros" (aprovado pelo usuário); some quando N = 0. */}
+      <BuscaAvancada acao="/fluxo/busca" filtros={{}} atalho={<AtalhoReputacao total={afetamReputacao} />} />
       <div className="md:hidden">
         {/* Mobile-first: Estoque Bom / Estoque Problema no TOPO da etapa 4, acima dos cartões, pelo ponto de extensão
             `conteudoEtapa` da Parte A (o EtapasCelular é congelado; contrato §10, E5). */}

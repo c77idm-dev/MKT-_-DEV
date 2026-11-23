@@ -24,6 +24,7 @@ const item: ItemConferencia = {
   status: 'PENDENTE',
   descricao: 'Produto',
   eanEsperado: '789',
+  fotoUrl: null,
   serial: null,
   loteFabricacao: null,
   validade: null,
@@ -172,5 +173,33 @@ describe('AssistenteConferencia: fotos da avaria (melhoria 2)', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirmar remoção' })));
     expect(screen.getByRole('alert').textContent).toContain('Sem conexão: a remoção precisa de internet.');
     expect(screen.getByRole('group', { name: 'Foto da avaria 1' })).toBeTruthy();
+  });
+});
+
+describe('AssistenteConferencia: foto do produto na unidade (produtos do ML, extra)', () => {
+  const FOTO = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
+  const naUnidade = (fotoUrl: string | null) =>
+    render(
+      <AssistenteConferencia
+        devolucao={{ id: 'd1', codigo: 'DEV-1', rastreio: null }}
+        itens={[{ ...item, fotoUrl }]}
+        evidencias={[]}
+        videoObrigatorio="SO_PROBLEMA"
+        passoInicial={1}
+        acoes={acoesDe()}
+      />,
+    );
+
+  it('mostra a foto do anúncio (64 px) ao lado de "Unidade 1" e do SKU, sem mudar o título da unidade', () => {
+    naUnidade(FOTO);
+    expect(screen.getByRole('heading', { name: 'Unidade 1' })).toBeTruthy();
+    const foto = screen.getByRole('img', { name: 'Produto' });
+    expect(foto.getAttribute('src')).toBe(FOTO);
+    expect(foto.className).toContain('size-16');
+  });
+
+  it('sem foto: o ícone neutro', () => {
+    naUnidade(null);
+    expect(screen.getByRole('img', { name: 'Sem foto do produto' }).className).toContain('size-16');
   });
 });

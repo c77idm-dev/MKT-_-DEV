@@ -18,6 +18,9 @@ export const ROTULOS_MERCADO_LIVRE: Record<string, string> = {
   ml_resposta_manual_pendente: 'Falta responder "OK" no Mercado Livre (à mão)',
   ml_ok_respondido_a_mao: '"OK" respondido à mão no Mercado Livre',
   ml_contestacao_respondida_a_mao: 'Contestação respondida à mão no Mercado Livre',
+  // Produtos do ML (emenda E22, extra)
+  ml_produto_criado: 'Produto cadastrado pelo anúncio do Mercado Livre',
+  ml_produto_completado: 'Foto, EAN ou anúncio do produto preenchidos pelo Mercado Livre',
   contestacao_criada: 'Contestação criada',
   contestacao_revisada: 'Contestação revisada pelo Gestor',
   contestacao_enviada: 'Contestação enviada ao Mercado Livre',
