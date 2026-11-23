@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { configuracoes, itensDevolucao } from '@/db/schema';
+import { configuracoes, itensDevolucao, produtos } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
@@ -41,6 +41,14 @@ describe('obterConferencia', () => {
       [2, 'FONE-01', 'Fone Bluetooth', '7891000000014', '7890000000001', true],
     ]);
     expect(c!.evidencias).toEqual([expect.objectContaining({ tipo: 'FOTO_1_ETIQUETA', itemId: null, situacao: 'RECEBIDA', caminho: null })]);
+  });
+
+  it('(extra) produtos do ML: cada unidade traz a foto do anúncio do produto esperado; fora do cadastro, null', async () => {
+    const foto = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
+    await criarProdutoTeste(db, { sku: 'FONE-01' });
+    await db.update(produtos).set({ fotoUrl: foto }).where(eq(produtos.sku, 'FONE-01'));
+    const d = await criarDevolucaoEmConferencia(db, operador, { itens: [{ sku: 'FONE-01', quantidade: 1 }, { sku: 'SEM-CADASTRO', quantidade: 1 }] });
+    expect((await obterConferencia(db, { id: d.id }))!.itens.map((i) => i.fotoUrl)).toEqual([foto, null]);
   });
 
   it('acha pelo id; devolve null quando não existe', async () => {

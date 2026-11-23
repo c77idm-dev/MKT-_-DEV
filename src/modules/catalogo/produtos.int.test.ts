@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { produtos } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { buscarDevolucoes } from '@/modules/devolucoes/busca';
 import { obterDetalhe } from '@/modules/devolucoes/detalhe';
@@ -100,6 +102,17 @@ describe('produtos no banco', () => {
     expect((await listarProdutos(db)).linhas.map((p) => p.sku)).toEqual(['CABO-02', 'FONE-01']);
     expect(await idsDosProdutos(db, ['FONE-01', 'NAO-EXISTE'])).toEqual(new Map([['FONE-01', id]]));
     expect(await idsDosProdutos(db, [])).toEqual(new Map());
+  });
+
+  it('(extra) produtos do ML: a lista e o detalhe trazem a foto e o anúncio; salvar e importar não apagam os dois', async () => {
+    const foto = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
+    const id = await salvarProduto(db, FONE);
+    await db.update(produtos).set({ fotoUrl: foto, mlItemId: 'MLB3456789012' }).where(eq(produtos.id, id));
+    expect((await listarProdutos(db)).linhas[0]).toMatchObject({ sku: 'FONE-01', fotoUrl: foto });
+    expect(await obterProduto(db, id)).toMatchObject({ fotoUrl: foto, mlItemId: 'MLB3456789012' });
+    await salvarProduto(db, { ...FONE, descricao: 'Fone editado' }, id);
+    await upsertProdutos(db, [{ ...FONE, descricao: 'Fone importado' }]);
+    expect(await obterProduto(db, id)).toMatchObject({ descricao: 'Fone importado', fotoUrl: foto, mlItemId: 'MLB3456789012' });
   });
 });
 

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { FotoProduto } from '@/components/FotoProduto';
 import { MensagemSucesso } from '@/components/MensagemSucesso';
 import { Selo } from '@/components/Selo';
 import { CARTAO, LINK_VOLTAR, ROTULO, VAZIO } from '@/components/estilos';
@@ -125,19 +126,23 @@ export default async function PaginaDevolucao({ params, searchParams }: Props) {
         {d.itens.length === 0 ? (
           <p className={VAZIO}>Nenhum item cadastrado.</p>
         ) : (
-          <ol className="grid gap-2 md:grid-cols-2">
+          <ol className="grid grid-cols-1 gap-2 md:grid-cols-2">
             {d.itens.map((item) => (
-              <li key={item.id} className={`${CARTAO} flex flex-col gap-1 p-3`}>
-                <span className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-texto-2">Unidade {item.unidade}</span>
-                  <span className="text-xs font-semibold text-texto-2">{ROTULO_STATUS_ITEM[item.status]}</span>
-                </span>
-                <span className="break-all font-mono text-[13px] font-semibold">{item.sku}</span>
-                <span className="text-sm">{item.descricao ?? 'SKU fora do cadastro de produtos'}</span>
-                <span className="text-xs text-texto-2">
-                  {item.fornecedor ?? 'Sem fornecedor'}
-                  {item.ean ? <span className="font-mono"> · EAN {item.ean}</span> : null}
-                  <span className="font-mono"> · S/N {item.serial ?? '—'}</span>
+              <li key={item.id} className={`${CARTAO} flex gap-3 p-3`}>
+                {/* Produtos do ML (extra): a foto do anúncio do produto. */}
+                <FotoProduto url={item.fotoUrl} descricao={item.descricao ?? item.sku} />
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-texto-2">Unidade {item.unidade}</span>
+                    <span className="text-xs font-semibold text-texto-2">{ROTULO_STATUS_ITEM[item.status]}</span>
+                  </span>
+                  <span className="break-all font-mono text-[13px] font-semibold">{item.sku}</span>
+                  <span className="text-sm [overflow-wrap:anywhere]">{item.descricao ?? 'SKU fora do cadastro de produtos'}</span>
+                  <span className="text-xs text-texto-2 [overflow-wrap:anywhere]">
+                    {item.fornecedor ?? 'Sem fornecedor'}
+                    {item.ean ? <span className="font-mono"> · EAN {item.ean}</span> : null}
+                    <span className="font-mono"> · S/N {item.serial ?? '—'}</span>
+                  </span>
                 </span>
               </li>
             ))}

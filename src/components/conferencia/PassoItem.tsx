@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { FotoProduto } from '@/components/FotoProduto';
 import { ALERTA_ATENCAO, ALERTA_OK, BOTAO_SECUNDARIO, CAMPO, CARTAO, ROTULO } from '@/components/estilos';
 import type { ResultadoEan } from '@/modules/conferencia/itens';
 import type { ItemConferencia } from '@/modules/conferencia/leitura';
@@ -46,15 +47,19 @@ export function PassoItem({ item, valor, ean, slot, aoMudar, aoConferirEan, aoEs
   const confere = ean?.situacao === 'confere' || ean?.situacao === 'confirmado';
   return (
     <section aria-labelledby={`${base}-titulo`} className="flex flex-col gap-3">
-      <div className={`${CARTAO} flex flex-col gap-1`}>
-        <h2 id={`${base}-titulo`} className="text-lg font-bold">
-          Unidade {item.unidade}
-        </h2>
-        <p className="break-all font-mono text-[13px] font-semibold">{item.sku}</p>
-        <p className="text-[15px]">{item.descricao ?? 'SKU fora do cadastro de produtos'}</p>
-        <p className="text-sm text-texto-2">
-          EAN esperado: <span className="font-mono">{item.eanEsperado ?? 'sem EAN no cadastro'}</span>
-        </p>
+      <div className={`${CARTAO} flex items-start gap-3`}>
+        {/* Produtos do ML (extra): a foto do anúncio, para comparar com o produto que está na mão. */}
+        <FotoProduto url={item.fotoUrl} descricao={item.descricao ?? item.sku} tamanho="m" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <h2 id={`${base}-titulo`} className="text-lg font-bold">
+            Unidade {item.unidade}
+          </h2>
+          <p className="break-all font-mono text-[13px] font-semibold">{item.sku}</p>
+          <p className="break-words text-[15px]">{item.descricao ?? 'SKU fora do cadastro de produtos'}</p>
+          <p className="text-sm text-texto-2">
+            EAN esperado: <span className="font-mono">{item.eanEsperado ?? 'sem EAN no cadastro'}</span>
+          </p>
+        </div>
       </div>
 
       {valor.decisao === 'AUSENTE' ? (

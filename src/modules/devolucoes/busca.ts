@@ -22,6 +22,8 @@ export type ResumoDevolucao = {
   pedidos: string[];
   /** Descrição do produto da unidade 1 (ou o SKU, se estiver fora do cadastro). */
   produto: string | null;
+  /** Foto do anúncio do ML do produto da unidade 1 (produtos do ML, extra); null sem foto. */
+  fotoProduto?: string | null;
   unidades: number;
   naoIdentificada: boolean;
   /** "Motivo do cliente" (do ML, manual ou da planilha); o cartão mostra em uma linha (melhoria 1). */
@@ -148,6 +150,14 @@ export async function buscarDevolucoes(
       // Colunas qualificadas à mão: o drizzle omite o nome da tabela nas subconsultas correlacionadas e o "id" ficaria ambíguo.
       produto: sql<string | null>`(
         select coalesce("produtos"."descricao", "itens_devolucao"."sku")
+        from "itens_devolucao"
+        left join "produtos" on "produtos"."id" = "itens_devolucao"."produto_esperado_id"
+        where "itens_devolucao"."devolucao_id" = "devolucoes"."id"
+        order by "itens_devolucao"."unidade"
+        limit 1
+      )`,
+      fotoProduto: sql<string | null>`(
+        select "produtos"."foto_url"
         from "itens_devolucao"
         left join "produtos" on "produtos"."id" = "itens_devolucao"."produto_esperado_id"
         where "itens_devolucao"."devolucao_id" = "devolucoes"."id"

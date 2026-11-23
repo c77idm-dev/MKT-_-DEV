@@ -15,6 +15,8 @@ export type ItemConferencia = {
   /** Do produto esperado (vazio quando o SKU está fora do cadastro). */
   descricao: string | null;
   eanEsperado: string | null;
+  /** Produtos do ML (extra): a foto do anúncio do produto esperado, para comparar com o que está na mão. */
+  fotoUrl: string | null;
   serial: string | null;
   loteFabricacao: string | null;
   validade: string | null;
@@ -88,6 +90,7 @@ export async function obterConferencia(db: DbOuTx, chave: { id: string } | { cod
       status: itensDevolucao.status,
       descricao: esperado.descricao,
       eanEsperado: esperado.ean,
+      fotoUrl: esperado.fotoUrl,
       serial: itensDevolucao.serial,
       loteFabricacao: itensDevolucao.loteFabricacao,
       validade: itensDevolucao.validade,
