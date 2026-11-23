@@ -622,3 +622,16 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
     - Revisão de 23/11: pedido de outro site (`Sec-Fetch-Site: cross-site`), 403; fila cheia (um dossiê rodando e outro esperando) ou prazo de 100 s estourado, 503 com `Retry-After: 30`; `HEAD`, 405. O 409 e o 503 voltam como uma página curta em pt-BR com o link de volta à devolução. O `nginx` ganha a `location` da rota com `proxy_read_timeout 120s`.
   - **Telas:** o botão do detalhe entra na `SecaoConferencia` (o `[codigo]/page.tsx` continua congelado) e no bloco "Responda no ML".
   - **Motivo:** os arquivos de rótulos são congelados.
+- **E24. Cancelamento explícito (extra, opção "b" aprovada pelo usuário em 23/11):** branch `cancelar-explicito`.
+  - **O que houve:** em 23/11 um Gestor cancelou a DEV-000437 sem querer, procurando no detalhe onde registrar a chegada. O quadro "Encerrar sem chegada" vinha com "Cancelada" marcada e um botão verde "Registrar".
+  - **A regra da spec §5.2 não muda:** só o Gestor, só a partir de Pendente de chegada, com motivo obrigatório; o servidor (`encerrarAcao`, `encerrarPendente`) é o mesmo.
+  - **Tela (`[codigo]/AcoesGestor.tsx`, `FormularioEncerrar`):**
+    - o bloco fica dentro de um `<details>` fechado, "Mais ações do Gestor" (resumo de 44 px, com seta);
+    - título "Cancelar ou marcar como extraviada" e o aviso "Isto não registra a chegada. Para registrar a chegada do pacote, use Receber pacote no Fluxo. (extra)", com o link "Ir para Receber pacote" (`/fluxo/recebimento`);
+    - nenhuma opção vem marcada; sem escolha, o botão diz "Escolha uma opção" e, se tocado, aparece "Escolha se a devolução foi cancelada ou extraviada." e o foco vai à 1ª opção;
+    - o botão é vermelho (`BOTAO_PERIGO`, que já existia; `estilos.ts` não muda) e diz o que faz: "Cancelar devolução" ou "Marcar como extraviada";
+    - o 1º toque abre, na própria tela, "Tem certeza? A DEV-xxxxxx sai da espera de chegada e isso não se desfaz pela tela.", com "Sim, cancelar devolução" ou "Sim, marcar como extraviada" (vermelho) e "Voltar". O foco vai à pergunta; "Voltar" devolve o foco ao botão; trocar a escolha volta ao 1º passo. Só o "Sim" envia.
+    - O código da devolução vem da rota (`useParams`), e por isso o `[codigo]/page.tsx` continua congelado e não mudou.
+  - **Histórico (`rotulos/base.ts`, congelado):** chave `cancelamento_desfeito` ("Cancelamento desfeito (correção)"). Nenhum código do sistema grava esse evento; ele vem da correção feita à mão no banco da VPS em 23/11 (a DEV-000437 voltou a Pendente de chegada), e antes aparecia no histórico como a chave crua.
+  - **Fora, por decisão do usuário:** botão "Registrar chegada" no detalhe e "Procurar pelo produto" no Recebimento.
+  - **Motivo:** `rotulos/base.ts` é congelado, e a ação manual da spec §5.2 ganhou proteções que a spec não pedia.
