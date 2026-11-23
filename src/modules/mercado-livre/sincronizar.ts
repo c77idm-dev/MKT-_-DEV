@@ -267,6 +267,15 @@ async function produtosDosAnuncios(tx: DbOuTx, dados: DadosDevolucaoML, agora: D
   }
 }
 
+/** A ligação dos itens antigos também num savepoint: um deadlock com a conferência não derruba a sincronização. */
+async function ligarItensAntigos(tx: DbOuTx, devolucaoId: string, reclamacaoId: string): Promise<void> {
+  try {
+    await tx.transaction((sp) => ligarItensSemProduto(sp, devolucaoId));
+  } catch (erro) {
+    logErroML('ligar itens ao produto', new Error(mensagemDoErro(erro)), { reclamacaoId });
+  }
+}
+
 /**
  * Aplica no sistema o que o ML mostra de uma reclamação (contrato §5.5). Numa transação com trava por reclamação
  * (espaço 3 das travas do sistema: o 1 é do rastreio e o 2 da gestão de usuários).
@@ -291,14 +300,14 @@ export async function aplicarReclamacao(db: DbOuTx, dados: DadosDevolucaoML, ago
     if (existente) {
       await atualizar(tx, existente, d, motivo, agora);
       await produtosDosAnuncios(tx, dados, agora);
-      await ligarItensSemProduto(tx, existente.id);
+      await ligarItensAntigos(tx, existente.id, dados.reclamacaoId);
       acao = 'atualizada';
       alvoId = existente.id;
     } else {
       const manual = d.semEnvioFisico ? null : await manualDoPedido(tx, d.pedidos);
       if (manual && (await vincular(tx, manual, d, motivo, agora))) {
         await produtosDosAnuncios(tx, dados, agora);
-        await ligarItensSemProduto(tx, manual.id);
+        await ligarItensAntigos(tx, manual.id, dados.reclamacaoId);
         acao = 'vinculada';
         alvoId = manual.id;
       } else if (d.semEnvioFisico || encerradaNoML(d)) {

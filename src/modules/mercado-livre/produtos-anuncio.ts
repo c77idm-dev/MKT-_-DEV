@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { ProdutoDoAnuncioML } from '@/conectores/marketplace/mercadolivre/tipos';
 import type { DbOuTx } from '@/db/client';
@@ -35,7 +35,7 @@ async function eanLivre(tx: DbOuTx, ean: string | null, exceto?: string): Promis
   const [outro] = await tx
     .select({ id: produtos.id })
     .from(produtos)
-    .where(and(eq(produtos.ean, ean), exceto ? ne(produtos.id, exceto) : undefined))
+    .where(and(sql`ltrim(${produtos.ean}, '0') = ltrim(${ean}, '0')`, exceto ? ne(produtos.id, exceto) : undefined))
     .limit(1);
   return !outro;
 }
@@ -53,7 +53,8 @@ export async function cadastrarProdutosDosAnuncios(
   origem: { reclamacaoId: string },
 ): Promise<ResultadoProdutosML> {
   const resultado: ResultadoProdutosML = { criados: [], completados: [] };
-  for (const [sku, anuncio] of porSku(lista)) {
+  const anuncios = porSku(lista);
+  for (const [sku, anuncio] of anuncios) {
     const [atual] = await tx
       .select({ id: produtos.id, ean: produtos.ean, fotoUrl: produtos.fotoUrl, mlItemId: produtos.mlItemId })
       .from(produtos)
@@ -112,11 +113,20 @@ export async function cadastrarProdutosDosAnuncios(
     });
     resultado.completados.push(sku);
   }
+  // Como criarProduto e a planilha: liga os itens ainda não lidos de TODAS as devoluções com esses SKUs (dentro do savepoint).
+  const skus = anuncios.map(([sku]) => sku);
+  if (skus.length > 0) {
+    await tx
+      .update(itensDevolucao)
+      .set({ produtoEsperadoId: produtos.id })
+      .from(produtos)
+      .where(and(isNull(itensDevolucao.produtoEsperadoId), isNull(itensDevolucao.eanLido), eq(itensDevolucao.sku, produtos.sku), inArray(produtos.sku, skus)));
+  }
   return resultado;
 }
 
 /**
- * Liga ao produto do mesmo SKU os itens desta devolução que ainda estão sem produto esperado (as devoluções sincronizadas
+ * Liga ao produto do mesmo SKU os itens desta devolução que ainda estão sem produto esperado e não foram lidos na bancada (um item lido com o catálogo vazio não vira divergente) (as devoluções sincronizadas
  * antes dos produtos do ML ganham o vínculo na próxima sincronização). Não troca uma ligação que já existe.
  */
 export async function ligarItensSemProduto(tx: DbOuTx, devolucaoId: string): Promise<void> {
@@ -124,5 +134,5 @@ export async function ligarItensSemProduto(tx: DbOuTx, devolucaoId: string): Pro
     .update(itensDevolucao)
     .set({ produtoEsperadoId: produtos.id })
     .from(produtos)
-    .where(and(eq(itensDevolucao.devolucaoId, devolucaoId), isNull(itensDevolucao.produtoEsperadoId), eq(itensDevolucao.sku, produtos.sku)));
+    .where(and(eq(itensDevolucao.devolucaoId, devolucaoId), isNull(itensDevolucao.produtoEsperadoId), isNull(itensDevolucao.eanLido), eq(itensDevolucao.sku, produtos.sku)));
 }

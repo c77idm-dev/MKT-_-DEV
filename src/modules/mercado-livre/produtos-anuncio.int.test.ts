@@ -2,6 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ProdutoDoAnuncioML } from '@/conectores/marketplace/mercadolivre/tipos';
 import { devolucoes, eventosHistorico, itensDevolucao, produtos } from '@/db/schema';
+import { obterConferencia } from '@/modules/conferencia/leitura';
 import { listarEventos } from '@/modules/historico/eventos';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarFornecedorTeste, criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
@@ -102,6 +103,8 @@ describe('produtos do ML na sincronização (extra)', () => {
 
   it('EAN que já é de outro produto não é copiado (nem no cadastro novo, nem no que existe sem EAN)', async () => {
     await criarProdutoTeste(db, { sku: 'OUTRO-SKU', ean: EAN });
+    await aplicarReclamacao(db, reclamacaoCom(['zero-03'], [anuncio({ sku: 'zero-03', mlItemId: 'MLB3', ean: `0${EAN}` })]).dados, AGORA);
+    expect(await produtoDoSku('ZERO-03')).toMatchObject({ ean: null });
     const semEan = await criarProdutoTeste(db, { sku: 'CABO-02', ean: null });
     await aplicarReclamacao(db, reclamacaoCom(['fone-01', 'cabo-02'], [anuncio(), anuncio({ sku: 'cabo-02', mlItemId: 'MLB2' })]).dados, AGORA);
     expect(await produtoDoSku('FONE-01')).toMatchObject({ ean: null, fotoUrl: FOTO });
@@ -179,5 +182,31 @@ describe('produtos do ML na sincronização (extra)', () => {
     expect(await db.select({ acao: eventosHistorico.acao }).from(eventosHistorico).where(eq(eventosHistorico.entidade, 'produto'))).toEqual([
       { acao: 'ml_produto_criado' },
     ]);
+  });
+
+  it('liga os itens de TODAS as devoluções do mesmo SKU ainda não lidas (manual de outro canal), como criarProduto', async () => {
+    const operador = await criarUsuarioTeste(db);
+    const outra = await criarDevolucaoTeste(db, operador, { canal: 'SHOPEE', pedido: 'P-SHOPEE', itens: [{ sku: 'FONE-01', quantidade: 1 }] });
+    expect(await ligacoes(outra.id)).toEqual([['FONE-01', null]]);
+    await aplicarReclamacao(db, reclamacaoCom(['fone-01'], [anuncio()]).dados, AGORA);
+    expect(await ligacoes(outra.id)).toEqual([['FONE-01', (await produtoDoSku('FONE-01')).id]]);
+  });
+
+  it('item já lido (ean_lido) sem produto continua sem ligação e não vira divergente', async () => {
+    const operador = await criarUsuarioTeste(db);
+    const outra = await criarDevolucaoTeste(db, operador, { canal: 'SHOPEE', pedido: 'P-SHOPEE', itens: [{ sku: 'FONE-01', quantidade: 1 }] });
+    await db.update(itensDevolucao).set({ eanLido: EAN }).where(eq(itensDevolucao.devolucaoId, outra.id));
+    await aplicarReclamacao(db, reclamacaoCom(['fone-01'], [anuncio()]).dados, AGORA);
+    expect(await ligacoes(outra.id)).toEqual([['FONE-01', null]]);
+    const conf = await obterConferencia(db, { id: outra.id });
+    expect(conf?.itens[0].divergente).toBe(false);
+  });
+
+  it('erro no cadastro do produto não impede a sincronização da reclamação (savepoint)', async () => {
+    const { dados } = reclamacaoCom(['fone-01'], [anuncio({ mlItemId: 'MLB ' })]);
+    const r = await aplicarReclamacao(db, dados, AGORA);
+    expect(r).toMatchObject({ acao: 'criada' });
+    expect(await db.select().from(produtos)).toEqual([]);
+    expect(await ligacoes(idDa(r))).toEqual([['FONE-01', null]]);
   });
 });
