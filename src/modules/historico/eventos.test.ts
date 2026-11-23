@@ -26,6 +26,8 @@ const RESERVADAS: Record<string, string[]> = {
     'criada', 'criada_nao_identificada', 'recebida', 'identificada', 'cancelada', 'extraviada',
     'usuario_criado', 'perfil_alterado', 'usuario_desativado', 'usuario_reativado',
     'item_status', 'concluida', 'configuracao_alterada',
+    // Cancelamento explícito (emenda E24, extra): a correção feita na VPS em 23/11 gravou este evento.
+    'cancelamento_desfeito',
   ],
   conferencia: [
     'conferencia_iniciada', 'conferencia_interrompida', 'conferencia_trava_liberada', 'conferencia_concluida',
@@ -78,6 +80,10 @@ describe('rótulos do histórico (contrato §4.7)', () => {
   it('as chaves do dossiê de provas têm o prefixo dossie_', () => {
     for (const chave of Object.keys(ROTULOS_DOSSIE)) expect(chave).toMatch(/^dossie_/);
     expect(rotuloDaAcao('dossie_gerado')).toBe('Dossiê de provas (PDF) gerado');
+  });
+
+  it('o cancelamento desfeito por correção tem rótulo (E24), e não aparece como a chave crua', () => {
+    expect(rotuloDaAcao('cancelamento_desfeito')).toBe('Cancelamento desfeito (correção)');
   });
 
   it('rotuloDaAcao usa o rótulo ou devolve a própria chave', () => {

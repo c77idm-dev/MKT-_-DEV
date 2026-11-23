@@ -13,4 +13,6 @@ export const ROTULOS_BASE: Record<string, string> = {
   item_status: 'Status do item alterado',
   concluida: 'Devolução concluída',
   configuracao_alterada: 'Configuração alterada',
+  /** Emenda E24 (extra): correção feita à mão no banco (DEV-000437, 23/11), que devolve a cancelada à espera de chegada. */
+  cancelamento_desfeito: 'Cancelamento desfeito (correção)',
 };
