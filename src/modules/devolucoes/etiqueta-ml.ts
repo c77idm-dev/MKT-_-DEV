@@ -1,7 +1,9 @@
 /**
  * (extra, emenda E25) Os outros números da etiqueta do Mercado Livre. Na etiqueta do pacote que o ML manda de volta à
  * loja, o leitor às vezes pega o número do pedido ou o do envio, e não o rastreio guardado. O Recebimento procura por eles
- * só depois do rastreio exato e só quando o código lido é feito só de dígitos (os rastreios têm letras).
+ * só depois do rastreio exato, só quando o código lido é feito só de dígitos (os rastreios têm letras) e só nas devoluções
+ * do canal MERCADO_LIVRE. Por isso o tamanho do número do pedido não é limitado: um número curto só acharia um pedido do
+ * ML igual a ele inteiro.
  */
 const SO_DIGITOS = /^\d+$/;
 

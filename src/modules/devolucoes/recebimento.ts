@@ -67,24 +67,33 @@ function candidatas(db: DbOuTx, condicao: SQL): Promise<Candidata[]> {
   return db.select({ id: devolucoes.id, status: devolucoes.status }).from(devolucoes).where(condicao).orderBy(asc(devolucoes.numero));
 }
 
+/** As regras 2 e 3 olham só as devoluções do Mercado Livre: no resto do sistema o pedido só é único por (canal, pedido). */
+function doML(condicao: SQL): SQL {
+  return and(eq(devolucoes.canal, 'MERCADO_LIVRE'), condicao)!;
+}
+
 /**
  * Onde o código lido aparece. A primeira regra que achar alguma devolução, em qualquer status, decide:
- * 1. o rastreio exato (como sempre);
- * 2. (extra, E25) só para código feito só de dígitos: o número do pedido do ML, inteiro, em `pedidos_externos`;
- * 3. (extra, E25) idem: o número do envio do ML dentro do rastreio do Mercado Envios.
+ * 1. o rastreio exato (como sempre), em qualquer canal;
+ * 2. (extra, E25) só para código feito só de dígitos: o número do pedido do ML, inteiro, em `pedidos_externos` das
+ *    devoluções do ML;
+ * 3. (extra, E25) idem: o número do envio do ML dentro do rastreio do Mercado Envios das devoluções do ML.
  */
 async function procurar(db: DbOuTx, codigo: string): Promise<{ achadas: Candidata[]; achadaPor?: AchadaPor }> {
   const porRastreio = await candidatas(db, eq(devolucoes.rastreio, codigo));
   if (porRastreio.length > 0) return { achadas: porRastreio };
   const pedidos = pedidosDoCodigo(codigo);
   if (pedidos.length > 0) {
-    // `&&` usa o índice GIN devolucoes_pedidos_externos_gin; cada pedido guardado é comparado inteiro.
+    // `&&` usa o índice GIN devolucoes_pedidos_externos_gin (junto com o filtro do canal); cada pedido guardado é
+    // comparado inteiro.
     const porPedido = await candidatas(
       db,
-      sql`${devolucoes.pedidosExternos} && ARRAY[${sql.join(
-        pedidos.map((p) => sql`${p}`),
-        sql`, `,
-      )}]::text[]`,
+      doML(
+        sql`${devolucoes.pedidosExternos} && ARRAY[${sql.join(
+          pedidos.map((p) => sql`${p}`),
+          sql`, `,
+        )}]::text[]`,
+      ),
     );
     if (porPedido.length > 0) return { achadas: porPedido, achadaPor: 'PEDIDO_ML' };
   }
@@ -92,7 +101,7 @@ async function procurar(db: DbOuTx, codigo: string): Promise<{ achadas: Candidat
   if (padrao) {
     // A expressão vai como parâmetro (o código já é só de dígitos). Sem índice: percorre a tabela, o que só acontece
     // quando o rastreio e o pedido não acharam nada.
-    const porEnvio = await candidatas(db, sql`${devolucoes.rastreio} ~ ${padrao}`);
+    const porEnvio = await candidatas(db, doML(sql`${devolucoes.rastreio} ~ ${padrao}`));
     if (porEnvio.length > 0) return { achadas: porEnvio, achadaPor: 'ENVIO_ML' };
   }
   return { achadas: [] };

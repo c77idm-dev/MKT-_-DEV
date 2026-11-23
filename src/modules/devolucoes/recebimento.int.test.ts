@@ -253,6 +253,33 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
     for (const d of outras) expect((await statusDe(d.id)).status).toBe('PENDENTE_CHEGADA');
   });
 
+  it('o pedido só é procurado nas devoluções do ML: a de outro canal com o mesmo número não é achada', async () => {
+    const magalu = await criarDevolucaoTeste(db, operador, { canal: 'MAGALU', pedido: '2000018992531744' });
+    for (const codigo of ['2000018992531744', '000018992531744']) {
+      expect(await receberPorRastreio(db, codigo, operador)).toEqual({ tipo: 'nao_encontrada', rastreio: codigo });
+    }
+    expect((await statusDe(magalu.id)).status).toBe('PENDENTE_CHEGADA');
+  });
+
+  it('o mesmo pedido no ML e em outro canal: só a do ML é recebida', async () => {
+    const ml = await devolucaoML({ pedido: '2000044443333222' });
+    const tiktok = await criarDevolucaoTeste(db, operador, { canal: 'TIKTOK_SHOP', pedido: '2000044443333222' });
+    const agora = new Date();
+    expect(await receberPorRastreio(db, '2000044443333222', operador, agora)).toEqual({
+      tipo: 'recebidas',
+      codigos: [ml.codigo],
+      em: agora,
+      achadaPor: 'PEDIDO_ML',
+    });
+    expect((await statusDe(tiktok.id)).status).toBe('PENDENTE_CHEGADA');
+  });
+
+  it('o envio só é procurado nos rastreios das devoluções do ML', async () => {
+    const shopee = await criarDevolucaoTeste(db, operador, { canal: 'SHOPEE', rastreio: 'MM48503476449BRSP02' });
+    expect(await receberPorRastreio(db, '48503476449', operador)).toEqual({ tipo: 'nao_encontrada', rastreio: '48503476449' });
+    expect((await statusDe(shopee.id)).status).toBe('PENDENTE_CHEGADA');
+  });
+
   it('com letra no código as regras novas não valem', async () => {
     const d = await devolucaoML({ pedido: 'ABC123', rastreio: 'MM48515208229BRSP02' });
     for (const codigo of ['ABC123', '48515208229BR', 'MM48515208229']) {
