@@ -22,6 +22,26 @@ describe('filtros da Busca Avançada', () => {
     expect(semFiltro({ rastreio: 'A', canal: 'SHOPEE' }, 'rastreio')).toEqual({ canal: 'SHOPEE' });
   });
 
+  it('(extra) "Só as que afetam a reputação no ML": reputacao=1 na URL, ida e volta', () => {
+    expect(lerFiltros({ reputacao: '1' })).toEqual({ reputacao: '1' });
+    // Só o "1" do formulário liga o filtro.
+    expect(lerFiltros({ reputacao: 'sim' })).toEqual({});
+    expect(lerFiltros({ reputacao: '' })).toEqual({});
+    const filtros = { canal: 'MERCADO_LIVRE', reputacao: '1' } as const;
+    const query = filtrosParaQuery(filtros, { pagina: '2' });
+    expect(query).toBe('?canal=MERCADO_LIVRE&reputacao=1&pagina=2');
+    expect(lerFiltros(Object.fromEntries(new URLSearchParams(query)))).toEqual(filtros);
+    expect(temFiltro({ reputacao: '1' })).toBe(true);
+    expect(semFiltro(filtros, 'reputacao')).toEqual({ canal: 'MERCADO_LIVRE' });
+  });
+
+  it('(extra) a etiqueta do filtro de reputação é "Afetam a reputação", depois das outras', () => {
+    expect(descreverFiltros({ reputacao: '1', canal: 'MERCADO_LIVRE' })).toEqual([
+      { chave: 'canal', texto: 'Marketplace: Mercado Livre' },
+      { chave: 'reputacao', texto: 'Afetam a reputação' },
+    ]);
+  });
+
   it('descreve os filtros ativos para as etiquetas', () => {
     expect(descreverFiltros({ de: '2026-11-01', canal: 'MAGALU', status: 'PENDENTE_CHEGADA', rastreio: 'BR1' })).toEqual([
       { chave: 'rastreio', texto: 'Rastreio: BR1' },

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { CANAIS, ROTULO_CANAL, ROTULO_STATUS, STATUS_DEVOLUCAO } from '@/modules/devolucoes/dominio';
 import { descreverFiltros, filtrosParaQuery, semFiltro, type FiltrosBusca } from '@/modules/devolucoes/filtros';
 import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, ROTULO } from './estilos';
@@ -64,8 +64,9 @@ function Escolha({ nome, rotulo, valor, opcoes }: { nome: string; rotulo: string
 /**
  * Busca Avançada do PDF (spec §6.7). Formulário GET: os filtros ficam no endereço e funcionam sem JavaScript.
  * Celular: atrás do botão "Filtros", com as etiquetas dos filtros ativos sempre à vista. Computador (md+): aberto.
+ * `atalho` (extra): fica na linha do botão "Filtros" (o "Afetam a reputação" do Fluxo).
  */
-export function BuscaAvancada({ acao, filtros }: { acao: string; filtros: FiltrosBusca }) {
+export function BuscaAvancada({ acao, filtros, atalho }: { acao: string; filtros: FiltrosBusca; atalho?: ReactNode }) {
   const [aberta, setAberta] = useState(false);
   const ativos = descreverFiltros(filtros);
   return (
@@ -92,6 +93,7 @@ export function BuscaAvancada({ acao, filtros }: { acao: string; filtros: Filtro
           </svg>
           Filtros{ativos.length > 0 ? ` (${ativos.length})` : ''}
         </button>
+        {atalho}
         {ativos.map((a) => (
           <Link
             key={a.chave}
@@ -111,7 +113,15 @@ export function BuscaAvancada({ acao, filtros }: { acao: string; filtros: Filtro
         <h2 id="titulo-busca" className="text-base font-bold">
           Busca Avançada
         </h2>
-        <form method="get" action={acao} role="search" aria-labelledby="titulo-busca" className="flex flex-col gap-3">
+        {/* A key recria o formulário quando os filtros mudam (ex.: a etiqueta tirou um): os campos não guardam o valor antigo. */}
+        <form
+          key={filtrosParaQuery(filtros)}
+          method="get"
+          action={acao}
+          role="search"
+          aria-labelledby="titulo-busca"
+          className="flex flex-col gap-3"
+        >
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <fieldset className={GRUPO}>
               <legend className={LEGENDA}>Código de Rastreamento</legend>
@@ -131,6 +141,16 @@ export function BuscaAvancada({ acao, filtros }: { acao: string; filtros: Filtro
                 valor={filtros.status}
                 opcoes={STATUS_DEVOLUCAO.map((s) => [s, ROTULO_STATUS[s]])}
               />
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px]">
+                <input
+                  type="checkbox"
+                  name="reputacao"
+                  value="1"
+                  defaultChecked={filtros.reputacao === '1'}
+                  className="size-5 shrink-0 accent-destaque"
+                />
+                Só as que afetam a reputação no ML (extra)
+              </label>
             </fieldset>
             <fieldset className={GRUPO}>
               <legend className={LEGENDA}>Fornecedor ou Código de Barras/Serial Number</legend>

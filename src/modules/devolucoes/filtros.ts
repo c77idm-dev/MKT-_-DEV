@@ -17,10 +17,12 @@ export type FiltrosBusca = {
   /** (extra) Período, pela data de cadastro: "2026-11-01". */
   de?: string;
   ate?: string;
+  /** (extra) "Só as que afetam a reputação no ML" (caixa de marcar; regra em reputacao.ts). Na URL: reputacao=1. */
+  reputacao?: '1';
 };
 export type ChaveFiltro = keyof FiltrosBusca;
 
-const ORDEM: ChaveFiltro[] = ['rastreio', 'pedido', 'reclamacao', 'canal', 'status', 'fornecedor', 'codigo', 'de', 'ate'];
+const ORDEM: ChaveFiltro[] = ['rastreio', 'pedido', 'reclamacao', 'canal', 'status', 'fornecedor', 'codigo', 'de', 'ate', 'reputacao'];
 const ROTULO_FILTRO: Record<ChaveFiltro, string> = {
   rastreio: 'Rastreio',
   pedido: 'Pedido',
@@ -31,6 +33,7 @@ const ROTULO_FILTRO: Record<ChaveFiltro, string> = {
   codigo: 'Código',
   de: 'De',
   ate: 'Até',
+  reputacao: 'Afetam a reputação',
 };
 const TEXTO_MAXIMO = 100;
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -49,6 +52,7 @@ export function lerFiltros(parametros: ParametrosBusca): FiltrosBusca {
     const valor = primeiroValor(parametros[chave]);
     if (DATA.test(valor) && interpretarData(valor) === valor) f[chave] = valor;
   }
+  if (primeiroValor(parametros.reputacao) === '1') f.reputacao = '1';
   return f;
 }
 
@@ -74,9 +78,11 @@ export function semFiltro(f: FiltrosBusca, chave: ChaveFiltro): FiltrosBusca {
 
 /** Etiquetas dos filtros ativos. No celular elas ficam à vista mesmo com o painel fechado. */
 export function descreverFiltros(f: FiltrosBusca): { chave: ChaveFiltro; texto: string }[] {
-  return ORDEM.flatMap((chave) => {
+  return ORDEM.flatMap((chave): { chave: ChaveFiltro; texto: string }[] => {
     const valor = f[chave];
     if (!valor) return [];
+    // Caixa de marcar: a etiqueta é só o nome do filtro.
+    if (chave === 'reputacao') return [{ chave, texto: ROTULO_FILTRO.reputacao }];
     let mostrado: string = valor;
     if (chave === 'canal' && f.canal) mostrado = ROTULO_CANAL[f.canal];
     if (chave === 'status' && f.status) mostrado = ROTULO_STATUS[f.status];

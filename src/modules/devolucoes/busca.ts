@@ -8,6 +8,7 @@ import type { AfetaReputacao } from '@/modules/mercado-livre/dominio';
 import type { Canal, StatusDevolucao } from './dominio';
 import { POR_PAGINA_DEVOLUCOES, type FiltrosBusca } from './filtros';
 import { normalizarRastreio } from './rastreio';
+import { condicaoAfetaReputacao } from './reputacao';
 import { selosDaDevolucao, type DadosSelo } from './selos';
 
 /** A reclamação do ML mais recente da devolução (extras e conta; integração Bitbrain). Colunas qualificadas à mão, como as outras subconsultas. */
@@ -64,6 +65,7 @@ function condicoes(db: DbOuTx, f: FiltrosBusca): SQL[] {
   if (f.status) lista.push(eq(devolucoes.status, f.status));
   if (f.de) lista.push(sql`${devolucoes.criadaEm} >= (${f.de}::date::timestamp at time zone 'America/Sao_Paulo')`);
   if (f.ate) lista.push(sql`${devolucoes.criadaEm} < ((${f.ate}::date + 1)::timestamp at time zone 'America/Sao_Paulo')`);
+  if (f.reputacao) lista.push(condicaoAfetaReputacao(Boolean(f.status)));
   if (f.fornecedor) {
     const termo = `%${escaparLike(f.fornecedor.trim())}%`;
     const documento = f.fornecedor.toUpperCase().replace(/[^0-9A-Z]/g, '');
