@@ -10,9 +10,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { obterArmazenamento } from '@/modules/midia/armazenamento';
 import type { ArmazenamentoMemoria } from '@/modules/midia/armazenamento-memoria';
 import { binariosFfmpeg, temFfmpeg } from '@/modules/midia/ffmpeg';
+import { dadosDossieTeste } from '../../../tests/helpers/fabricas-dossie';
 import { jpegTeste } from '../../../tests/helpers/fabricas-dossie-banco';
+import { textoDoPdf } from '../../../tests/helpers/pdf';
 import { IMAGEM_PADRAO, type EvidenciaDossie } from './dominio';
 import { midiasDoArmazenamento } from './midias';
+import { gerarPdfDossie } from './pdf';
 import { criarSerie } from './serie';
 
 const comFfmpeg = await temFfmpeg();
@@ -207,5 +210,39 @@ describe('midiasDoArmazenamento: vídeo (extra)', () => {
     await (obterArmazenamento() as ArmazenamentoMemoria).apagar(e.caminho!);
     const segunda = await midias.quadroDoVideo(e, { ladoMaior: 320, qualidade: 60 });
     expect(segunda.imagem!.largura).toBe(320);
+  });
+});
+
+describe('midiasDoArmazenamento: foto do anúncio no ML (extra)', () => {
+  it('baixa pelo fetch dado (os testes nunca saem para a rede), a 400 px, com o prazo pedido; host fora da lista nem chama', async () => {
+    const jpeg = await jpegTeste({ r: 200, g: 60, b: 40 }, 1200, 1200);
+    const fetchFn = vi.fn<typeof fetch>(async () => new Response(new Uint8Array(jpeg), { headers: { 'content-type': 'image/jpeg' } }));
+    const midias = midiasDoArmazenamento({ pastaTemporaria: pasta, fetchFn });
+    const r = await midias.fotoDoAnuncio('https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg', { prazoMs: 1_000 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect({ largura: r.imagem.largura, altura: r.imagem.altura }).toEqual({ largura: 400, altura: 400 });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(fetchFn.mock.calls[0][1]?.redirect).toBe('manual');
+
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // O domínio das fotos do ML falso (e2e) não está na lista: "indisponível" sem pedido nenhum.
+    expect(await midias.fotoDoAnuncio('https://imagens.ml-falso.example/mlf-fone-01.png', { prazoMs: 1_000 })).toEqual({ ok: false, motivo: 'host_nao_permitido' });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('no PDF, com o tempo das fotos do anúncio pela metade e o CDN falhando aos poucos: o dossiê sai, com "indisponível"', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // Cada pedido leva uns 15 ms e falha: a 2ª foto recebe o resto do tempo, com fração de ms (uns 3984,7).
+    const fetchFn = vi.fn<typeof fetch>(async () => {
+      await new Promise((r) => setTimeout(r, 15));
+      throw new TypeError('fetch failed');
+    });
+    const dados = dadosDossieTeste({ evidencias: [] });
+    const fotos = ['https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg', 'https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg'];
+    dados.unidades = dados.unidades.map((u, i) => ({ ...u, fotoUrl: fotos[i === 2 ? 1 : 0] }));
+    const r = await gerarPdfDossie(dados, midiasDoArmazenamento({ pastaTemporaria: pasta, fetchFn }), { orcamentoAnunciosMs: 4_000 });
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect((await textoDoPdf(r.bytes)).replace(/\s+/g, ' ').match(/Foto do anúncio indisponível/g)).toHaveLength(3);
   });
 });

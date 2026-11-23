@@ -9,6 +9,7 @@ import { armazenamentoDoProvedor } from '@/modules/midia/armazenamento';
 import { LIMITE_FOTO_BYTES } from '@/modules/midia/dominio';
 import { ErroArquivoNaoEncontrado } from '@/modules/midia/erros';
 import { binariosFfmpeg, executar, sondar, type Binarios } from '@/modules/midia/ffmpeg';
+import { baixarFotoAnuncio } from './anuncio';
 import type { EvidenciaDossie } from './dominio';
 import { reduzirImagem, type ImagemPdf } from './imagens';
 import type { MidiasDossie, ResultadoFoto, ResultadoQuadro } from './pdf';
@@ -107,10 +108,11 @@ const semVideo = (problema: string): Video => ({ quadro: null, duracaoSegundos: 
  * reduzida pelo sharp. Vídeo: copiado para um arquivo temporário (MIDIA_TMP_DIR), o ffprobe mede a duração e o ffmpeg
  * tira um quadro; a pasta temporária é apagada logo depois. O quadro fica guardado para a 2ª tentativa do PDF.
  * Erro de leitura, prazo estourado ou pasta temporária impossível viram aviso no PDF; só o cancelamento do dossiê
- * (`sinal`) sobe como erro.
+ * (`sinal`) sobe como erro. Foto do anúncio no ML (extra): a única que vem de fora, pelo CDN do ML (anuncio.ts);
+ * `fetchFn` só nos testes.
  */
 export function midiasDoArmazenamento(
-  o: { binarios?: Binarios; pastaTemporaria?: string; prazoLeituraMs?: number; limiteFotoBytes?: number } = {},
+  o: { binarios?: Binarios; pastaTemporaria?: string; prazoLeituraMs?: number; limiteFotoBytes?: number; fetchFn?: typeof fetch } = {},
 ): MidiasDossie {
   const videos = new Map<string, Promise<Video>>();
   const prazoMs = o.prazoLeituraMs ?? PRAZO_LEITURA_MS;
@@ -216,6 +218,10 @@ export function midiasDoArmazenamento(
         }
       }
       return { imagem, duracaoSegundos: v.duracaoSegundos, sha256Calculado: v.sha256Calculado, problema };
+    },
+
+    fotoDoAnuncio(url, { prazoMs, sinal }) {
+      return baixarFotoAnuncio(url, { fetchFn: o.fetchFn, prazoMs, sinal });
     },
   };
 }

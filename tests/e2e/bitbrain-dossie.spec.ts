@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { eq } from 'drizzle-orm';
 import { devolucoes, evidencias } from '../../src/db/schema';
+import { textoDoPdf } from '../helpers/pdf';
 import { comBanco, entrarComo, semRolagemLateral } from './apoio';
 import { fotoProntaSemArquivo } from './apoio-bitbrain';
 import { alvosDeToque44, contestacaoPronta } from './apoio-ml';
@@ -68,5 +69,11 @@ test('"Responda no ML" (modo Bitbrain): dossiê de provas em PDF junto das fotos
   // O arquivo da foto não existe no disco e o "vídeo" não é um mp4: o PDF sai assim mesmo, com avisos no lugar.
   const [download] = await Promise.all([page.waitForEvent('download'), dossie.click()]);
   expect(download.suggestedFilename()).toBe(`dossie-${codigo}.pdf`);
-  expect((await readFile(await download.path())).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  const pdf = await readFile(await download.path());
+  expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  // Foto do anúncio (extra): a do ML falso é de um domínio reservado (.example), fora da lista de hosts; o servidor
+  // nem tenta baixar (sem foto no cadastro, também não) e o PDF sai com o aviso no lugar.
+  const texto = (await textoDoPdf(pdf)).replace(/\s+/g, ' ');
+  expect(texto).toContain('Foto do anúncio no ML (o que foi vendido)');
+  expect(texto).toContain('Foto do anúncio indisponível');
 });

@@ -29,6 +29,7 @@ function unidade(p: Partial<UnidadeDossie> & Pick<UnidadeDossie, 'id' | 'unidade
     status: 'AGUARDANDO_NF',
     descricao: 'Fone Bluetooth Ação',
     eanEsperado: '7891000000014',
+    fotoUrl: null,
     eanLido: null,
     divergente: false,
     produtoRecebido: null,
