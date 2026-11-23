@@ -94,6 +94,11 @@ export type UnidadeDossie = {
   /** Do produto esperado (null quando o SKU está fora do cadastro). */
   descricao: string | null;
   eanEsperado: string | null;
+  /**
+   * Foto do anúncio no ML do produto esperado (produtos.foto_url, emenda E22), ou null. Só uma referência do que foi
+   * vendido: o PDF a baixa do CDN do ML na hora (anuncio.ts) e ela nunca entra como prova guardada (extra).
+   */
+  fotoUrl: string | null;
   eanLido: string | null;
   divergente: boolean;
   produtoRecebido: { sku: string; descricao: string } | null;

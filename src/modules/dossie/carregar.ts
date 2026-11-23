@@ -74,6 +74,7 @@ export async function carregarDossie(db: DbOuTx, codigo: string, geracao: { em: 
       status: i.status,
       descricao: i.descricao,
       eanEsperado: i.eanEsperado,
+      fotoUrl: i.fotoUrl,
       eanLido: i.eanLido,
       divergente: i.divergente,
       produtoRecebido: i.produtoRecebido,

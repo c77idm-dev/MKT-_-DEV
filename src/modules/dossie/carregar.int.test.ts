@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { produtos } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { criarDevolucaoChegada } from '../../../tests/helpers/fabricas-conferencia';
@@ -62,8 +64,9 @@ describe('carregarDossie (extra)', () => {
         destino: 'PROBLEMA',
         motivo: 'AVARIADO',
         observacao: 'Caixa amassada e tela trincada.',
+        fotoUrl: null,
       }),
-      expect.objectContaining({ id: p.itens[1], unidade: 2, status: 'AUSENTE', destino: null, motivo: 'AUSENTE' }),
+      expect.objectContaining({ id: p.itens[1], unidade: 2, status: 'AUSENTE', destino: null, motivo: 'AUSENTE', fotoUrl: null }),
     ]);
     expect(d!.evidencias).toHaveLength(6);
     const f3 = d!.evidencias.find((e) => e.id === p.evidencias.f3.id)!;
@@ -81,6 +84,14 @@ describe('carregarDossie (extra)', () => {
     const acoes = d!.eventos.map((e) => e.acao);
     for (const acao of ['criada', 'recebida', 'conferencia_iniciada', 'conferencia_concluida']) expect(acoes).toContain(acao);
     expect(d!.eventos.find((e) => e.acao === 'conferencia_concluida')!.usuarioNome).toBe(p.operador.nome);
+  });
+
+  it('foto do anúncio no ML (extra): a do produto esperado (produtos.foto_url) vai em cada unidade', async () => {
+    const p = await devolucaoComProvasTeste(db);
+    const foto = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
+    await db.update(produtos).set({ fotoUrl: foto }).where(eq(produtos.sku, p.sku));
+    const d = await carregarDossie(db, p.codigo, GERACAO);
+    expect(d!.unidades.map((u) => u.fotoUrl)).toEqual([foto, foto]);
   });
 
   it('nenhum dado pessoal do comprador: só os campos previstos', async () => {
