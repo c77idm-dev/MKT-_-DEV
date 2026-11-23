@@ -102,8 +102,23 @@ export function FormularioEncerrar({ acao }: { acao: Acao }) {
   const textoPergunta = `Tem certeza? ${quem} sai da espera de chegada e isso não se desfaz pela tela.`;
 
   return (
-    <details className={CARTAO}>
-      <summary className="flex min-h-11 cursor-pointer items-center text-base font-bold">Mais ações do Gestor</summary>
+    <details className={`${CARTAO} group`}>
+      {/* A seta mostra que o bloco abre (o display flex tira o marcador padrão; no Safari, o -webkit-details-marker). */}
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-base font-bold [&::-webkit-details-marker]:hidden">
+        Mais ações do Gestor
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-5 shrink-0 text-texto-2 transition-transform group-open:rotate-180"
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </summary>
       <form onSubmit={aoSubmeter} aria-labelledby="titulo-encerrar" className="mt-3 flex flex-col gap-3">
         <h2 id="titulo-encerrar" className="text-base font-bold">
           Cancelar ou marcar como extraviada
