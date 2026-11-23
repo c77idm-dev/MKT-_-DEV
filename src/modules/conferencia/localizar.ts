@@ -24,7 +24,10 @@ export async function localizarParaConferencia(db: DbOuTx, texto: string, usuari
     .from(devolucoes)
     .where(eq(devolucoes.rastreio, normalizarRastreio(limpo)))
     .orderBy(desc(devolucoes.numero));
-  if (lista.length === 0) throw new ErroConferencia('Nenhuma devolução com este código de rastreamento.');
+  // (extra, E25) A dica: o pacote recebido pelo número do pedido ou do envio do ML não é achado aqui por esses números.
+  if (lista.length === 0) {
+    throw new ErroConferencia('Nenhuma devolução com este código de rastreamento. Use o código DEV ou abra a devolução pela lista da etapa 2.');
+  }
   const abertas = lista.filter((d) => d.status === 'AGUARDANDO_CONFERENCIA' || d.status === 'EM_CONFERENCIA');
   if (abertas.length > 1) {
     throw new ErroConferencia(
