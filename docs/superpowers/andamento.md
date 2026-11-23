@@ -33,7 +33,7 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
         2. Pedir o adendo do `logistic` à sessão do Bitbrain, para o selo Full funcionar.
         3. Apagar as fotos que ficaram sem dono no armazenamento, das antigas DEV-000004 e 000005, e perguntar ao usuário se apaga também a DEV-000001.
         4. Mover o arquivo solto `/opt/devolucoes/backup-antes-fase1-20261112-1928.sql` para `~/backups-devolucoes`.
-      - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `70801df`). **Revisado em equipe e junto no `main` em 23/11 (`97f1fdb`).** Falta só publicar na VPS.
+      - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `70801df`). **Revisado em equipe, junto no `main` e publicado na VPS em 23/11 (`97f1fdb`).**
         - **Testes:**
           - unidade: 853;
           - integração: 513 (7 pulados);
@@ -44,7 +44,11 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
         - **Prints (23/11):** `scratchpad\produtos-ml\etapa-1-cartoes-com-foto.png` e `conferencia-unidade-com-foto.png`.
         - **Revisão final (run `wf_61044862-f3c`): aprovada.** Corrigiu um IMPORTANTE em `a178e64`: o produto criado pelo ML ligava só a devolução sincronizada, e outra devolução com o mesmo SKU dava divergência falsa na bancada. Agora liga os itens de todas as devoluções ainda não lidas, dentro do savepoint. Também: o EAN livre ignora zeros à esquerda, há um teste provando que um erro no cadastro do produto não trava a sincronização, e a E22 lista o detalhe. Os menores ficaram para o adendo do catálogo: alt repetido no leitor de tela, não dá para trocar a foto pela tela, a foto de 64 px não amplia com um toque.
         - **Aviso das revisões:** e2e e `test:int` não podem rodar ao mesmo tempo no mesmo worktree e banco, porque o `limparTabelas` apaga os usuários do e2e.
-        - **Falta:** publicar na VPS (imagem `97f1fdb558a64ff139af79fd6cdd6fd82c1d50f9`), que aplica a migração `0015_produtos_do_ml.sql` ao subir. Fazer o backup antes.
+        - **Na VPS (23/11, 13h50 UTC):**
+          - imagem `97f1fdb`, 16 migrações, web e worker healthy, `/api/saude` ok;
+          - backup antes em `~/backups-devolucoes/banco-antes-produtos-ml_20261123-1350.dump`; a imagem anterior `2aafd82` ficou para voltar atrás;
+          - **reprocessamento:** a sincronização só busca o que mudou desde a última vez, então as devoluções antigas não criavam produto. Foi zerado `contas_bitbrain.ultima_sincronizacao_em` das 5 contas e pedido "Sincronizar agora": a varredura voltou 30 dias, com 176 tarefas certas e **36 produtos criados, todos com foto**;
+          - erros: a reclamação 5614557128 (conta general) segue dando 401 em `/returns` e foi para Falhas; houve dois 429 do ML, que voltam sozinhos na nova tentativa.
         - **O que se desviou do pedido, de propósito:**
           - a foto aparece só no passo da unidade da conferência, não na legenda do destino;
           - o GTIN só vale se passar no `normalizarEan`, que confere o dígito verificador;
