@@ -209,3 +209,22 @@ describe('midiasDoArmazenamento: vídeo (extra)', () => {
     expect(segunda.imagem!.largura).toBe(320);
   });
 });
+
+describe('midiasDoArmazenamento: foto do anúncio no ML (extra)', () => {
+  it('baixa pelo fetch dado (os testes nunca saem para a rede), a 400 px, com o prazo pedido; host fora da lista nem chama', async () => {
+    const jpeg = await jpegTeste({ r: 200, g: 60, b: 40 }, 1200, 1200);
+    const fetchFn = vi.fn<typeof fetch>(async () => new Response(new Uint8Array(jpeg), { headers: { 'content-type': 'image/jpeg' } }));
+    const midias = midiasDoArmazenamento({ pastaTemporaria: pasta, fetchFn });
+    const r = await midias.fotoDoAnuncio('https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg', { prazoMs: 1_000 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect({ largura: r.imagem.largura, altura: r.imagem.altura }).toEqual({ largura: 400, altura: 400 });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(fetchFn.mock.calls[0][1]?.redirect).toBe('manual');
+
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // O domínio das fotos do ML falso (e2e) não está na lista: "indisponível" sem pedido nenhum.
+    expect(await midias.fotoDoAnuncio('https://imagens.ml-falso.example/mlf-fone-01.png', { prazoMs: 1_000 })).toEqual({ ok: false, motivo: 'host_nao_permitido' });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+});

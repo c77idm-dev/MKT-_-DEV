@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from 'pdf-lib';
 import { formatarDataHora } from '@/lib/formatar';
 import { ROTULO_CANAL, ROTULO_DESTINO, ROTULO_MOTIVO, rotuloStatus } from '@/modules/devolucoes/dominio';
 import { rotuloDaAcao } from '@/modules/historico/eventos';
@@ -20,12 +20,15 @@ import {
   leituraDoCodigo,
   MAX_FOTOS_DOSSIE,
   opcoesIniciais,
+  ORCAMENTO_FOTOS_ANUNCIO_MS,
+  PRAZO_FOTO_ANUNCIO_MS,
   ROTULO_LEITURA,
   type DadosDossie,
   type EvidenciaDossie,
   type OpcoesImagem,
   type UnidadeDossie,
 } from './dominio';
+import type { ResultadoFotoAnuncio } from './anuncio';
 import type { ImagemPdf } from './imagens';
 
 /** Foto lida do armazenamento já reduzida, ou o motivo de não ter vindo (o PDF põe um aviso no lugar). */
@@ -39,6 +42,11 @@ export type ResultadoQuadro = { imagem: ImagemPdf | null; duracaoSegundos: numbe
 export type MidiasDossie = {
   foto(e: EvidenciaDossie, opcoes: OpcoesImagem, sinal?: AbortSignal): Promise<ResultadoFoto>;
   quadroDoVideo(e: EvidenciaDossie, opcoes: OpcoesImagem, sinal?: AbortSignal): Promise<ResultadoQuadro>;
+  /**
+   * Foto do anúncio no ML (extra): a referência do que foi vendido, baixada do CDN do ML (anuncio.ts), já a 400 px.
+   * Falha vira { ok: false }; só o cancelamento do dossiê (`sinal`) sobe como erro. `prazoMs`: o desta foto.
+   */
+  fotoDoAnuncio(url: string, o: { prazoMs: number; sinal?: AbortSignal }): Promise<ResultadoFotoAnuncio>;
 };
 
 export type SecaoPdf = { titulo: string; pagina: number };
@@ -136,13 +144,29 @@ function fotosDoCorpo(d: DadosDossie): EvidenciaDossie[] {
 const ACOES_COM_MOTIVO = new Set(['cancelada', 'extraviada', 'concluida', 'conferencia_concluida']);
 const motivoVaiNoDossie = (acao: string) => ACOES_COM_MOTIVO.has(acao) || acao.startsWith('ml_') || acao.startsWith('contestacao_');
 
-/** O que entra no corpo: as fotos dentro do teto e o cancelamento do dossiê. */
-type Plano = { noPdf: Set<string>; fora: number; maxFotos: number; sinal?: AbortSignal };
+/**
+ * O que entra no corpo: as fotos dentro do teto, o cancelamento do dossiê e a foto do anúncio de cada URL (baixada uma
+ * vez para as duas tentativas do PDF).
+ */
+type Plano = { noPdf: Set<string>; fora: number; maxFotos: number; sinal?: AbortSignal; anuncio: (url: string) => Promise<ResultadoFotoAnuncio> };
 
 /** Legenda (2 linhas) + caixa da foto + carimbo. */
 const alturaDaLinha = (alturaCaixa: number) => 30 + alturaCaixa + 16;
 const CAIXA_UNIDADE = 230;
 const CAIXA_AVARIA = 200;
+const CAIXA_ANUNCIO = 120;
+
+const LEGENDA_ANUNCIO = 'Foto do anúncio no ML (o que foi vendido)';
+const NOTA_ANUNCIO = 'Referência do anúncio no Mercado Livre, não da conferência: não é arquivo guardado no sistema (sem carimbo e sem SHA-256).';
+const COMPARAR_ANUNCIO = 'Compare com as fotos da unidade (o que voltou).';
+const ANUNCIO_INDISPONIVEL = 'Foto do anúncio indisponível';
+/** Com menos tempo que isso no orçamento das fotos do anúncio, nem pede. */
+const PRAZO_MINIMO_ANUNCIO_MS = 200;
+
+/** "1", "1 e 2", "1, 2 e 3". */
+function juntarNumeros(n: number[]): string {
+  return n.length <= 1 ? n.join('') : `${n.slice(0, -1).join(', ')} e ${n[n.length - 1]}`;
+}
 
 /** Escreve de cima para baixo, abrindo páginas novas quando o espaço acaba. */
 class Escritor {
@@ -224,9 +248,18 @@ class Escritor {
     this.y -= altura + 10;
   }
 
-  /** A imagem cabendo na caixa (sem distorcer), ou o aviso no lugar. A imagem entra no PDF já reduzida. */
-  async caixa(x: number, topo: number, largura: number, altura: number, conteudo: { imagem: ImagemPdf } | { aviso: string }): Promise<void> {
-    const temImagem = 'imagem' in conteudo;
+  /**
+   * A imagem cabendo na caixa (sem distorcer), ou o aviso no lugar. A imagem entra no PDF já reduzida; `embutida`: uma
+   * que já está no arquivo (a mesma foto do anúncio em várias unidades vai uma vez só).
+   */
+  async caixa(
+    x: number,
+    topo: number,
+    largura: number,
+    altura: number,
+    conteudo: { imagem: ImagemPdf } | { embutida: PDFImage } | { aviso: string },
+  ): Promise<void> {
+    const temImagem = !('aviso' in conteudo);
     this.pagina.drawRectangle({
       x,
       y: topo - altura,
@@ -236,8 +269,8 @@ class Escritor {
       borderWidth: 0.75,
       ...(temImagem ? {} : { color: FUNDO_AVISO }),
     });
-    if (temImagem) {
-      const imagem = await this.doc.embedJpg(conteudo.imagem.jpeg);
+    if (!('aviso' in conteudo)) {
+      const imagem = 'embutida' in conteudo ? conteudo.embutida : await this.doc.embedJpg(conteudo.imagem.jpeg);
       const escala = Math.min((largura - 4) / imagem.width, (altura - 4) / imagem.height);
       const w = imagem.width * escala;
       const h = imagem.height * escala;
@@ -290,6 +323,9 @@ async function montar(
   const geradoEm = formatarDataHora(d.geradoEm);
   const video = d.evidencias.find((x) => x.tipo === 'VIDEO_PROVA') ?? null;
   const pronta = ehPronta;
+  /** Foto do anúncio (extra): cada URL entra uma vez no arquivo; e as unidades em que apareceu, para a integridade. */
+  const anunciosEmbutidos = new Map<string, PDFImage>();
+  const anunciosNoCorpo = new Map<string, number[]>();
 
   function nomeDaEvidencia(x: EvidenciaDossie): string {
     const u = x.itemId ? unidadeDe.get(x.itemId) : undefined;
@@ -426,11 +462,53 @@ async function montar(
     await secaoDaUnidade(u);
   }
 
+  /**
+   * Foto do anúncio no ML (extra), na coluna dos valores, logo abaixo do produto esperado: a caixa com a foto (ou
+   * "indisponível") e, ao lado, a legenda e a nota de que é referência do anúncio, não prova da conferência.
+   */
+  async function blocoDoAnuncio(u: UnidadeDossie, ausente: boolean): Promise<void> {
+    let conteudo: { embutida: PDFImage } | { aviso: string } = { aviso: ANUNCIO_INDISPONIVEL };
+    if (u.fotoUrl) {
+      sinal?.throwIfAborted();
+      const r = await plano.anuncio(u.fotoUrl);
+      if (r.ok) {
+        let embutida = anunciosEmbutidos.get(u.fotoUrl);
+        if (!embutida) {
+          embutida = await doc.embedJpg(r.imagem.jpeg);
+          anunciosEmbutidos.set(u.fotoUrl, embutida);
+        }
+        conteudo = { embutida };
+        anunciosNoCorpo.set(u.fotoUrl, [...(anunciosNoCorpo.get(u.fotoUrl) ?? []), u.unidade]);
+      }
+    }
+    const x = MARGEM + LARGURA_ROTULO;
+    const xTexto = x + CAIXA_ANUNCIO + 12;
+    const larguraTexto = MARGEM + LARGURA - xTexto;
+    const legenda = quebrar(LEGENDA_ANUNCIO, f.negrito, 9.5, larguraTexto);
+    const nota = quebrar(ausente ? NOTA_ANUNCIO : `${NOTA_ANUNCIO} ${COMPARAR_ANUNCIO}`, f.normal, 8.5, larguraTexto);
+    const altura = Math.max(CAIXA_ANUNCIO, legenda.length * 13 + 4 + nota.length * 11);
+    e.caber(altura + 10);
+    const topo = e.y;
+    await e.caixa(x, topo, CAIXA_ANUNCIO, CAIXA_ANUNCIO, conteudo);
+    let y = topo;
+    for (const l of legenda) {
+      e.desenhar(l, xTexto, y - 9.5, 9.5, f.negrito);
+      y -= 13;
+    }
+    y -= 4;
+    for (const l of nota) {
+      e.desenhar(l, xTexto, y - 8.5, 8.5, f.normal, CINZA);
+      y -= 11;
+    }
+    e.y = topo - altura - 10;
+  }
+
   async function secaoDaUnidade(u: UnidadeDossie): Promise<void> {
     const ausente = u.motivo === 'AUSENTE' || u.status === 'AUSENTE';
     if (ausente) e.quadro('Não veio no pacote (ausente)', { negrito: true });
-    // A foto do anúncio no ML (produtos.foto_url, da branch produtos-do-ml) entra aqui, ao lado do produto esperado.
     e.campo('Produto esperado', `${u.sku} · ${u.descricao ?? 'SKU fora do cadastro de produtos'}`);
+    // O que foi vendido (a foto do anúncio) ao lado do produto esperado; o que voltou, nas fotos da unidade. Só no ML.
+    if (ehML) await blocoDoAnuncio(u, ausente);
     e.campo('EAN esperado', u.eanEsperado ?? '—');
     if (!ausente) {
       const leitura = leituraDoCodigo(u);
@@ -552,6 +630,14 @@ async function montar(
     e.y -= 10;
   }
   if (d.evidencias.length === 0) e.escrever('Esta devolução não tem fotos nem vídeo.');
+  // A foto do anúncio (extra) não é prova guardada: aparece só para dizer isso, sem código de integridade.
+  for (const unidades of anunciosNoCorpo.values()) {
+    const onde = unidades.length === 1 ? `Unidade ${unidades[0]}` : `Unidades ${juntarNumeros(unidades)}`;
+    e.caber(2 * 14 + 10);
+    e.escrever(`Foto do anúncio no ML · ${onde}`, { tamanho: 10, fonte: f.negrito });
+    e.escrever('Referência do anúncio, não guardada no sistema: baixada do Mercado Livre ao gerar este PDF, sem SHA-256.', { tamanho: 9 });
+    e.y -= 10;
+  }
 
   // Índice da capa (agora que as páginas existem) e rodapé em todas.
   for (const item of indice) {
@@ -597,21 +683,65 @@ function ordenarEvidencias(d: DadosDossie): EvidenciaDossie[] {
 }
 
 /**
+ * Fotos do anúncio (extra): cada URL é pedida uma vez por dossiê (a promessa vale para as duas tentativas do PDF), uma
+ * por vez (as seções são montadas em ordem), só as que couberam no teto de fotos e dentro do tempo total
+ * (`orcamentoMs`): acabou o tempo, as que faltam nem são pedidas e ficam "indisponível".
+ */
+function fotosDoAnuncio(
+  midias: MidiasDossie,
+  noPdf: ReadonlySet<string>,
+  orcamentoMs: number,
+  sinal: AbortSignal | undefined,
+): (url: string) => Promise<ResultadoFotoAnuncio> {
+  const pedidas = new Map<string, Promise<ResultadoFotoAnuncio>>();
+  let gastoMs = 0;
+  async function baixar(url: string): Promise<ResultadoFotoAnuncio> {
+    if (!noPdf.has(url)) return { ok: false, motivo: 'fora_do_limite' };
+    const restante = orcamentoMs - gastoMs;
+    if (restante < PRAZO_MINIMO_ANUNCIO_MS) return { ok: false, motivo: 'sem_tempo' };
+    const inicio = performance.now();
+    try {
+      return await midias.fotoDoAnuncio(url, { prazoMs: Math.min(PRAZO_FOTO_ANUNCIO_MS, restante), sinal });
+    } finally {
+      gastoMs += performance.now() - inicio;
+    }
+  }
+  return (url) => {
+    let pedida = pedidas.get(url);
+    if (!pedida) {
+      pedida = baixar(url);
+      pedidas.set(url, pedida);
+    }
+    return pedida;
+  };
+}
+
+/**
  * O dossiê em PDF (extra). Imagens a 1280 px e qualidade 70; se o PDF passar de 8 MB, refaz uma vez a 1024 px e 60
  * (o ML recusa anexos grandes). Quando a estimativa (fotos × ~170 KB) já passa do limite, começa direto em 1024/60.
  * Até MAX_FOTOS_DOSSIE fotos no corpo; as de cima viram aviso. Mídia que falta ou não ficou pronta vira um aviso,
  * nunca um erro; o cancelamento (`sinal`: o pedido foi embora ou o dossiê passou do prazo) para entre uma foto e outra.
+ * Foto do anúncio no ML (extra, só nas devoluções do ML): conta no mesmo teto, com as vagas que sobram depois das
+ * provas (nunca tira o lugar de uma), e tem um tempo total próprio (`orcamentoAnunciosMs`, padrão 20 s).
  */
 export async function gerarPdfDossie(
   d: DadosDossie,
   midias: MidiasDossie,
-  config: { limiteBytes?: number; maxFotos?: number; sinal?: AbortSignal } = {},
+  config: { limiteBytes?: number; maxFotos?: number; sinal?: AbortSignal; orcamentoAnunciosMs?: number } = {},
 ): Promise<ResultadoPdf> {
   const limite = config.limiteBytes ?? LIMITE_BYTES_DOSSIE;
   const maxFotos = config.maxFotos ?? MAX_FOTOS_DOSSIE;
   const prontas = fotosDoCorpo(d);
   const noPdf = new Set(prontas.slice(0, maxFotos).map((x) => x.id));
-  const plano: Plano = { noPdf, fora: prontas.length - noPdf.size, maxFotos, sinal: config.sinal };
+  const urlsAnuncio = d.canal === 'MERCADO_LIVRE' ? [...new Set(d.unidades.map((u) => u.fotoUrl).filter((u): u is string => !!u))] : [];
+  const anunciosNoPdf = new Set(urlsAnuncio.slice(0, Math.max(0, maxFotos - noPdf.size)));
+  const plano: Plano = {
+    noPdf,
+    fora: prontas.length - noPdf.size,
+    maxFotos,
+    sinal: config.sinal,
+    anuncio: fotosDoAnuncio(midias, anunciosNoPdf, config.orcamentoAnunciosMs ?? ORCAMENTO_FOTOS_ANUNCIO_MS, config.sinal),
+  };
   const comQuadro = d.evidencias.some((x) => x.tipo === 'VIDEO_PROVA' && ehPronta(x));
   const inicial = opcoesIniciais(noPdf.size + (comQuadro ? 1 : 0), limite);
 

@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { imagensDoPdf, paginasDoPdf, textoDoPdf } from '../../../tests/helpers/pdf';
 import { dadosDossieTeste as dadosTeste } from '../../../tests/helpers/fabricas-dossie';
-import { MAX_FOTOS_DOSSIE, type OpcoesImagem } from './dominio';
+import { IMAGEM_ANUNCIO, MAX_FOTOS_DOSSIE, PRAZO_FOTO_ANUNCIO_MS, type DadosDossie, type OpcoesImagem } from './dominio';
 import { reduzirImagem, type ImagemPdf } from './imagens';
 import { gerarPdfDossie, type MidiasDossie } from './pdf';
 
@@ -30,13 +30,44 @@ function fotoPesada(opcoes: OpcoesImagem): Promise<ImagemPdf> {
   return pesadas.get(chave)!;
 }
 
+/** A foto do anúncio como o baixarFotoAnuncio a devolve: 1200×1200 reduzida a 400 px. */
+let anuncioReduzido: Promise<ImagemPdf> | null = null;
+function fotoDoAnuncioReduzida(): Promise<ImagemPdf> {
+  anuncioReduzido ??= sharp({ create: { width: 1200, height: 1200, channels: 3, background: { r: 200, g: 60, b: 40 } } })
+    .png()
+    .toBuffer()
+    .then((b) => reduzirImagem(b, IMAGEM_ANUNCIO));
+  return anuncioReduzido;
+}
+
 function midiasTeste(
-  o: { fotoFalha?: string[]; semQuadro?: boolean; pesadas?: boolean; aoPedirFoto?: (n: number) => void } = {},
-): MidiasDossie & { chamadas: { id: string; opcoes: OpcoesImagem }[] } {
+  o: {
+    fotoFalha?: string[];
+    semQuadro?: boolean;
+    pesadas?: boolean;
+    aoPedirFoto?: (n: number) => void;
+    /** ok: devolve a foto; falha: indisponível; demora: espera o prazo inteiro e desiste (servidor parado). */
+    anuncio?: 'ok' | 'falha' | 'demora';
+    aoPedirAnuncio?: (n: number) => void;
+  } = {},
+): MidiasDossie & { chamadas: { id: string; opcoes: OpcoesImagem }[]; anuncios: { url: string; prazoMs: number }[] } {
   const chamadas: { id: string; opcoes: OpcoesImagem }[] = [];
+  const anuncios: { url: string; prazoMs: number }[] = [];
   const imagem = o.pesadas ? fotoPesada : fotoReduzida;
   return {
     chamadas,
+    anuncios,
+    async fotoDoAnuncio(url, { prazoMs, sinal }) {
+      anuncios.push({ url, prazoMs });
+      o.aoPedirAnuncio?.(anuncios.length);
+      sinal?.throwIfAborted();
+      if (o.anuncio === 'falha') return { ok: false, motivo: 'http' };
+      if (o.anuncio === 'demora') {
+        await new Promise((r) => setTimeout(r, prazoMs));
+        return { ok: false, motivo: 'prazo' };
+      }
+      return { ok: true, imagem: await fotoDoAnuncioReduzida() };
+    },
     async foto(e, opcoes) {
       chamadas.push({ id: e.id, opcoes });
       o.aoPedirFoto?.(chamadas.length);
@@ -362,5 +393,136 @@ describe('gerarPdfDossie (extra)', () => {
     const dados = dadosTeste();
     dados.unidades[0] = { ...dados.unidades[0], observacao: 'Caixa amassada 📦' };
     await expect(gerarPdfDossie(dados, midiasTeste())).resolves.toMatchObject({ tentativas: 1 });
+  });
+});
+
+describe('foto do anúncio no ML no dossiê (extra)', () => {
+  const FOTO_A = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
+  const FOTO_B = 'https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg';
+  const LEGENDA = 'Foto do anúncio no ML (o que foi vendido)';
+  const INDISPONIVEL = 'Foto do anúncio indisponível';
+  /** O texto de cada caixa quebra em linhas: compara sem as quebras. */
+  const corrido = (t: string) => t.replace(/\s+/g, ' ');
+  const hashes = (t: string) => t.match(/\b[0-9a-f]{64}\b/g) ?? [];
+
+  /** Unidades 1 e 2 com o mesmo produto (FOTO_A), a 3 com outro (FOTO_B). */
+  function comFotos(m: Partial<DadosDossie> = {}, fotos: (string | null)[] = [FOTO_A, FOTO_A, FOTO_B]) {
+    const dados = dadosTeste(m);
+    dados.unidades = dados.unidades.map((u, i) => ({ ...u, fotoUrl: fotos[i] ?? null }));
+    return dados;
+  }
+
+  async function secoes(r: Awaited<ReturnType<typeof gerarPdfDossie>>) {
+    const paginas = await paginasDoPdf(r.bytes);
+    return (titulo: string) => {
+      const i = r.secoes.findIndex((s) => s.titulo === titulo);
+      const fim = i + 1 < r.secoes.length ? r.secoes[i + 1].pagina - 1 : paginas.length;
+      return paginas.slice(r.secoes[i].pagina - 1, fim).join('\n');
+    };
+  }
+
+  it('ao lado do produto esperado: a foto, a legenda e a nota de que é referência do anúncio, não da conferência', async () => {
+    const midias = midiasTeste({ anuncio: 'ok' });
+    const r = await gerarPdfDossie(comFotos(), midias);
+    const secao = await secoes(r);
+    for (const titulo of ['Unidade 1 de 3', 'Unidade 2 de 3', 'Unidade 3 de 3']) {
+      const u = corrido(secao(titulo));
+      expect(u).toContain(LEGENDA);
+      expect(u).toMatch(/Referência do anúncio no Mercado Livre, não da conferência/);
+      expect(u).not.toContain(INDISPONIVEL);
+      // Logo depois do produto esperado, antes do EAN.
+      expect(u.indexOf('Produto esperado')).toBeLessThan(u.indexOf(LEGENDA));
+      expect(u.indexOf(LEGENDA)).toBeLessThan(u.indexOf('EAN esperado'));
+    }
+    // A caixa com a foto: 8 fotos + o quadro + as 2 fotos de anúncio (uma vez cada no arquivo), a 400 px.
+    const imagens = await imagensDoPdf(r.bytes);
+    expect(imagens).toHaveLength(11);
+    expect(imagens.filter((i) => Math.max(i.largura, i.altura) === IMAGEM_ANUNCIO.ladoMaior)).toHaveLength(2);
+    // Nada da URL no PDF.
+    expect(await textoDoPdf(r.bytes)).not.toContain('mlstatic');
+  });
+
+  it('uma vez por URL (unidades com o mesmo produto), uma por vez e com o prazo de 5 s', async () => {
+    const midias = midiasTeste({ anuncio: 'ok' });
+    await gerarPdfDossie(comFotos(), midias);
+    expect(midias.anuncios).toEqual([
+      { url: FOTO_A, prazoMs: PRAZO_FOTO_ANUNCIO_MS },
+      { url: FOTO_B, prazoMs: PRAZO_FOTO_ANUNCIO_MS },
+    ]);
+  });
+
+  it('uma vez por URL também quando o PDF é refeito com imagens menores', async () => {
+    const midias = midiasTeste({ anuncio: 'ok', pesadas: true });
+    const r = await gerarPdfDossie(comFotos(), midias, { limiteBytes: 2 * 1024 * 1024 });
+    expect(r.tentativas).toBe(2);
+    expect(midias.anuncios.map((a) => a.url)).toEqual([FOTO_A, FOTO_B]);
+    expect((await imagensDoPdf(r.bytes)).filter((i) => Math.max(i.largura, i.altura) === IMAGEM_ANUNCIO.ladoMaior)).toHaveLength(2);
+  });
+
+  it('falhou ou o produto não tem foto: "Foto do anúncio indisponível" e o PDF sai igual', async () => {
+    const falha = midiasTeste({ anuncio: 'falha' });
+    const r = await gerarPdfDossie(comFotos({}, [FOTO_A, null, FOTO_B]), falha);
+    expect(falha.anuncios.map((a) => a.url)).toEqual([FOTO_A, FOTO_B]);
+    const secao = await secoes(r);
+    for (const titulo of ['Unidade 1 de 3', 'Unidade 2 de 3', 'Unidade 3 de 3']) {
+      const u = corrido(secao(titulo));
+      expect(u).toContain(LEGENDA);
+      expect(u).toContain(INDISPONIVEL);
+    }
+    expect(await imagensDoPdf(r.bytes)).toHaveLength(9);
+    // Sem foto nenhuma no cadastro: nada é pedido.
+    const semFoto = midiasTeste({ anuncio: 'ok' });
+    expect(corrido(await textoDoPdf((await gerarPdfDossie(dadosTeste(), semFoto)).bytes))).toContain(INDISPONIVEL);
+    expect(semFoto.anuncios).toEqual([]);
+  });
+
+  it('integridade: a foto do anúncio aparece como referência, não guardada no sistema, sem SHA-256', async () => {
+    const sem = await secoes(await gerarPdfDossie(dadosTeste(), midiasTeste()));
+    const com = await secoes(await gerarPdfDossie(comFotos(), midiasTeste({ anuncio: 'ok' })));
+    const integridade = corrido(com('Integridade dos arquivos'));
+    expect(integridade).toContain('Foto do anúncio no ML · Unidades 1 e 2');
+    expect(integridade).toContain('Foto do anúncio no ML · Unidade 3');
+    expect(integridade).toMatch(/referência do anúncio, não guardada no sistema/i);
+    // Nenhum hash a mais: os mesmos SHA-256 das evidências, nada para a foto do anúncio.
+    expect(hashes(integridade)).toEqual(hashes(corrido(sem('Integridade dos arquivos'))));
+    // Só a que entrou no PDF: indisponível não vai à integridade.
+    const falhou = await secoes(await gerarPdfDossie(comFotos(), midiasTeste({ anuncio: 'falha' })));
+    expect(corrido(falhou('Integridade dos arquivos'))).not.toContain('Foto do anúncio');
+  });
+
+  it('teto de fotos: a do anúncio conta no teto, mas nunca tira o lugar de uma prova', async () => {
+    // 8 fotos de prova no corpo; teto 8: nenhuma foto de anúncio é pedida.
+    const cheio = midiasTeste({ anuncio: 'ok' });
+    const r = await gerarPdfDossie(comFotos(), cheio, { maxFotos: 8 });
+    expect(cheio.anuncios).toEqual([]);
+    expect(cheio.chamadas.filter((c) => c.id !== 'quadro')).toHaveLength(8);
+    expect(corrido(await textoDoPdf(r.bytes))).toContain(INDISPONIVEL);
+    expect((await paginasDoPdf(r.bytes))[0]).not.toContain('não entr');
+    // Teto 9: sobra lugar para uma (a 1ª URL, na ordem das unidades).
+    const umaVaga = midiasTeste({ anuncio: 'ok' });
+    await gerarPdfDossie(comFotos(), umaVaga, { maxFotos: 9 });
+    expect(umaVaga.anuncios.map((a) => a.url)).toEqual([FOTO_A]);
+  });
+
+  it('tempo das fotos do anúncio: um CDN parado não come o prazo do dossiê (as que faltam nem são pedidas)', async () => {
+    const midias = midiasTeste({ anuncio: 'demora' });
+    const r = await gerarPdfDossie(comFotos(), midias, { orcamentoAnunciosMs: 300 });
+    expect(midias.anuncios).toHaveLength(1);
+    expect(midias.anuncios[0].prazoMs).toBeLessThanOrEqual(300);
+    expect(corrido(await textoDoPdf(r.bytes)).match(new RegExp(INDISPONIVEL, 'g'))).toHaveLength(3);
+  });
+
+  it('fora do ML: sem a foto do anúncio (nada é pedido)', async () => {
+    const midias = midiasTeste({ anuncio: 'ok' });
+    const r = await gerarPdfDossie(comFotos({ canal: 'SHOPEE', reclamacaoId: null, devolucaoExternaId: null, contaML: null, motivoReclamacaoML: null }), midias);
+    expect(midias.anuncios).toEqual([]);
+    expect(await textoDoPdf(r.bytes)).not.toContain('Foto do anúncio');
+  });
+
+  it('dossiê cancelado enquanto baixa a foto do anúncio: o erro sobe e nada mais é pedido', async () => {
+    const controle = new AbortController();
+    const midias = midiasTeste({ anuncio: 'ok', aoPedirAnuncio: () => controle.abort(new Error('foi embora')) });
+    await expect(gerarPdfDossie(comFotos(), midias, { sinal: controle.signal })).rejects.toThrow('foi embora');
+    expect(midias.anuncios).toHaveLength(1);
   });
 });
