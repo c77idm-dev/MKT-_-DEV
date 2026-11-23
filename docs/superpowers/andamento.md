@@ -33,7 +33,7 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
         2. Pedir o adendo do `logistic` à sessão do Bitbrain, para o selo Full funcionar.
         3. Apagar as fotos que ficaram sem dono no armazenamento, das antigas DEV-000004 e 000005, e perguntar ao usuário se apaga também a DEV-000001.
         4. Mover o arquivo solto `/opt/devolucoes/backup-antes-fase1-20261112-1928.sql` para `~/backups-devolucoes`.
-      - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `f2f5595`, no GitHub). Ainda não está no `main`.
+      - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `70801df`). **Revisado em equipe e junto no `main` em 23/11 (`97f1fdb`).** Falta só publicar na VPS.
         - **Testes:**
           - unidade: 853;
           - integração: 513 (7 pulados);
@@ -42,10 +42,9 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
           - e2e do modo Bitbrain: 14 de 14.
         - **Bateria e2e completa:** 221 passaram e 1 falhou (`texto-longo` no celular: a foto alargava o detalhe). Corrigido em `f2f5595` (lista dos itens com coluna fixa e quebra de texto); o reteste deu 7 de 7.
         - **Prints (23/11):** `scratchpad\produtos-ml\etapa-1-cartoes-com-foto.png` e `conferencia-unidade-com-foto.png`.
-        - **Falta:**
-          1. a revisão final, rodando no run `wf_61044862-f3c` (`fase-final.js`, `pref` `prod`, `base` `819b43a`);
-          2. a junção no `main`;
-          3. a publicação na VPS, que aplica a migração `0015_produtos_do_ml.sql` ao subir.
+        - **Revisão final (run `wf_61044862-f3c`): aprovada.** Corrigiu um IMPORTANTE em `a178e64`: o produto criado pelo ML ligava só a devolução sincronizada, e outra devolução com o mesmo SKU dava divergência falsa na bancada. Agora liga os itens de todas as devoluções ainda não lidas, dentro do savepoint. Também: o EAN livre ignora zeros à esquerda, há um teste provando que um erro no cadastro do produto não trava a sincronização, e a E22 lista o detalhe. Os menores ficaram para o adendo do catálogo: alt repetido no leitor de tela, não dá para trocar a foto pela tela, a foto de 64 px não amplia com um toque.
+        - **Aviso das revisões:** e2e e `test:int` não podem rodar ao mesmo tempo no mesmo worktree e banco, porque o `limparTabelas` apaga os usuários do e2e.
+        - **Falta:** publicar na VPS (imagem `97f1fdb558a64ff139af79fd6cdd6fd82c1d50f9`), que aplica a migração `0015_produtos_do_ml.sql` ao subir. Fazer o backup antes.
         - **O que se desviou do pedido, de propósito:**
           - a foto aparece só no passo da unidade da conferência, não na legenda do destino;
           - o GTIN só vale se passar no `normalizarEan`, que confere o dígito verificador;
