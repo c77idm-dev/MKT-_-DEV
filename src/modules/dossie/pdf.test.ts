@@ -1,9 +1,10 @@
+import { randomBytes } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { imagensDoPdf, paginasDoPdf, textoDoPdf } from '../../../tests/helpers/pdf';
 import { dadosDossieTeste as dadosTeste } from '../../../tests/helpers/fabricas-dossie';
-import type { OpcoesImagem } from './dominio';
+import { MAX_FOTOS_DOSSIE, type OpcoesImagem } from './dominio';
 import { reduzirImagem, type ImagemPdf } from './imagens';
 import { gerarPdfDossie, type MidiasDossie } from './pdf';
 
@@ -18,21 +19,45 @@ function fotoReduzida(opcoes: OpcoesImagem): Promise<ImagemPdf> {
   return reduzidas.get(chave)!;
 }
 
-function midiasTeste(o: { fotoFalha?: string[]; semQuadro?: boolean } = {}): MidiasDossie & { chamadas: { id: string; opcoes: OpcoesImagem }[] } {
+/** Foto de ruído (não comprime): bem mais pesada que a estimativa por foto, para forçar a 2ª tentativa. */
+const pesadas = new Map<string, Promise<ImagemPdf>>();
+function fotoPesada(opcoes: OpcoesImagem): Promise<ImagemPdf> {
+  const chave = `${opcoes.ladoMaior}/${opcoes.qualidade}`;
+  if (!pesadas.has(chave)) {
+    const base = sharp(randomBytes(1600 * 1200 * 3), { raw: { width: 1600, height: 1200, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
+    pesadas.set(chave, base.then((b) => reduzirImagem(b, opcoes)));
+  }
+  return pesadas.get(chave)!;
+}
+
+function midiasTeste(
+  o: { fotoFalha?: string[]; semQuadro?: boolean; pesadas?: boolean; aoPedirFoto?: (n: number) => void } = {},
+): MidiasDossie & { chamadas: { id: string; opcoes: OpcoesImagem }[] } {
   const chamadas: { id: string; opcoes: OpcoesImagem }[] = [];
+  const imagem = o.pesadas ? fotoPesada : fotoReduzida;
   return {
     chamadas,
     async foto(e, opcoes) {
       chamadas.push({ id: e.id, opcoes });
+      o.aoPedirFoto?.(chamadas.length);
       if (o.fotoFalha?.includes(e.id)) return { ok: false, motivo: 'Arquivo não encontrado no armazenamento.' };
-      return { ok: true, imagem: await fotoReduzida(opcoes), sha256Calculado: e.sha256Final ? null : 'c'.repeat(64) };
+      return { ok: true, imagem: await imagem(opcoes), sha256Calculado: e.sha256Final ? null : 'c'.repeat(64) };
     },
     async quadroDoVideo(_e, opcoes) {
       chamadas.push({ id: 'quadro', opcoes });
       if (o.semQuadro) return { imagem: null, duracaoSegundos: null, sha256Calculado: null, problema: 'Não foi possível tirar um quadro do vídeo.' };
-      return { imagem: await fotoReduzida(opcoes), duracaoSegundos: 42.4, sha256Calculado: null, problema: null };
+      return { imagem: await imagem(opcoes), duracaoSegundos: 42.4, sha256Calculado: null, problema: null };
     },
   };
+}
+
+/** Fotos da avaria a mais na unidade 1, para passar da estimativa de tamanho ou do teto de fotos. */
+function comMuitasFotos(n: number) {
+  const dados = dadosTeste();
+  for (let i = 0; i < n; i++) {
+    dados.evidencias.push({ ...dados.evidencias[4], id: `avx${i}`, sha256Original: i.toString(16).padStart(64, '0'), sha256Final: null });
+  }
+  return dados;
 }
 
 describe('gerarPdfDossie (extra)', () => {
@@ -199,6 +224,28 @@ describe('gerarPdfDossie (extra)', () => {
     expect(historico).not.toContain('Dossiê de provas (PDF) gerado');
   });
 
+  it('histórico: o motivo só das ações que servem de prova (nada do texto fiscal interno)', async () => {
+    const dados = dadosTeste();
+    const em = new Date('2026-11-19T14:10:00Z');
+    dados.eventos.push(
+      { acao: 'nf_rejeitada', de: null, para: null, em, usuarioNome: null, dados: { motivo: '539 - Duplicidade; destinatário Fulano de Tal' } },
+      { acao: 'devolucao_reaberta', de: 'AGUARDANDO_NF', para: 'AGUARDANDO_NF', em, usuarioNome: 'Fiscal Teste', dados: { motivo: 'Justificativa fiscal interna' } },
+      { acao: 'concluida', de: 'AGUARDANDO_NF', para: 'CONCLUIDA', em, usuarioNome: null, dados: { motivo: 'Todas as unidades estavam ausentes.' } },
+      { acao: 'contestacao_enviada', de: null, para: null, em, usuarioNome: 'Gestora Teste', dados: { motivo: 'SRF2' } },
+    );
+    const r = await gerarPdfDossie(dados, midiasTeste());
+    const paginas = await paginasDoPdf(r.bytes);
+    const historico = paginas.slice(r.secoes.find((s) => s.titulo === 'Histórico')!.pagina - 1, r.secoes.find((s) => s.titulo === 'Integridade dos arquivos')!.pagina - 1).join('\n');
+    expect(historico).toContain('NF-e rejeitada');
+    expect(historico).toContain('Devolução reaberta (NF cancelada)');
+    expect(historico).not.toContain('Duplicidade');
+    expect(historico).not.toContain('Fulano de Tal');
+    expect(historico).not.toContain('Justificativa fiscal interna');
+    expect(historico).toContain('Motivo: Teste de motivo');
+    expect(historico).toContain('Motivo: Todas as unidades estavam ausentes.');
+    expect(historico).toContain('Motivo: SRF2');
+  });
+
   it('integridade: quando e por quem foi gerado, e o SHA-256 e o carimbo de cada foto e do vídeo', async () => {
     const dados = dadosTeste();
     dados.evidencias[1] = { ...dados.evidencias[1], sha256Final: null }; // Foto 2 sem o hash final: calcula agora
@@ -248,14 +295,67 @@ describe('gerarPdfDossie (extra)', () => {
     expect(new Set(midias.chamadas.map((c) => c.opcoes.ladoMaior))).toEqual(new Set([1280]));
   });
 
-  it('acima do limite, refaz uma vez com 1024 px e qualidade 60', async () => {
-    const midias = midiasTeste();
-    const r = await gerarPdfDossie(dadosTeste(), midias, { limiteBytes: 1000 });
+  it('acima do limite (fotos mais pesadas que a estimativa), refaz uma vez com 1024 px e qualidade 60', async () => {
+    const midias = midiasTeste({ pesadas: true });
+    // 9 imagens × 170 KB cabem em 2 MB pela estimativa; as fotos de ruído passam disso.
+    const r = await gerarPdfDossie(dadosTeste(), midias, { limiteBytes: 2 * 1024 * 1024 });
     expect(r.tentativas).toBe(2);
     expect(r.opcoes).toEqual({ ladoMaior: 1024, qualidade: 60 });
+    expect(midias.chamadas.filter((c) => c.opcoes.ladoMaior === 1280)).toHaveLength(9);
     expect(midias.chamadas.filter((c) => c.opcoes.ladoMaior === 1024 && c.opcoes.qualidade === 60)).toHaveLength(9);
     for (const i of await imagensDoPdf(r.bytes)) expect(Math.max(i.largura, i.altura)).toBeLessThanOrEqual(1024);
     expect(Buffer.from(r.bytes.subarray(0, 5)).toString('latin1')).toBe('%PDF-');
+  });
+
+  it('muitas fotos (a estimativa passa de 8 MB): já começa em 1024 px/60, numa tentativa só', async () => {
+    const midias = midiasTeste();
+    const r = await gerarPdfDossie(comMuitasFotos(45), midias); // 53 fotos + o quadro: 54 × 170 KB > 8 MB
+    expect(r.tentativas).toBe(1);
+    expect(r.opcoes).toEqual({ ladoMaior: 1024, qualidade: 60 });
+    expect(new Set(midias.chamadas.map((c) => `${c.opcoes.ladoMaior}/${c.opcoes.qualidade}`))).toEqual(new Set(['1024/60']));
+    expect(await imagensDoPdf(r.bytes)).toHaveLength(54);
+  });
+
+  it('teto de fotos por PDF: as de cima viram aviso (sem ler o arquivo) e os hashes de todas ficam na integridade', async () => {
+    expect(MAX_FOTOS_DOSSIE).toBe(120);
+    const dados = comMuitasFotos(2); // 10 fotos no corpo
+    const midias = midiasTeste();
+    const r = await gerarPdfDossie(dados, midias, { maxFotos: 7 });
+    expect(midias.chamadas.filter((c) => c.id !== 'quadro')).toHaveLength(7);
+    expect(await imagensDoPdf(r.bytes)).toHaveLength(8); // 7 fotos + o quadro do vídeo
+    const paginas = await paginasDoPdf(r.bytes);
+    expect(paginas[0]).toContain('3 fotos não entraram neste PDF: veja no sistema.');
+    const texto = paginas.join('\n');
+    expect(texto.match(/Foto fora deste PDF \(limite de 7 fotos\)/g)).toHaveLength(3);
+    for (const e of dados.evidencias) expect(texto).toContain(e.sha256Original);
+  });
+
+  it('dossiê cancelado (o pedido foi embora): para entre uma foto e outra', async () => {
+    const controle = new AbortController();
+    const midias = midiasTeste({ aoPedirFoto: (n) => n === 2 && controle.abort(new Error('foi embora')) });
+    await expect(gerarPdfDossie(dadosTeste(), midias, { sinal: controle.signal })).rejects.toThrow('foi embora');
+    expect(midias.chamadas).toHaveLength(2);
+    const cancelado = new AbortController();
+    cancelado.abort(new Error('antes'));
+    const nenhuma = midiasTeste();
+    await expect(gerarPdfDossie(dadosTeste(), nenhuma, { sinal: cancelado.signal })).rejects.toThrow('antes');
+    expect(nenhuma.chamadas).toHaveLength(0);
+  });
+
+  it('fotos extras do pacote (sem unidade) entram na seção Pacote e na integridade', async () => {
+    const dados = dadosTeste();
+    dados.evidencias.push({ ...dados.evidencias[0], id: 'extra-pacote', tipo: 'EXTRA', itemId: null, sha256Original: 'e'.repeat(64) });
+    const r = await gerarPdfDossie(dados, midiasTeste());
+    expect(await imagensDoPdf(r.bytes)).toHaveLength(10);
+    const paginas = await paginasDoPdf(r.bytes);
+    const i = r.secoes.findIndex((s) => s.titulo === 'Pacote');
+    const pacote = paginas.slice(r.secoes[i].pagina - 1, r.secoes[i + 1].pagina - 1).join('\n');
+    expect(pacote).toContain('Fotos extras do pacote');
+    expect(pacote).toContain('Foto extra 1');
+    const integridade = paginas.slice(r.secoes.find((s) => s.titulo === 'Integridade dos arquivos')!.pagina - 1).join('\n');
+    expect(integridade).toContain('Foto extra 1 · Pacote');
+    // Na integridade, logo depois das Fotos 1 e 2 (a ordem do corpo).
+    expect(integridade.indexOf('Foto extra 1 · Pacote')).toBeLessThan(integridade.indexOf('Foto 3 · Unidade 1'));
   });
 
   it('caractere fora do WinAnsi (emoji) vira "?" em vez de erro', async () => {

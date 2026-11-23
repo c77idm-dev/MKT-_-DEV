@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   caminhoDossie,
+  cookieDossiePronto,
+  ehMarcaDossie,
   formatarDuracao,
   IMAGEM_PADRAO,
   IMAGEM_REDUZIDA,
   LIMITE_BYTES_DOSSIE,
   leituraDoCodigo,
+  MAX_FOTOS_DOSSIE,
+  opcoesIniciais,
   nomeArquivoDossie,
   normalizarCodigoDossie,
   ROTULO_LEITURA,
@@ -26,10 +30,28 @@ describe('dossiê de provas: domínio (extra)', () => {
     expect(nomeArquivoDossie('DEV-000123')).toBe('dossie-DEV-000123.pdf');
   });
 
+  it('marca do toque no botão: 16 hexadecimais, vai na query e vira o nome do cookie', () => {
+    expect(caminhoDossie('DEV-000123', '0123456789abcdef')).toBe('/api/devolucoes/DEV-000123/dossie?n=0123456789abcdef');
+    expect(cookieDossiePronto('0123456789abcdef')).toBe('dossie_0123456789abcdef');
+    expect(ehMarcaDossie('0123456789abcdef')).toBe(true);
+    for (const ruim of [null, undefined, '', '0123', '0123456789ABCDEF', '0123456789abcdeg', 'x; Path=/; a=0123456789abcdef']) {
+      expect(ehMarcaDossie(ruim), String(ruim)).toBe(false);
+    }
+  });
+
   it('limites: 8 MB; imagens a 1280 px/70 e, na 2ª tentativa, 1024 px/60', () => {
     expect(LIMITE_BYTES_DOSSIE).toBe(8 * 1024 * 1024);
     expect(IMAGEM_PADRAO).toEqual({ ladoMaior: 1280, qualidade: 70 });
     expect(IMAGEM_REDUZIDA).toEqual({ ladoMaior: 1024, qualidade: 60 });
+    expect(MAX_FOTOS_DOSSIE).toBe(120);
+  });
+
+  it('qualidade escolhida antes da 1ª passada: ~170 KB por imagem; acima do limite já começa reduzida', () => {
+    expect(opcoesIniciais(9, LIMITE_BYTES_DOSSIE)).toEqual(IMAGEM_PADRAO);
+    expect(opcoesIniciais(48, LIMITE_BYTES_DOSSIE)).toEqual(IMAGEM_PADRAO);
+    expect(opcoesIniciais(49, LIMITE_BYTES_DOSSIE)).toEqual(IMAGEM_REDUZIDA);
+    expect(opcoesIniciais(121, LIMITE_BYTES_DOSSIE)).toEqual(IMAGEM_REDUZIDA);
+    expect(opcoesIniciais(0, 1)).toEqual(IMAGEM_PADRAO);
   });
 
   it('leitura do código de barras: Confere, Não confere, Não lido ou sem referência para comparar', () => {

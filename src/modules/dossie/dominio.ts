@@ -13,8 +13,18 @@ export function normalizarCodigoDossie(codigo: string): string | null {
   return CODIGO.test(limpo) ? limpo : null;
 }
 
-export function caminhoDossie(codigo: string): string {
-  return `/api/devolucoes/${encodeURIComponent(codigo)}/dossie`;
+/** `marca`: a do toque no botão (?n=); o PDF pronto volta com o cookie dela, e a tela encerra o "Gerando…". */
+export function caminhoDossie(codigo: string, marca?: string): string {
+  return `/api/devolucoes/${encodeURIComponent(codigo)}/dossie${marca ? `?n=${marca}` : ''}`;
+}
+
+/** 16 caracteres hexadecimais (8 bytes aleatórios): só isso vira nome de cookie. */
+export function ehMarcaDossie(marca: string | null | undefined): marca is string {
+  return typeof marca === 'string' && /^[0-9a-f]{16}$/.test(marca);
+}
+
+export function cookieDossiePronto(marca: string): string {
+  return `dossie_${marca}`;
 }
 
 export function nomeArquivoDossie(codigo: string): string {
@@ -27,6 +37,20 @@ export const LIMITE_BYTES_DOSSIE = 8 * 1024 * 1024;
 export type OpcoesImagem = { ladoMaior: number; qualidade: number };
 export const IMAGEM_PADRAO: OpcoesImagem = { ladoMaior: 1280, qualidade: 70 };
 export const IMAGEM_REDUZIDA: OpcoesImagem = { ladoMaior: 1024, qualidade: 60 };
+
+/**
+ * Teto de fotos no corpo do PDF: cabe nos 8 MB a 1024 px/60 e limita a memória do pdf-lib (o web tem 512 MB). As de
+ * cima viram um aviso ("veja no sistema"); os hashes de todas continuam na integridade.
+ */
+export const MAX_FOTOS_DOSSIE = 120;
+
+/** Peso médio de uma imagem a 1280 px/70 no PDF, para escolher a qualidade antes da 1ª passada. */
+const BYTES_POR_IMAGEM = 170 * 1024;
+
+/** Quando a estimativa já passa do limite, começa direto nas imagens reduzidas (sem montar o PDF duas vezes). */
+export function opcoesIniciais(imagens: number, limiteBytes: number): OpcoesImagem {
+  return imagens * BYTES_POR_IMAGEM > limiteBytes ? IMAGEM_REDUZIDA : IMAGEM_PADRAO;
+}
 
 export const ACAO_DOSSIE_GERADO = 'dossie_gerado';
 

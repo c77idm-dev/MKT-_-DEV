@@ -15,10 +15,11 @@ import {
 import {
   ACAO_DOSSIE_GERADO,
   formatarDuracao,
-  IMAGEM_PADRAO,
   IMAGEM_REDUZIDA,
   LIMITE_BYTES_DOSSIE,
   leituraDoCodigo,
+  MAX_FOTOS_DOSSIE,
+  opcoesIniciais,
   ROTULO_LEITURA,
   type DadosDossie,
   type EvidenciaDossie,
@@ -114,6 +115,29 @@ function nomeDoTipo(tipo: TipoEvidencia): string {
 }
 
 type Celula = { legenda: string; descricao: string | null; evidencia: EvidenciaDossie | null };
+
+const ehPronta = (x: EvidenciaDossie) => x.situacao === 'PRONTA' && x.caminho !== null;
+const doTipo = (d: DadosDossie, tipo: TipoEvidencia, itemId: string | null) => d.evidencias.find((x) => x.tipo === tipo && x.itemId === itemId) ?? null;
+/** Fotos extras de uma unidade (as da avaria) ou do pacote (`itemId` null). */
+const extrasDe = (d: DadosDossie, itemId: string | null) => d.evidencias.filter((x) => x.tipo === 'EXTRA' && x.itemId === itemId);
+
+/** As fotos prontas do corpo do PDF, na ordem em que aparecem: o pacote (Fotos 1 e 2 e as extras), depois cada unidade. */
+function fotosDoCorpo(d: DadosDossie): EvidenciaDossie[] {
+  const fotos = [doTipo(d, 'FOTO_1_ETIQUETA', null), doTipo(d, 'FOTO_2_EMBALAGEM', null), ...extrasDe(d, null)];
+  for (const u of d.unidades) fotos.push(doTipo(d, 'FOTO_3_PRODUTO', u.id), doTipo(d, 'FOTO_4_CODIGO_SERIAL', u.id), ...extrasDe(d, u.id));
+  return fotos.filter((x): x is EvidenciaDossie => x !== null && ehPronta(x));
+}
+
+/**
+ * Ações cujo `dados.motivo` entra no histórico do dossiê: encerramento, ausentes, conferência e as do ML. O resto (o
+ * retorno da SEFAZ em nf_rejeitada, a justificativa do cancelamento da NF em devolucao_reaberta) é texto fiscal interno,
+ * livre e vindo de fora: no PDF que vai ao ML sai só o rótulo.
+ */
+const ACOES_COM_MOTIVO = new Set(['cancelada', 'extraviada', 'concluida', 'conferencia_concluida']);
+const motivoVaiNoDossie = (acao: string) => ACOES_COM_MOTIVO.has(acao) || acao.startsWith('ml_') || acao.startsWith('contestacao_');
+
+/** O que entra no corpo: as fotos dentro do teto e o cancelamento do dossiê. */
+type Plano = { noPdf: Set<string>; fora: number; maxFotos: number; sinal?: AbortSignal };
 
 /** Legenda (2 linhas) + caixa da foto + carimbo. */
 const alturaDaLinha = (alturaCaixa: number) => 30 + alturaCaixa + 16;
@@ -230,7 +254,14 @@ class Escritor {
 }
 
 /** Monta o PDF uma vez, com as imagens no tamanho dado. */
-async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem): Promise<Omit<ResultadoPdf, 'opcoes' | 'tentativas' | 'tamanho'>> {
+async function montar(
+  d: DadosDossie,
+  midias: MidiasDossie,
+  opcoes: OpcoesImagem,
+  plano: Plano,
+): Promise<Omit<ResultadoPdf, 'opcoes' | 'tentativas' | 'tamanho'>> {
+  const { sinal } = plano;
+  sinal?.throwIfAborted();
   const doc = await PDFDocument.create();
   doc.setTitle(`Dossiê de provas ${d.codigo}`);
   doc.setSubject('Provas da devolução: fotos, quadro do vídeo, histórico e integridade dos arquivos');
@@ -258,16 +289,14 @@ async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem
   const ehML = d.canal === 'MERCADO_LIVRE';
   const geradoEm = formatarDataHora(d.geradoEm);
   const video = d.evidencias.find((x) => x.tipo === 'VIDEO_PROVA') ?? null;
-  const pronta = (x: EvidenciaDossie) => x.situacao === 'PRONTA' && x.caminho !== null;
-
-  const doTipo = (tipo: TipoEvidencia, itemId: string | null) => d.evidencias.find((x) => x.tipo === tipo && x.itemId === itemId) ?? null;
-  const avariasDe = (itemId: string) => d.evidencias.filter((x) => x.tipo === 'EXTRA' && x.itemId === itemId);
+  const pronta = ehPronta;
 
   function nomeDaEvidencia(x: EvidenciaDossie): string {
     const u = x.itemId ? unidadeDe.get(x.itemId) : undefined;
     if (x.tipo === 'EXTRA') {
+      if (x.itemId === null) return `Foto extra ${extrasDe(d, null).indexOf(x) + 1} · Pacote`;
       if (!u) return 'Foto extra';
-      return `Foto da avaria ${avariasDe(u.id).indexOf(x) + 1} · Unidade ${u.unidade}`;
+      return `Foto da avaria ${extrasDe(d, u.id).indexOf(x) + 1} · Unidade ${u.unidade}`;
     }
     if (x.tipo === 'FOTO_1_ETIQUETA' || x.tipo === 'FOTO_2_EMBALAGEM') return `${ROTULO_EVIDENCIA[x.tipo]} · Pacote`;
     return u ? `${ROTULO_EVIDENCIA[x.tipo]} · Unidade ${u.unidade}` : ROTULO_EVIDENCIA[x.tipo];
@@ -280,7 +309,9 @@ async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem
   async function conteudoDaCelula(c: Celula): Promise<{ imagem: ImagemPdf } | { aviso: string }> {
     if (!c.evidencia) return { aviso: `${c.legenda} não enviada.` };
     if (!pronta(c.evidencia)) return { aviso: avisoDaSituacao(c.evidencia.situacao) };
-    const r = await midias.foto(c.evidencia, opcoes);
+    if (!plano.noPdf.has(c.evidencia.id)) return { aviso: `Foto fora deste PDF (limite de ${plano.maxFotos} fotos): veja no sistema.` };
+    sinal?.throwIfAborted();
+    const r = await midias.foto(c.evidencia, opcoes, sinal);
     if (!r.ok) return { aviso: r.motivo };
     if (r.sha256Calculado) calculados.set(c.evidencia.id, r.sha256Calculado);
     return { imagem: r.imagem };
@@ -363,6 +394,9 @@ async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem
   reservar('Integridade dos arquivos (SHA-256)', ['Integridade dos arquivos']);
   e.y -= 8;
   e.quadro('O Vídeo de Prova vai em arquivo separado: o Mercado Livre não aceita vídeo dentro do PDF.');
+  if (plano.fora > 0) {
+    e.quadro(`${plano.fora === 1 ? '1 foto não entrou' : `${plano.fora} fotos não entraram`} neste PDF: veja no sistema.`, { negrito: true });
+  }
 
   // 2. Pacote
   abrirSecao('Pacote');
@@ -370,11 +404,21 @@ async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem
     (['FOTO_1_ETIQUETA', 'FOTO_2_EMBALAGEM'] as const).map((tipo) => ({
       legenda: ROTULO_EVIDENCIA[tipo],
       descricao: DESCRICAO_EVIDENCIA[tipo],
-      evidencia: doTipo(tipo, null),
+      evidencia: doTipo(d, tipo, null),
     })),
     1,
     270,
   );
+  // Fotos extras sem unidade (a recepção aceita; a tela atual só cria com unidade, mas a API e dados antigos têm).
+  const extrasDoPacote = extrasDe(d, null);
+  if (extrasDoPacote.length > 0) {
+    e.subtitulo('Fotos extras do pacote', alturaDaLinha(CAIXA_AVARIA));
+    await grade(
+      extrasDoPacote.map((x, k) => ({ legenda: `Foto extra ${k + 1}`, descricao: null, evidencia: x })),
+      2,
+      CAIXA_AVARIA,
+    );
+  }
 
   // 3. Unidades
   for (const [i, u] of d.unidades.entries()) {
@@ -401,8 +445,8 @@ async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem
       u.destino ? `${ROTULO_DESTINO[u.destino]}${u.motivo && u.motivo !== 'AUSENTE' ? ` · ${ROTULO_MOTIVO[u.motivo]}` : ''}` : ausente ? 'Não veio no pacote (ausente)' : '—',
     );
     e.campo('Observação', u.observacao ?? '—');
-    const f3 = doTipo('FOTO_3_PRODUTO', u.id);
-    const f4 = doTipo('FOTO_4_CODIGO_SERIAL', u.id);
+    const f3 = doTipo(d, 'FOTO_3_PRODUTO', u.id);
+    const f4 = doTipo(d, 'FOTO_4_CODIGO_SERIAL', u.id);
     if (!ausente || f3 || f4) {
       e.subtitulo('Fotos da unidade', alturaDaLinha(CAIXA_UNIDADE));
       await grade(
@@ -415,7 +459,7 @@ async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem
         CAIXA_UNIDADE,
       );
     }
-    const avarias = avariasDe(u.id);
+    const avarias = extrasDe(d, u.id);
     if (avarias.length > 0) {
       e.subtitulo('Fotos da avaria', alturaDaLinha(CAIXA_AVARIA));
       await grade(
@@ -434,7 +478,8 @@ async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem
     let conteudo: { imagem: ImagemPdf } | { aviso: string } = { aviso: avisoDaSituacao(video.situacao) };
     let duracao: number | null = null;
     if (pronta(video)) {
-      const q = await midias.quadroDoVideo(video, opcoes);
+      sinal?.throwIfAborted();
+      const q = await midias.quadroDoVideo(video, opcoes, sinal);
       duracao = q.duracaoSegundos;
       if (q.sha256Calculado) calculados.set(video.id, q.sha256Calculado);
       conteudo = q.imagem ? { imagem: q.imagem } : { aviso: q.problema ?? 'Quadro do vídeo indisponível.' };
@@ -468,7 +513,7 @@ async function montar(d: DadosDossie, midias: MidiasDossie, opcoes: OpcoesImagem
       linhas.push({ texto: ev.de ? `De ${rotuloStatus(ev.de)} para ${rotuloStatus(ev.para)}` : `Status: ${rotuloStatus(ev.para)}`, tamanho: 9.5, fonte: f.normal, cor: PRETO });
     }
     const motivo = ev.dados?.motivo;
-    if (typeof motivo === 'string') linhas.push({ texto: `Motivo: ${motivo}`, tamanho: 9.5, fonte: f.normal, cor: PRETO });
+    if (typeof motivo === 'string' && motivoVaiNoDossie(ev.acao)) linhas.push({ texto: `Motivo: ${motivo}`, tamanho: 9.5, fonte: f.normal, cor: PRETO });
     linhas.push({ texto: `${formatarDataHora(ev.em)} · ${ev.usuarioNome ?? 'Sistema'}`, tamanho: 8.5, fonte: f.normal, cor: CINZA });
     e.caber(linhas.length * 14 + 8);
     for (const l of linhas) e.escrever(l.texto, { tamanho: l.tamanho, fonte: l.fonte, cor: l.cor });
@@ -540,6 +585,7 @@ function ordenarEvidencias(d: DadosDossie): EvidenciaDossie[] {
   };
   pegar((x) => x.tipo === 'FOTO_1_ETIQUETA');
   pegar((x) => x.tipo === 'FOTO_2_EMBALAGEM');
+  pegar((x) => x.tipo === 'EXTRA' && x.itemId === null);
   for (const u of d.unidades) {
     pegar((x) => x.itemId === u.id && x.tipo === 'FOTO_3_PRODUTO');
     pegar((x) => x.itemId === u.id && x.tipo === 'FOTO_4_CODIGO_SERIAL');
@@ -552,12 +598,28 @@ function ordenarEvidencias(d: DadosDossie): EvidenciaDossie[] {
 
 /**
  * O dossiê em PDF (extra). Imagens a 1280 px e qualidade 70; se o PDF passar de 8 MB, refaz uma vez a 1024 px e 60
- * (o ML recusa anexos grandes). Mídia que falta ou não ficou pronta vira um aviso, nunca um erro.
+ * (o ML recusa anexos grandes). Quando a estimativa (fotos × ~170 KB) já passa do limite, começa direto em 1024/60.
+ * Até MAX_FOTOS_DOSSIE fotos no corpo; as de cima viram aviso. Mídia que falta ou não ficou pronta vira um aviso,
+ * nunca um erro; o cancelamento (`sinal`: o pedido foi embora ou o dossiê passou do prazo) para entre uma foto e outra.
  */
-export async function gerarPdfDossie(d: DadosDossie, midias: MidiasDossie, config: { limiteBytes?: number } = {}): Promise<ResultadoPdf> {
+export async function gerarPdfDossie(
+  d: DadosDossie,
+  midias: MidiasDossie,
+  config: { limiteBytes?: number; maxFotos?: number; sinal?: AbortSignal } = {},
+): Promise<ResultadoPdf> {
   const limite = config.limiteBytes ?? LIMITE_BYTES_DOSSIE;
-  const primeira = await montar(d, midias, IMAGEM_PADRAO);
-  if (primeira.bytes.length <= limite) return { ...primeira, tamanho: primeira.bytes.length, opcoes: IMAGEM_PADRAO, tentativas: 1 };
-  const segunda = await montar(d, midias, IMAGEM_REDUZIDA);
+  const maxFotos = config.maxFotos ?? MAX_FOTOS_DOSSIE;
+  const prontas = fotosDoCorpo(d);
+  const noPdf = new Set(prontas.slice(0, maxFotos).map((x) => x.id));
+  const plano: Plano = { noPdf, fora: prontas.length - noPdf.size, maxFotos, sinal: config.sinal };
+  const comQuadro = d.evidencias.some((x) => x.tipo === 'VIDEO_PROVA' && ehPronta(x));
+  const inicial = opcoesIniciais(noPdf.size + (comQuadro ? 1 : 0), limite);
+
+  let primeira: Awaited<ReturnType<typeof montar>> | null = await montar(d, midias, inicial, plano);
+  const tamanho = primeira.bytes.length;
+  if (tamanho <= limite || inicial === IMAGEM_REDUZIDA) return { ...primeira, tamanho, opcoes: inicial, tentativas: 1 };
+  // Solta a 1ª montagem (acima de 8 MB) antes de montar a 2ª: o web tem 512 MB.
+  primeira = null;
+  const segunda = await montar(d, midias, IMAGEM_REDUZIDA, plano);
   return { ...segunda, tamanho: segunda.bytes.length, opcoes: IMAGEM_REDUZIDA, tentativas: 2 };
 }
