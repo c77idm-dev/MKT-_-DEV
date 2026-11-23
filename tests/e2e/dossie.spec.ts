@@ -31,15 +31,28 @@ test('dossiê de provas (extra): o botão só aparece depois da conferência e b
   await botao.click();
   await expect(secao.getByRole('status').filter({ hasText: 'Gerando o PDF' })).toBeVisible();
   const download = await baixando;
+  // Sem o atributo download no link: o nome vem do Content-Disposition da rota.
   expect(download.suggestedFilename()).toBe(`dossie-${d.codigo}.pdf`);
   const bytes = await readFile(await download.path());
   expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  // O PDF chegou com o cookie da marca do toque: o "Gerando…" some e o botão libera (sem esperar um tempo fixo).
+  await expect(secao.getByText('Gerando o PDF')).toHaveCount(0);
+  await expect(botao).not.toHaveAttribute('aria-disabled', 'true');
 
   // O histórico registra quem gerou o dossiê.
   await page.reload();
   const historico = page.getByRole('region', { name: 'Histórico' });
   await expect(historico.getByText('Dossiê de provas (PDF) gerado')).toBeVisible();
   await expect(historico).toContainText(USUARIOS_E2E.operador.nome);
+
+  // Sessão vencida numa aba antiga: o toque leva à tela de login, sem salvar o HTML dela como .pdf.
+  const downloads: string[] = [];
+  page.on('download', (d) => downloads.push(d.suggestedFilename()));
+  await page.context().clearCookies();
+  await page.getByRole('region', { name: 'Conferência' }).getByRole('link', { name: ROTULO }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible();
+  expect(downloads).toEqual([]);
 });
 
 test('dossiê sem sessão: a rota manda para o login', async ({ playwright }, testInfo) => {

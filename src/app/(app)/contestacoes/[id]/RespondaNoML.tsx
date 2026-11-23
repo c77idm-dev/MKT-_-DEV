@@ -37,7 +37,8 @@ export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motiv
       <p className="text-sm text-texto-2">
         No modo Bitbrain o sistema não envia ao Mercado Livre. Abra no ML a venda {pedidos}
         {reclamacaoId ? ` (reclamação ${reclamacaoId})` : ''}
-        {conta ? `, na conta ${conta}` : ''}, escolha o motivo, cole a mensagem e anexe as fotos. Depois, toque em &quot;Marcar como respondida&quot;.
+        {conta ? `, na conta ${conta}` : ''}, escolha o motivo, cole a mensagem e anexe o dossiê de provas (PDF) ou as fotos e, à parte, o
+        vídeo (extra). Depois, toque em &quot;Marcar como respondida&quot;.
       </p>
       <dl className="grid gap-3">
         <Dado rotulo="Motivo">
@@ -76,6 +77,9 @@ export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motiv
           </a>
         ) : (
           <p className="text-sm text-texto-2">Nenhum vídeo pronto desta devolução.</p>
+        )}
+        {(prontas.length > 0 || video) && (
+          <p className="text-xs text-texto-2">Os links das fotos e do vídeo valem 10 minutos. Para gerar novos, recarregue a página.</p>
         )}
       </div>
       <form onSubmit={aoEnviar} className="flex flex-col gap-2 border-t border-borda pt-3">
