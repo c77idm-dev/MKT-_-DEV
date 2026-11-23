@@ -24,6 +24,9 @@ export const REGRAS_TRANSICAO: readonly Regra[] = [
   { de: 'PENDENTE_CHEGADA', para: 'EXTRAVIADA', atores: ['SISTEMA', 'GESTOR'] },
   { de: 'PENDENTE_CHEGADA', para: 'NO_CD_MARKETPLACE', atores: ['SISTEMA'] },
   { de: 'NO_CD_MARKETPLACE', para: 'PENDENTE_CHEGADA', atores: ['SISTEMA'] },
+  // (extra, emenda E25; decisão do usuário de 23/11) O ML manda de volta à loja o pacote que estava no armazém dele: a
+  // leitura na recepção registra a chegada, como a de um pendente. Cancelada e Extraviada continuam sem esse caminho.
+  { de: 'NO_CD_MARKETPLACE', para: 'AGUARDANDO_CONFERENCIA', atores: QUEM_OPERA },
 ];
 
 export function podeTransitar(p: PedidoTransicao): boolean {

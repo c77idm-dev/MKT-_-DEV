@@ -19,6 +19,8 @@ const PERMITIDAS: [StatusDevolucao | null, StatusDevolucao, Ator[], boolean][] =
   ['PENDENTE_CHEGADA', 'EXTRAVIADA', ['SISTEMA', 'GESTOR'], false],
   ['PENDENTE_CHEGADA', 'NO_CD_MARKETPLACE', ['SISTEMA'], false],
   ['NO_CD_MARKETPLACE', 'PENDENTE_CHEGADA', ['SISTEMA'], false],
+  // (extra, emenda E25) O pacote que o ML mandou de volta do armazém chega na recepção.
+  ['NO_CD_MARKETPLACE', 'AGUARDANDO_CONFERENCIA', ['OPERADOR', 'GESTOR'], false],
 ];
 
 function esperado(de: StatusDevolucao | null, para: StatusDevolucao, ator: Ator, naoIdentificada: boolean): boolean {
@@ -49,6 +51,16 @@ describe('podeTransitar (spec §5.2)', () => {
   it('a devolução nova só nasce em "Aguardando conferência" quando é não identificada', () => {
     expect(podeTransitar({ de: null, para: 'AGUARDANDO_CONFERENCIA', ator: 'OPERADOR' })).toBe(false);
     expect(podeTransitar({ de: null, para: 'AGUARDANDO_CONFERENCIA', ator: 'OPERADOR', naoIdentificada: true })).toBe(true);
+  });
+
+  it('(extra, E25) o pacote que voltou do armazém do ML é recebido por quem opera o Recebimento; o Fiscal e o sistema não', () => {
+    expect(podeTransitar({ de: 'NO_CD_MARKETPLACE', para: 'AGUARDANDO_CONFERENCIA', ator: 'OPERADOR' })).toBe(true);
+    expect(podeTransitar({ de: 'NO_CD_MARKETPLACE', para: 'AGUARDANDO_CONFERENCIA', ator: 'GESTOR' })).toBe(true);
+    expect(podeTransitar({ de: 'NO_CD_MARKETPLACE', para: 'AGUARDANDO_CONFERENCIA', ator: 'FISCAL' })).toBe(false);
+    expect(podeTransitar({ de: 'NO_CD_MARKETPLACE', para: 'AGUARDANDO_CONFERENCIA', ator: 'SISTEMA' })).toBe(false);
+    // Cancelada e Extraviada continuam sem caminho para a recepção.
+    expect(podeTransitar({ de: 'CANCELADA', para: 'AGUARDANDO_CONFERENCIA', ator: 'GESTOR' })).toBe(false);
+    expect(podeTransitar({ de: 'EXTRAVIADA', para: 'AGUARDANDO_CONFERENCIA', ator: 'GESTOR' })).toBe(false);
   });
 
   it('o Fiscal não recebe, não cria e não cancela', () => {
