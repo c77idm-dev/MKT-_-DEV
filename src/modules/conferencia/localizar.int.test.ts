@@ -5,6 +5,7 @@ import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { criarDevolucaoChegada } from '../../../tests/helpers/fabricas-conferencia';
+import { ErroConferencia } from './erros';
 import { localizarParaConferencia } from './localizar';
 
 const { db, sql } = criarDbTeste();
@@ -26,7 +27,10 @@ describe('localizarParaConferencia ("Conferir pacote", extra)', () => {
 
   it('explica quando não dá', async () => {
     await expect(localizarParaConferencia(db, '  ', operador)).rejects.toThrow('Leia ou digite o código de rastreamento ou o código DEV.');
-    await expect(localizarParaConferencia(db, 'BRNADA', operador)).rejects.toThrow('Nenhuma devolução com este código de rastreamento.');
+    // (extra, E25) A dica serve também ao pacote recebido pelo número do pedido ou do envio do ML, que não é o rastreio.
+    await expect(localizarParaConferencia(db, 'BRNADA', operador)).rejects.toThrow(
+      new ErroConferencia('Nenhuma devolução com este código de rastreamento. Use o código DEV ou abra a devolução pela lista da etapa 2.'),
+    );
     const pendente = await criarDevolucaoTeste(db, operador, { rastreio: 'BRPENDENTE' });
     await expect(localizarParaConferencia(db, 'BRPENDENTE', operador)).rejects.toThrow(`${pendente.codigo} está pendente de chegada. Registre a chegada no Recebimento primeiro.`);
   });

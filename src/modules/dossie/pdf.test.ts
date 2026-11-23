@@ -292,6 +292,23 @@ describe('gerarPdfDossie (extra)', () => {
     expect(historico).toContain('Motivo: SRF2');
   });
 
+  it('histórico: a chegada do pacote que voltou do armazém do ML leva o aviso, como na tela (extra, E25)', async () => {
+    const dados = dadosTeste();
+    dados.eventos.push({
+      acao: 'recebida',
+      de: 'NO_CD_MARKETPLACE',
+      para: 'AGUARDANDO_CONFERENCIA',
+      em: new Date('2026-11-19T14:10:00Z'),
+      usuarioNome: 'Conferente Teste',
+      dados: { codigoLido: '000018992531744', achadaPor: 'PEDIDO_ML', voltouDoArmazemML: true },
+    });
+    const r = await gerarPdfDossie(dados, midiasTeste());
+    const paginas = await paginasDoPdf(r.bytes);
+    const historico = paginas.slice(r.secoes.find((s) => s.titulo === 'Histórico')!.pagina - 1, r.secoes.find((s) => s.titulo === 'Integridade dos arquivos')!.pagina - 1).join('\n');
+    expect(historico).toContain('Chegada registrada (voltou do armazém do ML)');
+    expect(historico).toContain('De No CD do marketplace para Aguardando conferência');
+  });
+
   it('integridade: quando e por quem foi gerado, e o SHA-256 e o carimbo de cada foto e do vídeo', async () => {
     const dados = dadosTeste();
     dados.evidencias[1] = { ...dados.evidencias[1], sha256Final: null }; // Foto 2 sem o hash final: calcula agora

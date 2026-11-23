@@ -23,6 +23,7 @@ import {
 } from '@/modules/devolucoes/dominio';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { TOM_DO_STATUS } from '@/modules/devolucoes/selos';
+import { complementoDoEvento } from '@/modules/historico/complementos';
 import { rotuloDaAcao } from '@/modules/historico/eventos';
 import { encerrarAcao, identificarAcao } from './acoes';
 import { FormularioEncerrar, FormularioIdentificar } from './AcoesGestor';
@@ -163,9 +164,14 @@ export default async function PaginaDevolucao({ params, searchParams }: Props) {
         <ol className="flex flex-col gap-3">
           {d.eventos.map((e) => {
             const motivo = motivoDoEvento(e.dados);
+            // (extra, E25) Ex.: "Chegada registrada (voltou do armazém do ML)".
+            const complemento = complementoDoEvento(e.acao, e.dados);
             return (
               <li key={e.id} className="flex flex-col text-sm">
-                <span className="font-semibold">{rotuloDaAcao(e.acao)}</span>
+                <span className="font-semibold">
+                  {rotuloDaAcao(e.acao)}
+                  {complemento && <span className="font-normal"> {complemento}</span>}
+                </span>
                 {e.para && e.de !== e.para && (
                   <span className="text-texto-2">
                     {e.de ? `${rotuloStatus(e.de)} → ` : ''}

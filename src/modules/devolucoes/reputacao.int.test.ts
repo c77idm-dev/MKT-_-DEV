@@ -8,6 +8,7 @@ import { buscarDevolucoes, type OpcoesBusca } from './busca';
 import type { DevolucaoCriada } from './criar';
 import type { StatusDevolucao } from './dominio';
 import type { FiltrosBusca } from './filtros';
+import { receberPorRastreio } from './recebimento';
 import { contarAfetamReputacao, STATUS_EM_ANDAMENTO } from './reputacao';
 
 const { db, sql } = criarDbTeste();
@@ -92,6 +93,14 @@ describe('(extra) filtro "Só as que afetam a reputação no ML"', () => {
     expect(await contarAfetamReputacao(db)).toBe(2);
     await limparTabelas(sql);
     expect(await contarAfetamReputacao(db)).toBe(0);
+  });
+
+  it('(E25) a No CD que chega pelo Recebimento continua contando e continua no filtro, agora na etapa 2', async () => {
+    const operador = await criarUsuarioTeste(db, 'OPERADOR');
+    const [linha] = await db.select({ rastreio: devolucoes.rastreio }).from(devolucoes).where(eq(devolucoes.id, noCd.id));
+    expect(await receberPorRastreio(db, linha.rastreio ?? '', operador)).toMatchObject({ tipo: 'recebidas', codigos: [noCd.codigo] });
+    expect(await contarAfetamReputacao(db)).toBe(4);
+    expect(await codigos({ reputacao: '1' }, { status: ['AGUARDANDO_CONFERENCIA'] })).toEqual([noCd.codigo]);
   });
 });
 

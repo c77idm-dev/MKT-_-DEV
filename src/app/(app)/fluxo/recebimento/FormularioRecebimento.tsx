@@ -9,6 +9,7 @@ import { useLeitorCamera } from '@/components/leitor/useLeitorCamera';
 import { criarRetiradaAcao, type EstadoNovaRetirada } from '../retiradas-full/acoes';
 import { registrarChegadaAcao, type EstadoRecebimento } from './acoes';
 import { podeAceitarLeitura } from './guarda';
+import { mensagemComNota } from './mensagens';
 
 const INICIAL: EstadoRecebimento = { tipo: 'inicial' };
 const SEM_ERRO_RETIRADA: EstadoNovaRetirada = { erro: null };
@@ -78,8 +79,11 @@ function LinksDevolucoes({ codigos }: { codigos: string[] }) {
   );
 }
 
-/** Cartão grande do resultado. O texto visível fica escondido do leitor de tela porque a região aria-live (acima) já o anuncia. */
-function Cartao({ tom, titulo, mensagem, children }: { tom: Tom; titulo: string; mensagem: ReactNode; children?: ReactNode }) {
+/**
+ * Cartão grande do resultado. O texto visível fica escondido do leitor de tela porque a região aria-live (acima) já o anuncia.
+ * `nota` (extra, E25): por qual número da etiqueta do ML a devolução foi achada.
+ */
+function Cartao({ tom, titulo, mensagem, nota, children }: { tom: Tom; titulo: string; mensagem: ReactNode; nota?: string; children?: ReactNode }) {
   const cores =
     tom === 'sucesso' ? 'border-bom bg-bom-suave text-bom' : tom === 'aviso' ? 'border-atencao bg-atencao-suave text-atencao' : 'border-erro bg-erro-suave text-erro';
   return (
@@ -91,6 +95,11 @@ function Cartao({ tom, titulo, mensagem, children }: { tom: Tom; titulo: string;
       <p aria-hidden="true" className="text-[15px] font-medium">
         {mensagem}
       </p>
+      {nota && (
+        <p aria-hidden="true" className="text-sm font-semibold">
+          {nota}
+        </p>
+      )}
       {children}
     </div>
   );
@@ -100,7 +109,7 @@ function textoAnunciado(estado: EstadoRecebimento): string {
   switch (estado.tipo) {
     case 'sucesso':
     case 'aviso':
-      return `${estado.titulo}. ${estado.mensagem}`;
+      return `${estado.titulo}. ${mensagemComNota(estado.mensagem, estado.nota)}`;
     case 'nao_encontrada':
       return `Rastreio não encontrado. Nenhuma devolução com o rastreio ${estado.rastreio}.`;
     case 'erro':
@@ -121,7 +130,7 @@ function Resultado({ estado, acao, pendente }: { estado: EstadoRecebimento; acao
         {textoAnunciado(estado)}
       </div>
       {(estado.tipo === 'sucesso' || estado.tipo === 'aviso') && (
-        <Cartao tom={estado.tipo} titulo={estado.titulo} mensagem={estado.mensagem}>
+        <Cartao tom={estado.tipo} titulo={estado.titulo} mensagem={estado.mensagem} nota={estado.nota}>
           <LinksDevolucoes codigos={estado.codigos} />
         </Cartao>
       )}
@@ -161,6 +170,8 @@ export function FormularioRecebimento() {
   const [estado, acao, pendente] = useActionState(registrarChegadaAcao, INICIAL);
   const formularioRef = useRef<HTMLFormElement>(null);
   const campoRef = useRef<HTMLInputElement>(null);
+  // (extra, E25) Botão escondido que a câmera usa para mandar o formulário com `origem=camera` (ver mesmaLeituraDaCamera).
+  const envioCameraRef = useRef<HTMLButtonElement>(null);
   // Última situação do envio, lida pelo callback da câmera (que não é recriado a cada renderização).
   const situacaoEnvioRef = useRef({ pendente, estado });
   useEffect(() => {
@@ -174,7 +185,7 @@ export function FormularioRecebimento() {
     // Marca já como pendente: uma segunda leitura antes da próxima renderização também é ignorada.
     situacaoEnvioRef.current = { pendente: true, estado: situacaoEnvioRef.current.estado };
     campo.value = codigo;
-    formulario.requestSubmit();
+    formulario.requestSubmit(envioCameraRef.current);
   }, []);
   const { videoRef, situacao, erro: erroCamera, abrir, fechar } = useLeitorCamera(aoLer);
   const cameraAberta = situacao !== 'parada';
@@ -270,6 +281,8 @@ export function FormularioRecebimento() {
           <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} min-h-14 text-lg`}>
             {pendente ? 'Registrando…' : 'Registrar chegada'}
           </button>
+          {/* Depois do botão visível, que continua sendo o do Enter (leitor USB). */}
+          <button ref={envioCameraRef} type="submit" name="origem" value="camera" hidden tabIndex={-1} />
         </form>
         {!cameraAberta && botaoCamera}
         {erroCamera && (

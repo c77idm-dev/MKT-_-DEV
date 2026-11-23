@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from 'pdf-lib';
 import { formatarDataHora } from '@/lib/formatar';
 import { ROTULO_CANAL, ROTULO_DESTINO, ROTULO_MOTIVO, rotuloStatus } from '@/modules/devolucoes/dominio';
+import { complementoDoEvento } from '@/modules/historico/complementos';
 import { rotuloDaAcao } from '@/modules/historico/eventos';
 import { paraWinAnsi } from '@/modules/lotes/pdf';
 import { textoCarimbo } from '@/modules/midia/carimbo';
@@ -588,8 +589,10 @@ async function montar(
     const tipo = typeof ev.dados?.tipo === 'string' && ehTipoEvidencia(ev.dados.tipo) ? ev.dados.tipo : null;
     const item = typeof ev.dados?.itemId === 'string' ? unidadeDe.get(ev.dados.itemId) : undefined;
     const detalhe = tipo ? ` · ${nomeDoTipo(tipo)}${item ? ` · Unidade ${item.unidade}` : ''}` : '';
+    // (extra, E25) Como na tela: "Chegada registrada (voltou do armazém do ML)".
+    const complemento = complementoDoEvento(ev.acao, ev.dados);
     const linhas: { texto: string; tamanho: number; fonte: PDFFont; cor: RGB }[] = [
-      { texto: `${rotuloDaAcao(ev.acao)}${detalhe}`, tamanho: 10, fonte: f.negrito, cor: PRETO },
+      { texto: `${rotuloDaAcao(ev.acao)}${complemento ? ` ${complemento}` : ''}${detalhe}`, tamanho: 10, fonte: f.negrito, cor: PRETO },
     ];
     if (ev.para && ev.de !== ev.para) {
       linhas.push({ texto: ev.de ? `De ${rotuloStatus(ev.de)} para ${rotuloStatus(ev.para)}` : `Status: ${rotuloStatus(ev.para)}`, tamanho: 9.5, fonte: f.normal, cor: PRETO });
