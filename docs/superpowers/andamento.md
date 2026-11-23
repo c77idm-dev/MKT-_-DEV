@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 19/11/2026, à noite. A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Integração pelo Bitbrain: no `main` desde 19/11.** Spec [specs/2026-11-18-integracao-bitbrain-design.md](specs/2026-11-18-integracao-bitbrain-design.md) e plano [plans/2026-11-18-integracao-bitbrain.md](plans/2026-11-18-integracao-bitbrain.md).
@@ -33,19 +33,19 @@ Atualizado em 19/11/2026, à noite. A integração pelo Bitbrain e a opção C e
         2. Pedir o adendo do `logistic` à sessão do Bitbrain, para o selo Full funcionar.
         3. Apagar as fotos que ficaram sem dono no armazenamento, das antigas DEV-000004 e 000005, e perguntar ao usuário se apaga também a DEV-000001.
         4. Mover o arquivo solto `/opt/devolucoes/backup-antes-fase1-20261112-1928.sql` para `~/backups-devolucoes`.
-      - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `9d02b69`, no GitHub). Ainda não está no `main`.
+      - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `f2f5595`, no GitHub). Ainda não está no `main`.
         - **Testes:**
           - unidade: 853;
           - integração: 513 (7 pulados);
           - typecheck e lint limpos;
           - e2e novo `produtos-ml.spec.ts`: 6 de 6;
           - e2e do modo Bitbrain: 14 de 14.
+        - **Bateria e2e completa:** 221 passaram e 1 falhou (`texto-longo` no celular: a foto alargava o detalhe). Corrigido em `f2f5595` (lista dos itens com coluna fixa e quebra de texto); o reteste deu 7 de 7.
+        - **Prints (23/11):** `scratchpad\produtos-ml\etapa-1-cartoes-com-foto.png` e `conferencia-unidade-com-foto.png`.
         - **Falta:**
-          1. a bateria e2e completa, que está rodando;
-          2. os prints;
-          3. a revisão final (`fase-final.js`, `pref` `prod`, `base` `819b43a`);
-          4. a junção no `main`;
-          5. a publicação na VPS, que aplica a migração `0015_produtos_do_ml.sql` ao subir.
+          1. a revisão final, rodando no run `wf_61044862-f3c` (`fase-final.js`, `pref` `prod`, `base` `819b43a`);
+          2. a junção no `main`;
+          3. a publicação na VPS, que aplica a migração `0015_produtos_do_ml.sql` ao subir.
         - **O que se desviou do pedido, de propósito:**
           - a foto aparece só no passo da unidade da conferência, não na legenda do destino;
           - o GTIN só vale se passar no `normalizarEan`, que confere o dígito verificador;
@@ -87,8 +87,8 @@ Atualizado em 19/11/2026, à noite. A integração pelo Bitbrain e a opção C e
           - **Testes:** unidade 837; integração 501; typecheck e lint limpos; e2e dos specs afetados nos dois projetos.
           - Corrigiu de quebra um bug antigo: depois de tirar um filtro pela etiqueta, o próximo "Buscar" trazia o filtro de volta. A correção foi um `key` no formulário.
           - **Decisão do usuário (19/11):** contar e listar também as devoluções "No CD do marketplace" (armazém do ML). Ficam de fora só as concluídas, canceladas e extraviadas.
-          - **Revisão final** no run `wf_1c1d7469-b37` (`fase-final.js`, `pref` `rep`, `base` `c58aea0`), com essa decisão como correção obrigatória.
-        - **Ordem de junção no `main`:** `produtos-do-ml` primeiro, depois `filtro-reputacao` e por último `dossie-provas`. As duas primeiras mexem em `busca.ts`, mas em partes diferentes; o dossiê mexe no detalhe e no "Responda no ML". **O dossiê de provas foi aprovado em 19/11 e roda no fluxo `wf_56f87cc3-2eb`**, que constrói, revisa por 3 olhares com verificação cética, corrige e envia. A foto do anúncio entra no dossiê depois de `produtos-do-ml`.
+          - **Revisão final** no run `wf_1c1d7469-b37` (`fase-final.js`, `pref` `rep`, `base` `c58aea0`), com essa decisão como correção obrigatória. Parou em 19/11 depois da metade do servidor (`.superpowers/sdd/fases-2-6/rep-final-servidor.md`); retomada em 23/11 no mesmo run.
+        - **Ordem de junção no `main`:** `produtos-do-ml` primeiro, depois `filtro-reputacao` e por último `dossie-provas`. As duas primeiras mexem em `busca.ts`, mas em partes diferentes; o dossiê mexe no detalhe e no "Responda no ML". **O dossiê de provas foi aprovado em 19/11.** O primeiro fluxo (`wf_56f87cc3-2eb`) parou no limite de 5 horas com 3 commits locais (`823136e`, `fb831d0`, `696ebad`, ainda fora do GitHub) e os e2e pela metade. Retomado em 23/11 no run `wf_5f9f5de2-57b`, que continua a construção, revisa por 3 olhares com verificação cética, corrige e envia. A foto do anúncio entra no dossiê depois de `produtos-do-ml`.
         - **Dossiê de provas (PDF) (extra):** o usuário precisa apresentar provas ao ML nas contestações.
           - **Conteúdo do PDF:** capa (DEV, venda e reclamação do ML, rastreio, motivos, chegada e conferência), fotos do pacote, cada unidade (código de barras, nº de série, Fotos 3 e 4, avarias, destino), um quadro do vídeo, o histórico e um rodapé com o SHA-256 de cada arquivo.
           - **Onde baixar:** botão "Baixar dossiê de provas (PDF)" no detalhe, depois da conferência, e no "Responda no ML".
