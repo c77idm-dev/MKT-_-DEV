@@ -3,7 +3,15 @@
 Atualizado em 23/11/2026, à tarde (cancelamento explícito pronto; defeito das 87 reclamações desligadas corrigido na branch `religar-reclamacoes`; deploy único das 4 frentes a preparar). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
-- **Integração de 23/11, à tarde: quatro frentes juntas no `main` em `c668ec7`, deploy pendente.** Branch `integracao-23-11`:
+- **Integração de 23/11, à tarde: quatro frentes juntas no `main` em `c668ec7` e ✅ publicadas na VPS (imagem `3f01630`, 23/11, 19h57 UTC).** Branch `integracao-23-11`.
+  - **Deploy:**
+    - backup antes em `~/backups-devolucoes/banco-antes-integracao-23-11_20261123-1957.dump` (chmod 600);
+    - web e worker healthy, `/api/saude` ok (banco e fila), 17 migrações;
+    - **463 reclamações do ML, 0 sem ligação**, e o reparo não precisou rodar de novo; DEV-000068 e DEV-000071 ligadas (megadino-2);
+    - 0 erros nos registros;
+    - imagens guardadas: `3f01630` (atual) e `a274ecb` (para voltar atrás); a `0200335` saiu.
+  - **Falta:** o `git pull --ff-only` em `/opt/devolucoes`. Só os containers subiram, e o compose e o nginx não mudaram de verdade. O `devolucoes.conf` ganhou as 2 linhas que a VPS já tinha.
+  - Frentes da integração:
   - foto do anúncio no dossiê (E23);
   - cancelamento explícito (E24);
   - receber pelo pedido e pelo envio do ML e o que volta do armazém (E25);
