@@ -1,15 +1,16 @@
 import { and, count, inArray, sql, type SQL } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes } from '@/db/schema';
-import { ETAPA_DO_STATUS, STATUS_DEVOLUCAO, type StatusDevolucao } from './dominio';
+import { STATUS_DEVOLUCAO, type StatusDevolucao } from './dominio';
+
+const ENCERRADAS: readonly StatusDevolucao[] = ['CONCLUIDA', 'CANCELADA', 'EXTRAVIADA'];
 
 /**
- * (extra) Devolução em andamento = numa das etapas 1 a 4 do quadro (ETAPA_DO_STATUS): Pendente de chegada, Aguardando
- * conferência, Em conferência e Aguardando NF. Ficam de fora as encerradas (Concluída, Cancelada e Extraviada) e a
- * "No CD do marketplace", que também não aparece no quadro. Assim o número do botão do Fluxo é o de cartões do quadro
- * com o selo "Afeta reputação".
+ * (extra) Todo status que não é de encerramento: etapas 1 a 4 do quadro e a No CD do marketplace (CD do ML / Full, também
+ * pesa na reputação; decisão do usuário 19/11). A No CD não tem coluna no quadro: o N pode passar dos selos à vista, mas
+ * é sempre o total da Busca com o filtro.
  */
-export const STATUS_EM_ANDAMENTO: readonly StatusDevolucao[] = STATUS_DEVOLUCAO.filter((s) => ETAPA_DO_STATUS[s] !== undefined);
+export const STATUS_EM_ANDAMENTO: readonly StatusDevolucao[] = STATUS_DEVOLUCAO.filter((s) => !ENCERRADAS.includes(s));
 
 /**
  * A reclamação do ML mais recente da devolução (a mesma do selo do cartão: DA_ULTIMA_RECLAMACAO em busca.ts) diz que
