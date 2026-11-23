@@ -74,9 +74,10 @@ export type ProvasTeste = {
  * Devolução do ML pelo caminho de verdade (chegada, conferência, EAN, unidades, evidências e conclusão), para o dossiê:
  * unidade 1 com Estoque Problema (Avariado) e o EAN que confere; unidade 2 ausente. Grava também a reclamação do ML
  * (motivo no cache e conta do Bitbrain) e a razão social. `concluir: false` deixa a devolução em conferência.
- * `video`: os bytes do Vídeo de Prova (o padrão não é um vídeo de verdade: o quadro vira aviso).
+ * `video`: os bytes do Vídeo de Prova (o padrão não é um vídeo de verdade: o quadro vira aviso). `eanLido`: o código que
+ * o operador lê na unidade 1 (padrão: o do produto esperado); o EAN de outro produto do cadastro a deixa divergente.
  */
-export async function devolucaoComProvasTeste(db: Db, p: { concluir?: boolean; video?: Buffer } = {}): Promise<ProvasTeste> {
+export async function devolucaoComProvasTeste(db: Db, p: { concluir?: boolean; video?: Buffer; eanLido?: string } = {}): Promise<ProvasTeste> {
   contador += 1;
   const marca = `${Date.now().toString(36).toUpperCase()}${contador}`;
   const operador = await criarUsuarioTeste(db, 'OPERADOR');
@@ -98,7 +99,7 @@ export async function devolucaoComProvasTeste(db: Db, p: { concluir?: boolean; v
   const itens = (
     await db.select({ id: itensDevolucao.id }).from(itensDevolucao).where(eq(itensDevolucao.devolucaoId, criada.id)).orderBy(asc(itensDevolucao.unidade))
   ).map((i) => i.id);
-  await registrarEan(db, criada.id, itens[0], EAN_DOSSIE, operador);
+  await registrarEan(db, criada.id, itens[0], p.eanLido ?? EAN_DOSSIE, operador);
   await salvarItem(
     db,
     criada.id,
