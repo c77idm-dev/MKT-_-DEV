@@ -7,6 +7,7 @@ import { exigirPermissao } from '@/modules/auth/servidor';
 import { rotuloStatus } from '@/modules/devolucoes/dominio';
 import { ErroDevolucao } from '@/modules/devolucoes/erros';
 import { criarNaoIdentificada, receberPorRastreio } from '@/modules/devolucoes/recebimento';
+import { mesmaLeituraDaCamera } from './guarda';
 import { mensagemChegada, notaAchada } from './mensagens';
 
 /** `nota` (extra, E25): por qual número da etiqueta do ML a devolução foi achada, quando não foi pelo rastreio. */
@@ -22,9 +23,11 @@ function comNota(nota: string | undefined): { nota?: string } {
   return nota ? { nota } : {};
 }
 
-export async function registrarChegadaAcao(_anterior: EstadoRecebimento, dados: FormData): Promise<EstadoRecebimento> {
+/** `origem=camera` (extra, E25): a leitura veio da câmera, que manda pelo botão escondido do formulário. */
+export async function registrarChegadaAcao(anterior: EstadoRecebimento, dados: FormData): Promise<EstadoRecebimento> {
   const usuario = await exigirPermissao('operar_devolucoes');
   const rastreio = String(dados.get('rastreio') ?? '');
+  const daCamera = dados.get('origem') === 'camera';
   const db = obterDb();
   try {
     if (dados.get('intencao') === 'criar_nao_identificada') {
@@ -50,6 +53,7 @@ export async function registrarChegadaAcao(_anterior: EstadoRecebimento, dados: 
           ...comNota(notaAchada(r.achadaPor, r.codigos.length)),
         };
       case 'ja_recebida':
+        if (mesmaLeituraDaCamera(anterior, daCamera, r.codigo)) return anterior;
         return {
           tipo: 'aviso',
           titulo: 'Este pacote já chegou',

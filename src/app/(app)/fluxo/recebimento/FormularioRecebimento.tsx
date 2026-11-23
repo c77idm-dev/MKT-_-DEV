@@ -170,6 +170,8 @@ export function FormularioRecebimento() {
   const [estado, acao, pendente] = useActionState(registrarChegadaAcao, INICIAL);
   const formularioRef = useRef<HTMLFormElement>(null);
   const campoRef = useRef<HTMLInputElement>(null);
+  // (extra, E25) Botão escondido que a câmera usa para mandar o formulário com `origem=camera` (ver mesmaLeituraDaCamera).
+  const envioCameraRef = useRef<HTMLButtonElement>(null);
   // Última situação do envio, lida pelo callback da câmera (que não é recriado a cada renderização).
   const situacaoEnvioRef = useRef({ pendente, estado });
   useEffect(() => {
@@ -183,7 +185,7 @@ export function FormularioRecebimento() {
     // Marca já como pendente: uma segunda leitura antes da próxima renderização também é ignorada.
     situacaoEnvioRef.current = { pendente: true, estado: situacaoEnvioRef.current.estado };
     campo.value = codigo;
-    formulario.requestSubmit();
+    formulario.requestSubmit(envioCameraRef.current);
   }, []);
   const { videoRef, situacao, erro: erroCamera, abrir, fechar } = useLeitorCamera(aoLer);
   const cameraAberta = situacao !== 'parada';
@@ -279,6 +281,8 @@ export function FormularioRecebimento() {
           <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} min-h-14 text-lg`}>
             {pendente ? 'Registrando…' : 'Registrar chegada'}
           </button>
+          {/* Depois do botão visível, que continua sendo o do Enter (leitor USB). */}
+          <button ref={envioCameraRef} type="submit" name="origem" value="camera" hidden tabIndex={-1} />
         </form>
         {!cameraAberta && botaoCamera}
         {erroCamera && (
