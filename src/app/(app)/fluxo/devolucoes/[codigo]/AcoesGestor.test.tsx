@@ -1,25 +1,41 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EstadoAcaoGestor } from './acoes';
-import { FormularioEncerrar } from './AcoesGestor';
+import { FormularioEncerrar, TRAVA_CONFIRMACAO_MS } from './AcoesGestor';
 
-vi.mock('next/navigation', () => ({ useParams: () => ({ codigo: 'DEV-000437' }) }));
+// O código vem da rota (useParams); cada teste pode trocar o que a URL traz.
+const rota = vi.hoisted(() => ({ codigo: 'DEV-000437' }));
+vi.mock('next/navigation', () => ({ useParams: () => ({ codigo: rota.codigo }) }));
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = () => undefined;
 });
 
+// Só o performance.now é falso: a trava do toque duplo conta o tempo por ele, e os timers do React seguem reais.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['performance'] });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  rota.codigo = 'DEV-000437';
+});
+
 const PERGUNTA = 'Tem certeza? A DEV-000437 sai da espera de chegada e isso não se desfaz pela tela.';
 
-function montar() {
-  const acao = vi.fn(async (): Promise<EstadoAcaoGestor> => ({ erros: [] }));
+function montar(acao = vi.fn(async (): Promise<EstadoAcaoGestor> => ({ erros: [] }))) {
   const tela = render(<FormularioEncerrar acao={acao} />);
   return { acao, ...tela };
 }
 
 function escreverMotivo(texto = 'Cliente desistiu da devolução') {
   fireEvent.change(screen.getByLabelText('Motivo'), { target: { value: texto } });
+}
+
+/** O tempo de ler a pergunta: depois dele, o "Sim" envia. */
+function lerPergunta() {
+  vi.advanceTimersByTime(TRAVA_CONFIRMACAO_MS);
 }
 
 describe('FormularioEncerrar (spec §5.2: Pendente de chegada → Cancelada ou Extraviada, só o Gestor)', () => {
@@ -84,6 +100,62 @@ describe('FormularioEncerrar (spec §5.2: Pendente de chegada → Cancelada ou E
     expect(acao).not.toHaveBeenCalled();
   });
 
+  it('um toque duplo não cancela: o "Sim" tocado logo depois de a pergunta abrir não envia (E24)', async () => {
+    const { acao } = montar();
+    fireEvent.click(screen.getByRole('radio', { name: 'Cancelada' }));
+    escreverMotivo();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar devolução' }));
+    // O 2º toque de um toque duplo cai no "Sim", que ocupa parte do lugar do botão.
+    fireEvent.click(screen.getByRole('button', { name: 'Sim, cancelar devolução' }));
+    vi.advanceTimersByTime(300);
+    fireEvent.click(screen.getByRole('button', { name: 'Sim, cancelar devolução' }));
+    await new Promise((ok) => setTimeout(ok, 0));
+    expect(acao).not.toHaveBeenCalled();
+    // A pergunta continua na tela, esperando o "Sim" de quem leu.
+    expect(screen.getByText(PERGUNTA)).toBeTruthy();
+
+    vi.advanceTimersByTime(TRAVA_CONFIRMACAO_MS - 300);
+    fireEvent.click(screen.getByRole('button', { name: 'Sim, cancelar devolução' }));
+    await vi.waitFor(() => expect(acao).toHaveBeenCalledTimes(1));
+  });
+
+  it('a trava recomeça a cada vez que a pergunta abre', async () => {
+    const { acao } = montar();
+    fireEvent.click(screen.getByRole('radio', { name: 'Cancelada' }));
+    escreverMotivo();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar devolução' }));
+    lerPergunta();
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar devolução' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sim, cancelar devolução' }));
+    await new Promise((ok) => setTimeout(ok, 0));
+    expect(acao).not.toHaveBeenCalled();
+  });
+
+  it('Enter numa opção não envia: o navegador acionaria o "Sim", que é o botão padrão (E24)', () => {
+    montar();
+    const cancelada = screen.getByRole('radio', { name: 'Cancelada' });
+    fireEvent.click(cancelada);
+    escreverMotivo();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar devolução' }));
+    lerPergunta();
+    // O fireEvent devolve false quando o evento foi cancelado (preventDefault).
+    expect(fireEvent.keyDown(cancelada, { key: 'Enter' })).toBe(false);
+    expect(fireEvent.keyDown(screen.getByRole('radio', { name: 'Extraviada' }), { key: 'Enter' })).toBe(false);
+    // O motivo continua aceitando quebra de linha, e as outras teclas passam.
+    expect(fireEvent.keyDown(screen.getByLabelText('Motivo'), { key: 'Enter' })).toBe(true);
+    expect(fireEvent.keyDown(cancelada, { key: ' ' })).toBe(true);
+  });
+
+  it('a pergunta mostra o código como o título da página, mesmo com a URL em minúsculas', () => {
+    rota.codigo = ' dev-000437 ';
+    montar();
+    fireEvent.click(screen.getByRole('radio', { name: 'Cancelada' }));
+    escreverMotivo();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar devolução' }));
+    expect(screen.getByText(PERGUNTA)).toBeTruthy();
+  });
+
   it('"Voltar" fecha a confirmação, devolve o foco ao botão e não chama a ação', async () => {
     const { acao } = montar();
     fireEvent.click(screen.getByRole('radio', { name: 'Extraviada' }));
@@ -108,11 +180,12 @@ describe('FormularioEncerrar (spec §5.2: Pendente de chegada → Cancelada ou E
     expect(screen.getByRole('button', { name: 'Marcar como extraviada' })).toBeTruthy();
   });
 
-  it('o 2º toque chama a ação com o novo status e o motivo (Cancelada)', async () => {
+  it('o 2º toque, depois de ler a pergunta, chama a ação com o novo status e o motivo (Cancelada)', async () => {
     const { acao } = montar();
     fireEvent.click(screen.getByRole('radio', { name: 'Cancelada' }));
     escreverMotivo('Cliente desistiu da devolução');
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar devolução' }));
+    lerPergunta();
     fireEvent.click(screen.getByRole('button', { name: 'Sim, cancelar devolução' }));
     await vi.waitFor(() => expect(acao).toHaveBeenCalledTimes(1));
     const dados = (acao.mock.calls[0] as unknown as [EstadoAcaoGestor, FormData])[1];
@@ -120,15 +193,37 @@ describe('FormularioEncerrar (spec §5.2: Pendente de chegada → Cancelada ou E
     expect(dados.get('motivo')).toBe('Cliente desistiu da devolução');
   });
 
-  it('o 2º toque chama a ação com o novo status e o motivo (Extraviada)', async () => {
+  it('o 2º toque, depois de ler a pergunta, chama a ação com o novo status e o motivo (Extraviada)', async () => {
     const { acao } = montar();
     fireEvent.click(screen.getByRole('radio', { name: 'Extraviada' }));
     escreverMotivo('Correios confirmaram o extravio');
     fireEvent.click(screen.getByRole('button', { name: 'Marcar como extraviada' }));
+    lerPergunta();
     fireEvent.click(screen.getByRole('button', { name: 'Sim, marcar como extraviada' }));
     await vi.waitFor(() => expect(acao).toHaveBeenCalledTimes(1));
     const dados = (acao.mock.calls[0] as unknown as [EstadoAcaoGestor, FormData])[1];
     expect(dados.get('para')).toBe('EXTRAVIADA');
     expect(dados.get('motivo')).toBe('Correios confirmaram o extravio');
+  });
+
+  it('durante o envio, as opções e o motivo ficam travados: a tela não mostra outra escolha', async () => {
+    let terminar: (estado: EstadoAcaoGestor) => void = () => undefined;
+    const acao = vi.fn(() => new Promise<EstadoAcaoGestor>((ok) => (terminar = ok)));
+    montar(acao);
+    fireEvent.click(screen.getByRole('radio', { name: 'Cancelada' }));
+    escreverMotivo();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar devolução' }));
+    lerPergunta();
+    fireEvent.click(screen.getByRole('button', { name: 'Sim, cancelar devolução' }));
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Registrando…' })).toBeTruthy());
+    expect(screen.getByRole('radio', { name: 'Cancelada' }).matches(':disabled')).toBe(true);
+    expect(screen.getByRole('radio', { name: 'Extraviada' }).matches(':disabled')).toBe(true);
+    expect(screen.getByLabelText('Motivo').matches(':disabled')).toBe(true);
+    expect(screen.getByText(PERGUNTA)).toBeTruthy();
+
+    // A ação devolveu um erro: tudo volta a ficar editável.
+    await act(async () => terminar({ erros: ['Esta devolução não está mais pendente de chegada.'] }));
+    expect(screen.getByRole('radio', { name: 'Extraviada' }).matches(':disabled')).toBe(false);
+    expect(screen.getByLabelText('Motivo').matches(':disabled')).toBe(false);
   });
 });

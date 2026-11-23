@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { CampoTexto } from '@/components/CampoTexto';
 import { CamposItens } from '@/components/CamposItens';
 import { ListaErros } from '@/components/ListaErros';
@@ -34,10 +34,18 @@ const ID_ERROS_ENCERRAR = 'erros-encerrar';
 const ID_ERRO_ESCOLHA = 'erro-escolha-encerrar';
 
 /**
+ * Quanto tempo a pergunta fica na tela antes de o "Sim" valer. Com o rodapé preso do celular, o "Sim" aparece onde
+ * estava o alto do botão do 1º passo (no computador, a parte de baixo): sem a trava, um toque duplo cancelaria.
+ */
+export const TRAVA_CONFIRMACAO_MS = 700;
+
+/**
  * Spec §5.2: Pendente de chegada → Cancelada ou Extraviada, por ação manual do Gestor.
  * Emenda E24 (23/11): um Gestor cancelou uma devolução sem querer, procurando onde registrar a chegada. Por isso o
  * bloco fica recolhido em "Mais ações do Gestor", nada vem marcado, o botão é vermelho e diz o que faz, e só o
- * 2º toque, na confirmação, envia. O código vem da rota (useParams): o `[codigo]/page.tsx` é congelado (§3).
+ * 2º toque, na confirmação, envia: o "Sim" tocado antes de a pergunta ficar 0,7 s na tela não vale (toque duplo), e
+ * o Enter numa opção não envia (o "Sim" é o botão padrão do formulário). O código vem da rota (useParams): o
+ * `[codigo]/page.tsx` é congelado (§3).
  */
 export function FormularioEncerrar({ acao }: { acao: Acao }) {
   const { codigo } = useParams<{ codigo?: string }>();
@@ -49,6 +57,8 @@ export function FormularioEncerrar({ acao }: { acao: Acao }) {
   const botao = useRef<HTMLButtonElement>(null);
   const pergunta = useRef<HTMLParagraphElement>(null);
   const voltou = useRef(false);
+  /** Quando a pergunta abriu (performance.now), para a trava do toque duplo. */
+  const abertaEm = useRef(0);
 
   // A confirmação recebe o foco (o leitor de tela lê a pergunta); o "Voltar" devolve o foco ao botão.
   useEffect(() => {
@@ -87,10 +97,22 @@ export function FormularioEncerrar({ acao }: { acao: Acao }) {
     }
     if (!confirmando) {
       evento.preventDefault();
+      abertaEm.current = performance.now();
       setConfirmando(true);
       return;
     }
+    // O 2º toque de um toque duplo cai no "Sim" antes de a pergunta ser lida: não vale.
+    if (performance.now() - abertaEm.current < TRAVA_CONFIRMACAO_MS) {
+      evento.preventDefault();
+      return;
+    }
     aoEnviar(evento);
+  }
+
+  // Enter numa opção faria o envio implícito, e o navegador acionaria o botão padrão, que na confirmação é o "Sim".
+  // O motivo (textarea) continua aceitando quebra de linha.
+  function aoTeclar(evento: KeyboardEvent<HTMLFormElement>) {
+    if (evento.key === 'Enter' && evento.target instanceof HTMLInputElement) evento.preventDefault();
   }
 
   function voltar() {
@@ -98,7 +120,9 @@ export function FormularioEncerrar({ acao }: { acao: Acao }) {
     setConfirmando(false);
   }
 
-  const quem = codigo ? `A ${codigo}` : 'A devolução';
+  // Normaliza como o detalhe (obterDetalhe): /fluxo/devolucoes/dev-000437 mostra a DEV-000437, igual ao título.
+  const codigoNormalizado = codigo?.trim().toUpperCase();
+  const quem = codigoNormalizado ? `A ${codigoNormalizado}` : 'A devolução';
   const textoPergunta = `Tem certeza? ${quem} sai da espera de chegada e isso não se desfaz pela tela.`;
 
   return (
@@ -119,7 +143,12 @@ export function FormularioEncerrar({ acao }: { acao: Acao }) {
           <path d="M6 9l6 6 6-6" />
         </svg>
       </summary>
-      <form onSubmit={aoSubmeter} aria-labelledby="titulo-encerrar" className="mt-3 flex flex-col gap-3">
+      <form
+        onSubmit={aoSubmeter}
+        onKeyDown={aoTeclar}
+        aria-labelledby="titulo-encerrar"
+        className="mt-3 flex flex-col gap-3"
+      >
         <h2 id="titulo-encerrar" className="text-base font-bold">
           Cancelar ou marcar como extraviada
         </h2>
@@ -129,7 +158,12 @@ export function FormularioEncerrar({ acao }: { acao: Acao }) {
             Ir para Receber pacote
           </Link>
         </div>
-        <fieldset className="flex flex-col" aria-describedby={semEscolha ? ID_ERRO_ESCOLHA : undefined}>
+        {/* Durante o envio, a escolha e o motivo ficam travados: a tela mostra o que foi enviado (o FormData já foi lido). */}
+        <fieldset
+          disabled={pendente}
+          className="flex flex-col"
+          aria-describedby={semEscolha ? ID_ERRO_ESCOLHA : undefined}
+        >
           <legend className={ROTULO}>Novo status</legend>
           <label className="flex min-h-11 items-center gap-3 text-[15px]">
             <input
@@ -171,6 +205,7 @@ export function FormularioEncerrar({ acao }: { acao: Acao }) {
             minLength={3}
             maxLength={500}
             rows={3}
+            disabled={pendente}
             className={`${CAMPO} min-h-24 py-2`}
           />
         </div>

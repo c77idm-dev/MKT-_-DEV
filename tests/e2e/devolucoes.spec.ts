@@ -82,6 +82,50 @@ function pergunta(codigo: string): string {
   return `Tem certeza? A ${codigo} sai da espera de chegada e isso não se desfaz pela tela.`;
 }
 
+/** E24: o "Sim" só envia depois de a pergunta ficar 0,7 s na tela (TRAVA_CONFIRMACAO_MS, em AcoesGestor.tsx). */
+const TRAVA_CONFIRMACAO_MS = 700;
+
+/** Quem lê a pergunta leva mais tempo que a trava do toque duplo; antes do "Sim", o teste espera esse tempo. */
+async function lerPergunta(page: Page) {
+  await page.waitForTimeout(TRAVA_CONFIRMACAO_MS + 100);
+}
+
+/** Conta os envios de Server Action (POST com o cabeçalho Next-Action) que a página faz daqui em diante. */
+function contarEnvios(page: Page): () => number {
+  let envios = 0;
+  page.on('request', (pedido) => {
+    if (pedido.method() === 'POST' && pedido.headers()['next-action']) envios += 1;
+  });
+  return () => envios;
+}
+
+/** Gestor no detalhe, com "Mais ações do Gestor" aberto, "Cancelada" escolhida e o motivo escrito. */
+async function prepararCancelamento(page: Page, codigo: string): Promise<Locator> {
+  await entrarComo(page, USUARIOS_E2E.gestor);
+  await page.goto(`/fluxo/devolucoes/${codigo}`);
+  const bloco = blocoMaisAcoes(page);
+  await bloco.getByText('Mais ações do Gestor').click();
+  await aguardarHidratacao(bloco.getByRole('button', { name: 'Escolha uma opção' }));
+  await page.getByRole('radio', { name: 'Cancelada' }).check();
+  await page.getByLabel('Motivo').fill('Toque sem querer');
+  return bloco;
+}
+
+/** Nada saiu: a pergunta segue na tela, nenhum envio partiu e a devolução continua pendente de chegada. */
+async function nadaEnviado(page: Page, bloco: Locator, codigo: string, envios: () => number) {
+  // Um envio indevido parte logo depois do toque; meio segundo basta para ele aparecer.
+  await page.waitForTimeout(500);
+  expect(envios(), 'nenhuma Server Action enviada').toBe(0);
+  await expect(bloco.getByText(pergunta(codigo))).toBeVisible();
+  await expect(bloco.getByRole('button', { name: 'Sim, cancelar devolução' })).toBeEnabled();
+  expect(await statusNoBanco(codigo)).toBe('PENDENTE_CHEGADA');
+}
+
+/** O ponto (x, y) da tela cai dentro do elemento. */
+async function cobre(elemento: Locator, x: number, y: number): Promise<boolean> {
+  return elemento.evaluate((el, [px, py]) => el.contains(document.elementFromPoint(px, py)), [x, y] as const);
+}
+
 test('gestor cancela uma devolução pendente em "Mais ações do Gestor", confirma, e o histórico mostra o motivo', async ({ page }) => {
   const codigo = await devolucaoPendente();
   await entrarComo(page, USUARIOS_E2E.gestor);
@@ -126,6 +170,7 @@ test('gestor cancela uma devolução pendente em "Mais ações do Gestor", confi
   for (const altura of alturas) expect(altura, 'alvo de toque de 44 px ou mais').toBeGreaterThanOrEqual(44);
   expect(await statusNoBanco(codigo)).toBe('PENDENTE_CHEGADA');
 
+  await lerPergunta(page);
   await sim.click();
   await expect(page.getByRole('status')).toHaveText('Devolução cancelada.');
   await expect(page.getByRole('status')).toBeFocused();
@@ -155,12 +200,78 @@ test('gestor marca como extraviada: "Voltar" não envia, e só o "Sim" muda o st
   expect(await statusNoBanco(codigo)).toBe('PENDENTE_CHEGADA');
 
   await marcar.click();
+  await lerPergunta(page);
   await bloco.getByRole('button', { name: 'Sim, marcar como extraviada' }).click();
   await expect(page.getByRole('status')).toHaveText('Devolução marcada como extraviada.');
   await expect(page.getByText('Pendente de chegada → Extraviada')).toBeVisible();
   await expect(page.getByText('Motivo: Correios confirmaram o extravio')).toBeVisible();
   await semRolagemLateral(page);
   expect(await statusNoBanco(codigo)).toBe('EXTRAVIADA');
+});
+
+test('celular: um toque duplo no "Cancelar devolução" só abre a pergunta, e o 2º toque, no "Sim", não cancela (E24)', async ({
+  page,
+}, testInfo) => {
+  test.skip(!ehCelular(testInfo), 'toque na tela; o computador tem o teste do clique duplo');
+  const codigo = await devolucaoPendente();
+  const bloco = await prepararCancelamento(page, codigo);
+  // O bloco é o último da página. Rolada até o fim, o rodapé preso cresce para cima quando a pergunta abre,
+  // e o "Sim" passa a cobrir o alto do botão do 1º passo.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const caixa = await bloco.getByRole('button', { name: 'Cancelar devolução' }).boundingBox();
+  if (!caixa) throw new Error('o botão "Cancelar devolução" não está na tela');
+  const x = caixa.x + caixa.width / 2;
+  const y = caixa.y + 4;
+  const envios = contarEnvios(page);
+
+  await page.touchscreen.tap(x, y);
+  const sim = bloco.getByRole('button', { name: 'Sim, cancelar devolução' });
+  await expect(sim).toBeVisible();
+  // O caso de 23/11: o 2º toque, no mesmo ponto, cai no "Sim".
+  expect(await cobre(sim, x, y), 'o 2º toque cai no "Sim"').toBe(true);
+  await page.touchscreen.tap(x, y);
+  await nadaEnviado(page, bloco, codigo, envios);
+});
+
+test('computador: um clique duplo no "Cancelar devolução" só abre a pergunta, e o 2º clique, no "Sim", não cancela (E24)', async ({
+  page,
+}, testInfo) => {
+  test.skip(ehCelular(testInfo), 'mouse; o celular tem o teste do toque duplo');
+  const codigo = await devolucaoPendente();
+  const bloco = await prepararCancelamento(page, codigo);
+  const botao = bloco.getByRole('button', { name: 'Cancelar devolução' });
+  await botao.scrollIntoViewIfNeeded();
+  const caixa = await botao.boundingBox();
+  if (!caixa) throw new Error('o botão "Cancelar devolução" não está na tela');
+  // No computador, o "Sim" aparece cobrindo a parte de baixo do botão do 1º passo.
+  const x = caixa.x + caixa.width / 2;
+  const y = caixa.y + caixa.height - 3;
+  const envios = contarEnvios(page);
+
+  await page.mouse.dblclick(x, y);
+  await nadaEnviado(page, bloco, codigo, envios);
+  expect(await cobre(bloco.getByRole('button', { name: 'Sim, cancelar devolução' }), x, y), 'o 2º clique caiu no "Sim"').toBe(
+    true,
+  );
+});
+
+test('computador: Enter numa opção, com a pergunta aberta, não cancela (o "Sim" é o botão padrão do formulário) (E24)', async ({
+  page,
+}, testInfo) => {
+  test.skip(ehCelular(testInfo), 'teclado do computador');
+  const codigo = await devolucaoPendente();
+  const bloco = await prepararCancelamento(page, codigo);
+  await bloco.getByRole('button', { name: 'Cancelar devolução' }).click();
+  await expect(bloco.getByText(pergunta(codigo))).toBeFocused();
+  // Passada a trava do toque duplo, só a regra do Enter segura o envio.
+  await lerPergunta(page);
+  const envios = contarEnvios(page);
+
+  const cancelada = page.getByRole('radio', { name: 'Cancelada' });
+  await cancelada.focus();
+  await expect(cancelada).toBeChecked();
+  await page.keyboard.press('Enter');
+  await nadaEnviado(page, bloco, codigo, envios);
 });
 
 test('o Operador vê o detalhe da pendente sem "Mais ações do Gestor"', async ({ page }) => {
