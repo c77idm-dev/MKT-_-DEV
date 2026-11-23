@@ -10,7 +10,8 @@ import type { DadosDossie } from './dominio';
 /**
  * Tudo o que o dossiê de provas (extra) mostra, num carregamento só. Reaproveita as consultas do detalhe (dados e
  * histórico) e da conferência (unidades e evidências); acrescenta só o que elas não trazem: os hashes e quem enviou
- * cada evidência, a reclamação do ML (motivo e conta) e a razão social. Nenhum dado pessoal do comprador.
+ * cada evidência, a reclamação do ML (motivo e conta) e a razão social. Nenhum campo de texto com dado do comprador (o
+ * destinatário da NF fica de fora); a Foto 1 pode mostrar o nome e o endereço dele na etiqueta.
  */
 export async function carregarDossie(db: DbOuTx, codigo: string, geracao: { em: Date; porNome: string }): Promise<DadosDossie | null> {
   const detalhe = await obterDetalhe(db, codigo);

@@ -132,7 +132,10 @@ export type EventoDossie = {
   dados: Record<string, unknown> | null;
 };
 
-/** Tudo o que o PDF mostra. Nenhum dado pessoal do comprador (o sistema não guarda). */
+/**
+ * Tudo o que o PDF mostra. Nenhum campo de texto com dado do comprador (o destinatário da NF, em notas_venda, fica de
+ * fora); mas a Foto 1 (etiqueta de rastreio e declaração de conteúdo) pode mostrar o nome e o endereço dele na imagem.
+ */
 export type DadosDossie = {
   id: string;
   codigo: string;
