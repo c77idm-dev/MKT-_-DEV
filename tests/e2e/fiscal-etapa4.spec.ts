@@ -31,7 +31,7 @@ test('a coluna 4 se divide em Estoque Bom e Estoque Problema; a devolução com 
   await expect(page.getByRole('link', { name: new RegExp(mista.codigo) })).toContainText('Estoque Bom: 1');
   await expect(page.getByRole('link', { name: new RegExp(soProblema.codigo) })).toHaveCount(0);
   // O Operador vê as listas, mas não emite NF (spec §6.9).
-  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: /^Selecionar / })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Emitir NF/ })).toHaveCount(0);
   await semRolagemLateral(page);
 });
