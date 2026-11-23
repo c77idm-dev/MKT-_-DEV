@@ -44,6 +44,19 @@ export const IMAGEM_REDUZIDA: OpcoesImagem = { ladoMaior: 1024, qualidade: 60 };
  */
 export const MAX_FOTOS_DOSSIE = 120;
 
+/**
+ * Foto do anúncio no ML (extra, 23/11): a referência do que foi vendido, ao lado do produto esperado. Pequena (o
+ * anúncio é só referência) e no mesmo tamanho nas duas tentativas do PDF, para ser baixada uma vez só.
+ */
+export const IMAGEM_ANUNCIO: OpcoesImagem = { ladoMaior: 400, qualidade: 70 };
+/** Prazo de cada foto do anúncio (o CDN do ML responde em menos de 1 s). */
+export const PRAZO_FOTO_ANUNCIO_MS = 5_000;
+/**
+ * Tempo total das fotos do anúncio num dossiê: uma devolução com muitos produtos não gasta o prazo de 100 s (gerar.ts)
+ * esperando o CDN. Acabou o tempo, as que faltam ficam "indisponível".
+ */
+export const ORCAMENTO_FOTOS_ANUNCIO_MS = 20_000;
+
 /** Peso médio de uma imagem a 1280 px/70 no PDF, para escolher a qualidade antes da 1ª passada. */
 const BYTES_POR_IMAGEM = 170 * 1024;
 
