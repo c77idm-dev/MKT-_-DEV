@@ -129,7 +129,10 @@ export async function baixarFotoAnuncio(
   o.sinal?.throwIfAborted();
   const host = url.hostname;
   const limite = o.limiteBytes ?? LIMITE_BYTES_FOTO_ANUNCIO;
-  const prazo = AbortSignal.timeout(o.prazoMs ?? PRAZO_FOTO_ANUNCIO_MS);
+  // O AbortSignal.timeout do Node só aceita inteiro (fração ou negativo lançam ERR_OUT_OF_RANGE, fora do try): o prazo
+  // que sobra do tempo das fotos do anúncio vem de performance.now(), com fração.
+  const pedido = o.prazoMs ?? PRAZO_FOTO_ANUNCIO_MS;
+  const prazo = AbortSignal.timeout(Number.isFinite(pedido) ? Math.max(1, Math.floor(pedido)) : PRAZO_FOTO_ANUNCIO_MS);
   const sinal = o.sinal ? AbortSignal.any([o.sinal, prazo]) : prazo;
 
   let conteudo: Buffer;

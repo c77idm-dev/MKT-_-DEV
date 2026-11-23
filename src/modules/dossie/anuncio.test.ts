@@ -140,6 +140,20 @@ describe('baixarFotoAnuncio (dossiê, extra)', () => {
     expect(Date.now() - inicio).toBeLessThan(2_000);
   });
 
+  it('prazo fracionário (o que sobra do tempo das fotos do anúncio, medido em ms com fração): baixa, sem lançar', async () => {
+    // O AbortSignal.timeout do Node só aceita inteiro: 4996.5 lançava ERR_OUT_OF_RANGE e derrubava o dossiê.
+    const fetchFn = fetchQueResponde(async () => resposta(new Uint8Array(await pngAnuncio())));
+    await expect(baixarFotoAnuncio(FOTO, { fetchFn, prazoMs: 4996.5 })).resolves.toMatchObject({ ok: true });
+  });
+
+  it.each([4996.5, 0.4, 0, -3, Number.NaN])('prazo fracionário ou fora do comum (%d) com erro de rede: indisponível, nunca rejeita', async (prazoMs) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fetchFn = vi.fn<typeof fetch>(async () => {
+      throw new Error('rede');
+    });
+    await expect(baixarFotoAnuncio(FOTO, { fetchFn, prazoMs })).resolves.toEqual({ ok: false, motivo: 'rede' });
+  });
+
   it('prazo: o corpo começa e trava no meio', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const fetchFn = fetchQueResponde(() => resposta(corpoQueTrava()));

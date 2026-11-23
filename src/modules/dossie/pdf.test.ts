@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
 import sharp from 'sharp';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { imagensDoPdf, paginasDoPdf, textoDoPdf } from '../../../tests/helpers/pdf';
 import { dadosDossieTeste as dadosTeste } from '../../../tests/helpers/fabricas-dossie';
+import { baixarFotoAnuncio } from './anuncio';
 import { IMAGEM_ANUNCIO, MAX_FOTOS_DOSSIE, PRAZO_FOTO_ANUNCIO_MS, type DadosDossie, type OpcoesImagem } from './dominio';
 import { reduzirImagem, type ImagemPdf } from './imagens';
 import { gerarPdfDossie, type MidiasDossie } from './pdf';
@@ -46,8 +47,11 @@ function midiasTeste(
     semQuadro?: boolean;
     pesadas?: boolean;
     aoPedirFoto?: (n: number) => void;
-    /** ok: devolve a foto; falha: indisponível; demora: espera o prazo inteiro e desiste (servidor parado). */
-    anuncio?: 'ok' | 'falha' | 'demora';
+    /**
+     * ok: devolve a foto; falha: indisponível; demora: espera o prazo inteiro e desiste (servidor parado); lenta: desiste
+     * depois de uns 15 ms; erro: rejeita com um erro comum (um bug, não o cancelamento do dossiê).
+     */
+    anuncio?: 'ok' | 'falha' | 'demora' | 'lenta' | 'erro';
     aoPedirAnuncio?: (n: number) => void;
   } = {},
 ): MidiasDossie & { chamadas: { id: string; opcoes: OpcoesImagem }[]; anuncios: { url: string; prazoMs: number }[] } {
@@ -61,9 +65,16 @@ function midiasTeste(
       anuncios.push({ url, prazoMs });
       o.aoPedirAnuncio?.(anuncios.length);
       sinal?.throwIfAborted();
+      // O mesmo contrato do baixarFotoAnuncio de verdade: o prazo vira um AbortSignal.timeout (só aceita inteiro).
+      const prazo = AbortSignal.timeout(prazoMs);
       if (o.anuncio === 'falha') return { ok: false, motivo: 'http' };
+      if (o.anuncio === 'erro') throw new Error('bug na foto do anúncio');
+      if (o.anuncio === 'lenta') {
+        await new Promise((r) => setTimeout(r, 15));
+        return { ok: false, motivo: 'rede' };
+      }
       if (o.anuncio === 'demora') {
-        await new Promise((r) => setTimeout(r, prazoMs));
+        await new Promise((r) => prazo.addEventListener('abort', r, { once: true }));
         return { ok: false, motivo: 'prazo' };
       }
       return { ok: true, imagem: await fotoDoAnuncioReduzida() };
@@ -81,6 +92,10 @@ function midiasTeste(
     },
   };
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 /** Fotos da avaria a mais na unidade 1, para passar da estimativa de tamanho ou do teto de fotos. */
 function comMuitasFotos(n: number) {
@@ -509,7 +524,57 @@ describe('foto do anúncio no ML no dossiê (extra)', () => {
     const r = await gerarPdfDossie(comFotos(), midias, { orcamentoAnunciosMs: 300 });
     expect(midias.anuncios).toHaveLength(1);
     expect(midias.anuncios[0].prazoMs).toBeLessThanOrEqual(300);
+    expect(midias.anuncios.every((a) => Number.isInteger(a.prazoMs))).toBe(true);
     expect(corrido(await textoDoPdf(r.bytes)).match(new RegExp(INDISPONIVEL, 'g'))).toHaveLength(3);
+  });
+
+  it('tempo das fotos do anúncio: o que sobra do tempo (com fração de ms) vai como prazo inteiro', async () => {
+    // 1ª foto: 4000 ms; ela leva uns 15 ms; a 2ª recebe o resto (uns 3984,7 ms), que o AbortSignal.timeout recusaria.
+    const midias = midiasTeste({ anuncio: 'lenta' });
+    const r = await gerarPdfDossie(comFotos(), midias, { orcamentoAnunciosMs: 4000 });
+    expect(midias.anuncios.map((a) => a.url)).toEqual([FOTO_A, FOTO_B]);
+    expect(midias.anuncios[0].prazoMs).toBe(4000);
+    expect(midias.anuncios[1].prazoMs).toBeLessThan(4000);
+    expect(midias.anuncios.every((a) => Number.isInteger(a.prazoMs))).toBe(true);
+    expect(corrido(await textoDoPdf(r.bytes)).match(new RegExp(INDISPONIVEL, 'g'))).toHaveLength(3);
+  });
+
+  it('qualquer erro inesperado ao buscar a foto do anúncio (não o cancelamento): "indisponível" e o PDF sai', async () => {
+    const avisos: string[] = [];
+    vi.spyOn(console, 'warn').mockImplementation((m: unknown) => void avisos.push(String(m)));
+    const midias = midiasTeste({ anuncio: 'erro' });
+    const r = await gerarPdfDossie(comFotos(), midias);
+    expect(midias.anuncios.map((a) => a.url)).toEqual([FOTO_A, FOTO_B]);
+    // O log diz que houve erro e de que tipo, sem a URL.
+    expect(avisos.map((a) => JSON.parse(a) as Record<string, unknown>)).toEqual([
+      expect.objectContaining({ evento: 'dossie_foto_anuncio_erro', erro: 'Error' }),
+      expect.objectContaining({ evento: 'dossie_foto_anuncio_erro', erro: 'Error' }),
+    ]);
+    for (const a of avisos) expect(a).not.toContain('mlstatic');
+    const secao = await secoes(r);
+    for (const titulo of ['Unidade 1 de 3', 'Unidade 2 de 3', 'Unidade 3 de 3']) expect(corrido(secao(titulo))).toContain(INDISPONIVEL);
+    expect(await imagensDoPdf(r.bytes)).toHaveLength(9);
+  });
+
+  it('com o download de verdade (baixarFotoAnuncio) e o CDN falhando aos poucos: o PDF sai, com "indisponível" nas 3 unidades', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fetchFn = vi.fn<typeof fetch>(async () => {
+      await new Promise((r) => setTimeout(r, 15));
+      throw new TypeError('fetch failed');
+    });
+    const prazos: number[] = [];
+    const midias: MidiasDossie = {
+      ...midiasTeste(),
+      fotoDoAnuncio(url, { prazoMs, sinal }) {
+        prazos.push(prazoMs);
+        return baixarFotoAnuncio(url, { fetchFn, prazoMs, sinal });
+      },
+    };
+    const r = await gerarPdfDossie(comFotos(), midias, { orcamentoAnunciosMs: 4000 });
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(prazos).toHaveLength(2);
+    const secao = await secoes(r);
+    for (const titulo of ['Unidade 1 de 3', 'Unidade 2 de 3', 'Unidade 3 de 3']) expect(corrido(secao(titulo))).toContain(INDISPONIVEL);
   });
 
   it('fora do ML: sem a foto do anúncio (nada é pedido)', async () => {

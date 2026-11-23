@@ -44,7 +44,7 @@ export type MidiasDossie = {
   quadroDoVideo(e: EvidenciaDossie, opcoes: OpcoesImagem, sinal?: AbortSignal): Promise<ResultadoQuadro>;
   /**
    * Foto do anúncio no ML (extra): a referência do que foi vendido, baixada do CDN do ML (anuncio.ts), já a 400 px.
-   * Falha vira { ok: false }; só o cancelamento do dossiê (`sinal`) sobe como erro. `prazoMs`: o desta foto.
+   * Falha vira { ok: false }; só o cancelamento do dossiê (`sinal`) sobe como erro. `prazoMs`: o desta foto, inteiro.
    */
   fotoDoAnuncio(url: string, o: { prazoMs: number; sinal?: AbortSignal }): Promise<ResultadoFotoAnuncio>;
 };
@@ -685,7 +685,8 @@ function ordenarEvidencias(d: DadosDossie): EvidenciaDossie[] {
 /**
  * Fotos do anúncio (extra): cada URL é pedida uma vez por dossiê (a promessa vale para as duas tentativas do PDF), uma
  * por vez (as seções são montadas em ordem), só as que couberam no teto de fotos e dentro do tempo total
- * (`orcamentoMs`): acabou o tempo, as que faltam nem são pedidas e ficam "indisponível".
+ * (`orcamentoMs`): acabou o tempo, as que faltam nem são pedidas e ficam "indisponível". Um erro que não seja o
+ * cancelamento do dossiê também vira "indisponível".
  */
 function fotosDoAnuncio(
   midias: MidiasDossie,
@@ -701,7 +702,15 @@ function fotosDoAnuncio(
     if (restante < PRAZO_MINIMO_ANUNCIO_MS) return { ok: false, motivo: 'sem_tempo' };
     const inicio = performance.now();
     try {
-      return await midias.fotoDoAnuncio(url, { prazoMs: Math.min(PRAZO_FOTO_ANUNCIO_MS, restante), sinal });
+      // O prazo vira um AbortSignal.timeout, que só aceita inteiro; o restante (de performance.now()) tem fração.
+      return await midias.fotoDoAnuncio(url, { prazoMs: Math.floor(Math.min(PRAZO_FOTO_ANUNCIO_MS, restante)), sinal });
+    } catch (erro) {
+      // Rede de segurança: só o cancelamento do dossiê sobe; qualquer outro erro vira "indisponível", nunca derruba o PDF.
+      sinal?.throwIfAborted();
+      console.warn(
+        JSON.stringify({ em: new Date().toISOString(), nivel: 'aviso', origem: 'web', evento: 'dossie_foto_anuncio_erro', erro: erro instanceof Error ? erro.name : typeof erro }),
+      );
+      return { ok: false, motivo: 'rede' };
     } finally {
       gastoMs += performance.now() - inicio;
     }
