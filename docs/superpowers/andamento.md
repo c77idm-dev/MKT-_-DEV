@@ -29,10 +29,14 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
       - **Às 17h15:** 61 reclamações lidas, 13 devoluções do ML criadas, e cerca de 1.100 leituras ainda na fila, que vai andando sozinha.
       - Na VPS: opção C no ar (`1901f0d`). DEV-000002 a 000005, que eram de teste, foram apagadas; backup antes em `/root/backups-devolucoes/banco-antes-apagar-testes_20261119-1957.dump`. Sobrou só a DEV-000001, cancelada.
       - **Depois da entrega (19/11):**
-        1. O ML devolve 401 em `/post-purchase/v2/claims/5614557128/returns`, numa reclamação só. Investigar; talvez a conta não seja a dona da devolução.
-        2. Pedir o adendo do `logistic` à sessão do Bitbrain, para o selo Full funcionar.
-        3. Apagar as fotos que ficaram sem dono no armazenamento, das antigas DEV-000004 e 000005, e perguntar ao usuário se apaga também a DEV-000001.
-        4. Mover o arquivo solto `/opt/devolucoes/backup-antes-fase1-20261112-1928.sql` para `~/backups-devolucoes`.
+        1. O ML devolve 401 em `/post-purchase/v2/claims/5614557128/returns` (conta general), numa reclamação só. **O usuário mandou deixar assim (23/11).** Ela fica em Falhas.
+        2. Pedir o adendo do `logistic` à sessão do Bitbrain, para o selo Full funcionar. Vai junto no texto do catálogo, que o usuário vai colar (23/11).
+        3. **Feito em 23/11:**
+           - a DEV-000001 (manual e cancelada) foi apagada, com backup antes em `~/backups-devolucoes/banco-antes-apagar-dev1_20261123-1652.dump`;
+           - as 2 pastas de evidências sem dono foram apagadas, com cópia em `~/backups-devolucoes/midias-sem-dono_20261123-1652.tar.gz`;
+           - o backup solto de 12/11 foi para `~/backups-devolucoes`;
+           - a imagem `97f1fdb` saiu.
+           Ficam as imagens `a274ecb` (atual) e `0200335` (para voltar atrás). Havia 454 devoluções no banco.
       - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `70801df`). **Revisado em equipe, junto no `main` e publicado na VPS em 23/11 (`97f1fdb`).**
         - **Testes:**
           - unidade: 853;
