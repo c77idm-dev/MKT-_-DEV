@@ -33,13 +33,24 @@ export const ACAO_DOSSIE_GERADO = 'dossie_gerado';
 export const MENSAGEM_CONFERENCIA_PENDENTE =
   'A conferência desta devolução ainda não foi concluída. O dossiê de provas fica disponível depois dela.';
 
-export type LeituraCodigo = 'confere' | 'nao_confere' | 'nao_lido';
-export const ROTULO_LEITURA: Record<LeituraCodigo, string> = { confere: 'Confere', nao_confere: 'Não confere', nao_lido: 'Não lido' };
+export type LeituraCodigo = 'confere' | 'nao_confere' | 'nao_lido' | 'sem_referencia';
+export const ROTULO_LEITURA: Record<LeituraCodigo, string> = {
+  confere: 'Confere',
+  nao_confere: 'Não confere',
+  nao_lido: 'Não lido',
+  sem_referencia: 'Sem EAN de referência no cadastro (não comparado)',
+};
 
-/** `divergente` vem da conferência: leu um EAN e o produto recebido não é o esperado. */
-export function leituraDoCodigo(u: { eanLido: string | null; divergente: boolean }): LeituraCodigo {
+/**
+ * Como a tela da conferência (compararEan): `divergente` vem dela (leu um EAN e o produto recebido não é o esperado).
+ * Sem EAN esperado nada foi comparado, e o PDF não pode dizer "Confere": a tela pede "confira pela descrição".
+ * Com o SKU fora do cadastro (`descricao` null) a tela também diz "sem referência", mesmo que o EAN ache outro produto.
+ */
+export function leituraDoCodigo(u: { eanLido: string | null; eanEsperado: string | null; divergente: boolean; descricao: string | null }): LeituraCodigo {
   if (u.eanLido === null) return 'nao_lido';
-  return u.divergente ? 'nao_confere' : 'confere';
+  if (u.descricao === null) return 'sem_referencia';
+  if (u.divergente) return 'nao_confere';
+  return u.eanEsperado === null ? 'sem_referencia' : 'confere';
 }
 
 /** "0:42", "1:05", "1:02:03". */

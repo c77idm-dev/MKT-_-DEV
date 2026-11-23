@@ -32,11 +32,25 @@ describe('dossiê de provas: domínio (extra)', () => {
     expect(IMAGEM_REDUZIDA).toEqual({ ladoMaior: 1024, qualidade: 60 });
   });
 
-  it('leitura do código de barras: Confere, Não confere ou Não lido', () => {
-    expect(leituraDoCodigo({ eanLido: '7891000000014', divergente: false })).toBe('confere');
-    expect(leituraDoCodigo({ eanLido: '7891000000021', divergente: true })).toBe('nao_confere');
-    expect(leituraDoCodigo({ eanLido: null, divergente: false })).toBe('nao_lido');
-    expect(ROTULO_LEITURA).toEqual({ confere: 'Confere', nao_confere: 'Não confere', nao_lido: 'Não lido' });
+  it('leitura do código de barras: Confere, Não confere, Não lido ou sem referência para comparar', () => {
+    const produto = { descricao: 'Fone', eanEsperado: '7891000000014' };
+    expect(leituraDoCodigo({ ...produto, eanLido: '7891000000014', divergente: false })).toBe('confere');
+    expect(leituraDoCodigo({ ...produto, eanLido: '7891000000021', divergente: true })).toBe('nao_confere');
+    expect(leituraDoCodigo({ ...produto, eanLido: null, divergente: false })).toBe('nao_lido');
+    // O produto esperado não tem EAN no cadastro: a tela diz "confira pela descrição"; nada foi comparado.
+    expect(leituraDoCodigo({ descricao: 'Fone', eanEsperado: null, eanLido: '7891000000014', divergente: false })).toBe('sem_referencia');
+    // Sem EAN, mas o lido é de outro produto do cadastro: a conferência marcou divergente.
+    expect(leituraDoCodigo({ descricao: 'Fone', eanEsperado: null, eanLido: '7891000000021', divergente: true })).toBe('nao_confere');
+    // SKU fora do cadastro: com ou sem produto achado pelo EAN, a conferência não teve com o que comparar.
+    expect(leituraDoCodigo({ descricao: null, eanEsperado: null, eanLido: '7891000000014', divergente: false })).toBe('sem_referencia');
+    expect(leituraDoCodigo({ descricao: null, eanEsperado: null, eanLido: '7891000000021', divergente: true })).toBe('sem_referencia');
+    expect(leituraDoCodigo({ descricao: null, eanEsperado: null, eanLido: null, divergente: false })).toBe('nao_lido');
+    expect(ROTULO_LEITURA).toEqual({
+      confere: 'Confere',
+      nao_confere: 'Não confere',
+      nao_lido: 'Não lido',
+      sem_referencia: 'Sem EAN de referência no cadastro (não comparado)',
+    });
   });
 
   it('duração do vídeo em minutos e segundos', () => {

@@ -139,6 +139,19 @@ describe('gerarPdfDossie (extra)', () => {
     expect(await textoDoPdf((await gerarPdfDossie(semLeitura, midiasTeste())).bytes)).toContain('Não lido');
   });
 
+  it('código lido sem EAN de referência (produto sem EAN ou SKU fora do cadastro): nunca "Confere"', async () => {
+    for (const descricao of ['Fone Bluetooth Ação', null]) {
+      const dados = dadosTeste();
+      dados.unidades = [{ ...dados.unidades[0], descricao, eanEsperado: null, eanLido: '7891000000014', divergente: false }];
+      const r = await gerarPdfDossie(dados, midiasTeste());
+      const paginas = await paginasDoPdf(r.bytes);
+      const i = r.secoes.findIndex((s) => s.titulo === 'Unidade 1 de 1');
+      const unidade = paginas.slice(r.secoes[i].pagina - 1, r.secoes[i + 1].pagina - 1).join('\n');
+      expect(unidade).toContain('7891000000014 · Sem EAN de referência no cadastro (não comparado)');
+      expect(unidade).not.toMatch(/· Confere/);
+    }
+  });
+
   it('o subtítulo de uma grade de fotos não fica sozinho no pé da página', async () => {
     const paginas = await paginasDoPdf((await gerarPdfDossie(dadosTeste(), midiasTeste())).bytes);
     const comSubtitulo = paginas.filter((p) => p.split('\n').includes('Fotos da avaria'));
