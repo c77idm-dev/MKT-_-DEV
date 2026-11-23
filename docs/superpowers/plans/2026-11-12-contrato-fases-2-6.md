@@ -622,3 +622,21 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
     - Revisão de 23/11: pedido de outro site (`Sec-Fetch-Site: cross-site`), 403; fila cheia (um dossiê rodando e outro esperando) ou prazo de 100 s estourado, 503 com `Retry-After: 30`; `HEAD`, 405. O 409 e o 503 voltam como uma página curta em pt-BR com o link de volta à devolução. O `nginx` ganha a `location` da rota com `proxy_read_timeout 120s`.
   - **Telas:** o botão do detalhe entra na `SecaoConferencia` (o `[codigo]/page.tsx` continua congelado) e no bloco "Responda no ML".
   - **Motivo:** os arquivos de rótulos são congelados.
+- **E25. Recebimento do pacote que volta do armazém do ML e pelos outros números da etiqueta (extra; o usuário aprovou em 23/11 com "blz"):** branch `recebimento-ml`. A E24 é da branch `cancelar-explicito`.
+  - **Caso real (VPS, 23/11):** 345 das 454 devoluções estavam "No CD do marketplace", e o ML começou a mandar esses pacotes de volta à loja. No "Receber pacote" eles falhavam duas vezes:
+    - o leitor pegava outro código da etiqueta do ML. Num pacote foi o número do pedido: `000018992531744`, que é o pedido `2000018992531744` da DEV-000071 sem o 2 do começo. Noutro foi o número do envio, `48515208229`, com 11 dígitos; nos rastreios do Mercado Envios ele aparece entre letras (`MM48503476449BRSP02`, `MEL48249814112FMDOR01`);
+    - mesmo achada, a No CD caía em "Fale com o Gestor", e só a sincronização do ML mexia nesse status.
+  - **Transição nova** em `transicoes.ts` (congelado): `NO_CD_MARKETPLACE → AGUARDANDO_CONFERENCIA`, para Operador e Gestor, que operam o Recebimento (decisão do usuário). É uma linha extra, fora da tabela da spec §5.2. Cancelada e Extraviada continuam bloqueadas, com "Fale com o Gestor".
+  - **Busca no Recebimento** (`recebimento.ts` e o arquivo novo `etiqueta-ml.ts`). A primeira regra que acha alguma devolução, em qualquer status, decide:
+    1. o rastreio exato, sem mudança;
+    2. só se nenhuma devolução tem esse rastreio e o código é feito só de dígitos: o pedido do ML. Vale o elemento de `pedidos_externos` igual ao código ou, quando o código tem 15 dígitos, igual a "2" + código. Usa `&&` com o índice GIN e compara sempre o número inteiro, sem pedaços;
+    3. nas mesmas condições: o número do envio do ML. Com 10 a 12 dígitos (hoje são 11; a folga é por segurança), vale o rastreio que casa com `^[A-Z]{2,4}<código>[A-Z]`. A expressão vai como parâmetro. Não há índice, mas a regra só roda quando o rastreio e o pedido não acharam nada.
+    - Todas as achadas em Pendente de chegada ou No CD chegam juntas, como no rastreio repetido, com o UPDATE condicional ao status de antes.
+  - **Histórico:** a ação continua `recebida`; nenhuma chave nova. O `de` passa a ser o status de antes (`NO_CD_MARKETPLACE` ou `PENDENTE_CHEGADA`). Em `dados`:
+    - `voltouDoArmazemML: true` quando a devolução estava na No CD;
+    - quando não foi pelo rastreio, `codigoLido` e `achadaPor` (`PEDIDO_ML` ou `ENVIO_ML`) no lugar de `rastreio`.
+    - Arquivo novo `src/modules/historico/complementos.ts` (`complementoDoEvento`). O detalhe (`[codigo]/page.tsx`, congelado) e o histórico do dossiê (`dossie/pdf.ts`) mostram "Chegada registrada (voltou do armazém do ML)".
+  - **Tela do Recebimento:** "Chegada registrada · DEV-xxxxxx · voltou do armazém do ML (extra) · data". Quando não foi pelo rastreio, entra a nota "Achada pelo número do pedido do ML (extra)." ou "Achada pelo número do envio do ML (extra).", que também aparece nos avisos "Este pacote já chegou" e "Fale com o Gestor".
+  - **Sincronização do ML:** não muda. Depois da chegada física, o `proximoStatusML` não move mais a devolução e o rastreio lido fica (spec §7.3). Testes garantem que reaplicar a reclamação com destino armazém, ou o reenvio da triagem, mantém "Aguardando conferência". O filtro e o número "Afetam a reputação" continuam contando a devolução, agora na etapa 2.
+  - **Fora desta emenda:** a nova sincronização de 120 dias; o botão "Registrar chegada" no detalhe e o "Procurar pelo produto" no Recebimento, que o usuário recusou.
+  - **Motivo:** `transicoes.ts` e o detalhe da devolução são congelados.
