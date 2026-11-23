@@ -59,6 +59,7 @@ test('(extra) "Afetam a reputação · N" ao lado de Filtros: conta as não ence
     for (const d of [pendente, aguardandoNf, noCd]) {
       await expect(page.getByRole('link', { name: new RegExp(d.codigo) })).toContainText('Afeta reputação');
     }
+    await expect(page.getByRole('link', { name: new RegExp(noCd.codigo) })).toContainText('No CD do marketplace');
     for (const d of [concluida, naoAfeta]) await expect(page.getByRole('link', { name: new RegExp(d.codigo) })).toHaveCount(0);
     await semRolagemLateral(page);
 
