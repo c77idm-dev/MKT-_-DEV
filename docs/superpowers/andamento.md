@@ -3,6 +3,25 @@
 Atualizado em 23/11/2026, à tarde (cancelamento explícito pronto; defeito das 87 reclamações desligadas corrigido na branch `religar-reclamacoes`; deploy único das 4 frentes a preparar). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
+- **Integração de 23/11, à tarde: quatro frentes juntas no `main` em `c668ec7`, deploy pendente.** Branch `integracao-23-11`:
+  - foto do anúncio no dossiê (E23);
+  - cancelamento explícito (E24);
+  - receber pelo pedido e pelo envio do ML e o que volta do armazém (E25);
+  - as 87 reclamações religadas (E26, migração `0016`).
+  - **Bateria completa** (worktree `dossie`, porta 3109, banco `devolucoes_test_f9`):
+    - tipos, lint e `build:scripts` limpos;
+    - unidade 1006; integração 591 (7 pulados);
+    - e2e 242 (12 pulados, 0 falhas); e2e do modo Bitbrain 16.
+  - **Conferências na VPS antes do deploy, todas limpas (só leitura):**
+    - as 163 fotos de produtos vêm de `http2.mlstatic.com`, o único host do dossiê;
+    - nenhuma não identificada com número no lugar do rastreio (coluna `criada_em`);
+    - nenhum pedido do ML com duas devoluções e uma ainda esperando.
+  - **Decisão (opção 1, consulta c vazia):** pelo pedido, as devoluções do mesmo pedido chegam juntas. Quando houver mais de uma esperando, a tela vai mostrar as devoluções para tocar na que chegou. Isso entra junto com a Retirada do Full (item 7 abaixo), que usa a mesma tela de "Dar chegada nesta devolução".
+  - **Depois do deploy:** conferir que `registro_sem_ligacao` deu 0. Se sobrar alguma, rodar de novo o SQL da `0016`, que é idempotente: o worker antigo pode ter sincronizado durante a troca.
+  - **Pendências menores das revisões (não bloqueiam):**
+    - `FOR UPDATE` no recebimento poderia ser `FOR NO KEY UPDATE`;
+    - o e2e do toque duplo pode falhar à toa numa máquina muito lenta;
+    - nenhum teste cobre a 0016 com `devolucao_externa_id` nulo.
 - **Integração pelo Bitbrain: no `main` desde 19/11.** Spec [specs/2026-11-18-integracao-bitbrain-design.md](specs/2026-11-18-integracao-bitbrain-design.md) e plano [plans/2026-11-18-integracao-bitbrain.md](plans/2026-11-18-integracao-bitbrain.md).
   - **Revisão final aprovada** (run `wf_b85dc797-2e1`), com 10 itens corrigidos e nenhuma rodada extra. Os principais:
     - o nome longo da conta não alarga mais o cartão no celular;
