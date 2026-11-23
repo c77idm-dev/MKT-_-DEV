@@ -639,3 +639,13 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
   - **Histórico (`rotulos/base.ts`, congelado):** chave `cancelamento_desfeito` ("Cancelamento desfeito (correção)"). Nenhum código do sistema grava esse evento; ele vem da correção feita à mão no banco da VPS em 23/11 (a DEV-000437 voltou a Pendente de chegada), e antes aparecia no histórico como a chave crua.
   - **Fora, por decisão do usuário:** botão "Registrar chegada" no detalhe e "Procurar pelo produto" no Recebimento.
   - **Motivo:** `rotulos/base.ts` é congelado, e a ação manual da spec §5.2 ganhou proteções que a spec não pedia.
+- **E26. A reclamação não se desliga da devolução (23/11, correção aprovada pelo usuário):** branch `religar-reclamacoes`.
+  - **Defeito:** quando o ML respondia a reclamação sem a parte da devolução (sem `return` em `related_entities`, ou com a lista de devoluções vazia), `gravarReclamacao` gravava `devolucao_id`, `return_id`, `subtipo` e `status_devolucao` nulos por cima do que já havia.
+    - Na produção, 87 de 460 linhas ficaram desligadas.
+    - Desligada, a devolução saía do filtro "Afetam a reputação", das "Respostas para dar no ML" e da busca por conta.
+    - Também perdia a conta do Bitbrain (`contaDaDevolucao`).
+  - **Correção:** no conflito do upsert, essas 4 colunas seguem a regra da D8 (`coalesce` com o valor anterior). O status da reclamação, o motivo, o urgente e a ação continuam acompanhando o ML.
+  - **Banco:** migração `0016_religar_reclamacoes`, só de dados, idempotente.
+    - Religa pela `devolucoes.reclamacao_id`, só quando exatamente uma devolução do ML tem aquela reclamação.
+    - Completa o `return_id` vazio com o `devolucao_externa_id`.
+  - **Motivo:** o upsert de `reclamacoes_ml` faz parte do §5.5.
