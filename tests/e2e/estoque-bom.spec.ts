@@ -7,7 +7,7 @@ import { criarProdutoTeste } from '../helpers/fabricas';
 import { criarDevolucaoNoEstoqueTeste } from '../helpers/fabricas-fiscal';
 import { criarRetiradaTeste } from '../helpers/fabricas-retiradas';
 import { paraArrayBuffer } from '../helpers/xlsx';
-import { abrirMenuAcoes, codigoUnico, comBanco, entrarComo, naFrente, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { abrirMenuAcoes, codigoUnico, comBanco, ehCelular, entrarComo, naFrente, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { URL_E2E, USUARIOS_E2E } from './dados';
 
 /** Uma unidade BOM (e uma AUSENTE, que não entra) e uma retirada do Full Conferida com 2 unidades, hoje. SKUs únicos. */
@@ -31,7 +31,7 @@ async function prepararVolta() {
   });
 }
 
-test('Estoque Bom: abre pela etapa 4, filtra Hoje, mostra a unidade e o item da retirada e baixa a planilha (melhoria 4)', async ({ page }) => {
+test('Estoque Bom: abre pela etapa 4, filtra Hoje, mostra a unidade e o item da retirada e baixa a planilha (melhoria 4)', async ({ page }, testInfo) => {
   const dados = await prepararVolta();
   await entrarComo(page, USUARIOS_E2E.operador);
   await page.goto('/fluxo/etapa/4');
@@ -58,6 +58,9 @@ test('Estoque Bom: abre pela etapa 4, filtra Hoje, mostra a unidade e o item da 
 
   const baixar = page.getByRole('link', { name: 'Baixar planilha' });
   expect((await baixar.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  // No celular o botão fica fixo acima da barra de abas: tem de estar na frente sem rolar. No computador ele vem no fim
+  // da lista, e a lista de "Hoje" cresce com as unidades que os outros specs deixam no Estoque Bom: rola até ele antes.
+  if (!ehCelular(testInfo)) await baixar.scrollIntoViewIfNeeded();
   await naFrente(baixar);
   await semRolagemLateral(page);
   // Prints para a revisão visual (só com PRINTS_DIR): o topo e o fim da lista, com o rodapé fixo.
