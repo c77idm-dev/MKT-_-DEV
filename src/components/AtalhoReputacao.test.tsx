@@ -11,7 +11,7 @@ describe('AtalhoReputacao (extra)', () => {
     expect(link.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
   });
 
-  it('some quando nenhuma devolução em andamento afeta a reputação', () => {
+  it('some quando nenhuma devolução não encerrada (inclusive No CD do marketplace) afeta a reputação', () => {
     const { container } = render(<AtalhoReputacao total={0} />);
     expect(container.innerHTML).toBe('');
   });

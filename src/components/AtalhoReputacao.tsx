@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { filtrosParaQuery } from '@/modules/devolucoes/filtros';
 
 /**
- * (extra) Botão ao lado de "Filtros" no Fluxo (aprovado pelo usuário): as devoluções em andamento cuja reclamação do ML
+ * (extra) Botão ao lado de "Filtros" no Fluxo (aprovado pelo usuário): as devoluções não encerradas (inclusive No CD do marketplace) cuja reclamação do ML
  * afeta a reputação (regra em modules/devolucoes/reputacao.ts). Um toque abre a Busca com o filtro ligado. Vermelho,
  * como os alertas de erro do painel. Some quando não há nenhuma.
  */

@@ -20,7 +20,7 @@ async function devolucaoML(status: StatusDevolucao, afetaReputacao: AfetaReputac
   });
 }
 
-test('(extra) "Afetam a reputação · N" ao lado de Filtros: conta as em andamento, abre a Busca só com elas e some com N = 0', async ({
+test('(extra) "Afetam a reputação · N" ao lado de Filtros: conta as não encerradas (inclusive No CD do marketplace), abre a Busca só com elas e some com N = 0', async ({
   page,
 }, testInfo) => {
   // O banco do e2e é compartilhado: as reclamações que afetam a reputação de outros testes ficam de lado e voltam no fim.
@@ -36,11 +36,12 @@ test('(extra) "Afetam a reputação · N" ao lado de Filtros: conta as em andame
   try {
     const pendente = await devolucaoML('PENDENTE_CHEGADA', 'AFETA');
     const aguardandoNf = await devolucaoML('AGUARDANDO_NF', 'AFETA');
+    const noCd = await devolucaoML('NO_CD_MARKETPLACE', 'AFETA');
     const concluida = await devolucaoML('CONCLUIDA', 'AFETA');
     const naoAfeta = await devolucaoML('PENDENTE_CHEGADA', 'NAO_AFETA');
 
     await entrarComo(page, USUARIOS_E2E.operador);
-    const atalho = page.getByRole('link', { name: 'Afetam a reputação · 2' });
+    const atalho = page.getByRole('link', { name: 'Afetam a reputação · 3' });
     await expect(atalho).toBeVisible();
     expect((await atalho.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     if (ehCelular(testInfo)) {
@@ -54,8 +55,8 @@ test('(extra) "Afetam a reputação · N" ao lado de Filtros: conta as em andame
 
     await atalho.click();
     await expect(page).toHaveURL(/\/fluxo\/busca\?reputacao=1$/);
-    await expect(page.getByText('2 devoluções', { exact: true })).toBeVisible();
-    for (const d of [pendente, aguardandoNf]) {
+    await expect(page.getByText('3 devoluções', { exact: true })).toBeVisible();
+    for (const d of [pendente, aguardandoNf, noCd]) {
       await expect(page.getByRole('link', { name: new RegExp(d.codigo) })).toContainText('Afeta reputação');
     }
     for (const d of [concluida, naoAfeta]) await expect(page.getByRole('link', { name: new RegExp(d.codigo) })).toHaveCount(0);
@@ -78,14 +79,14 @@ test('(extra) "Afetam a reputação · N" ao lado de Filtros: conta as em andame
     // O formulário GET manda também os campos vazios.
     await expect(page).toHaveURL(/\/fluxo\/busca\?.*\breputacao=1\b/);
     await expect(page.getByRole('link', { name: 'Remover filtro: Afetam a reputação' })).toBeVisible();
-    await expect(page.getByText('2 devoluções', { exact: true })).toBeVisible();
+    await expect(page.getByText('3 devoluções', { exact: true })).toBeVisible();
 
     // N = 0: o botão some.
     await comBanco((db) =>
       db
         .update(reclamacoesMl)
         .set({ afetaReputacao: 'NAO_AFETA' })
-        .where(inArray(reclamacoesMl.devolucaoId, [pendente.id, aguardandoNf.id])),
+        .where(inArray(reclamacoesMl.devolucaoId, [pendente.id, aguardandoNf.id, noCd.id])),
     );
     await page.goto('/fluxo');
     await expect(page.getByRole('heading', { level: 1, name: 'Fluxo de devoluções' })).toBeVisible();
