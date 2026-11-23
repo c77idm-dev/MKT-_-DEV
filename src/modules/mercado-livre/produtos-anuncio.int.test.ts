@@ -203,7 +203,7 @@ describe('produtos do ML na sincronização (extra)', () => {
   });
 
   it('erro no cadastro do produto não impede a sincronização da reclamação (savepoint)', async () => {
-    const { dados } = reclamacaoCom(['fone-01'], [anuncio({ mlItemId: 'MLB ' })]);
+    const { dados } = reclamacaoCom(['fone-01'], [anuncio({ mlItemId: 'MLB\u0000' })]);
     const r = await aplicarReclamacao(db, dados, AGORA);
     expect(r).toMatchObject({ acao: 'criada' });
     expect(await db.select().from(produtos)).toEqual([]);
