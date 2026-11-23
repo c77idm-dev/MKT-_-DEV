@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 23/11/2026, à tarde (cancelamento explícito pronto; defeito das 87 reclamações desligadas corrigido na branch `religar-reclamacoes`; deploy único das 4 frentes a preparar). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **Integração pelo Bitbrain: no `main` desde 19/11.** Spec [specs/2026-11-18-integracao-bitbrain-design.md](specs/2026-11-18-integracao-bitbrain-design.md) e plano [plans/2026-11-18-integracao-bitbrain.md](plans/2026-11-18-integracao-bitbrain.md).
@@ -50,6 +50,10 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
              - o rótulo `cancelamento_desfeito`;
              - a emenda E24.
            - **O usuário recusou** o botão "Registrar chegada" no detalhe e o "Procurar pelo produto" no Recebimento.
+           - ✅ **Pronta (23/11, à tarde):** revisada, com uma rodada de correções e re-revisão aprovada. A branch `cancelar-explicito` (`746a079`) está no GitHub, falta juntar no `main`.
+             - A revisão achou e a rodada corrigiu: o toque duplo cancelava (o "Sim" aparecia embaixo do dedo; agora só vale depois de 700 ms) e o Enter numa opção também cancelava.
+             - Testes: unidade 925; integração 557 (7 pulados); e2e 234 (12 pulados), sem instáveis.
+             - Ressalva menor da re-revisão: o e2e do toque duplo pode falhar à toa numa máquina muito lenta (mais de 700 ms entre os toques).
         6. **Pacotes que voltam do armazém do ML (23/11, aprovado: "blz"):**
            - **Achado:** das 454 devoluções, 345 estão "No CD do marketplace", e o ML está mandando esses pacotes de volta à loja. Eles falhavam por dois motivos:
              - o leitor pega da etiqueta o número do pedido do ML ou o número do envio, e não o rastreio. Exemplo: o Wahl era a DEV-000071, pedido `2000018992531744`, e a etiqueta dava `000018992531744`;
@@ -59,6 +63,22 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
              - **B:** qualquer pessoa que opera pode dar chegada numa "No CD do marketplace", que vai para a etapa 2 com "voltou do armazém do ML (extra)". Emenda E25.
            - **Segurado, não feito (C):** buscar 120 dias para trás traria centenas de devoluções antigas que já chegaram antes do sistema.
            - **O pacote da JBL** (Reparo Driver RPD220Ti, envio `48515208229`) não está no sistema. Caminho atual: "Registrar pacote não identificado" e depois o Gestor identifica.
+        7. **Etiqueta amarela da triagem do Full (23/11):**
+           - **Ideia do usuário, aprovada ("2- sim"):** bipar a etiqueta dentro da Retirada do Full para mostrar o pós-venda e o botão "Dar chegada nesta devolução".
+           - **O que o QR traz:** só o ID do item da triagem (ex.: `1000063685755`), não o pedido.
+           - **O que a VPS mostrou (leitura):** a revisão do ML (`/post-purchase/v1/returns/{id}/reviews`) identifica a triagem pelo pedido (`resource: order`, `resource_id` = pedido) e não traz esse ID.
+           - A consulta da devolução (`/post-purchase/v2/claims/{id}/returns`) deu 429. É o limite por minuto da rota do Bitbrain, dividido com a sincronização; não insistir.
+           - **Decisão:** na Retirada do Full, a etiqueta amarela é lida pelo **ID do pedido impresso** (digitado). Construir depois que a `recebimento-ml` entrar no `main`, reaproveitando a busca pelo pedido.
+           - **DEV-000068** (pedido `2000019107957008`, conta megadino-2, "No CD do marketplace"): a triagem do ML de 09/11 deu "não vendável, danificado", a favor do comprador, e a análise do vendedor está pendente no ML. O usuário foi avisado.
+        8. **Defeito achado em 23/11 (E26; o usuário disse "sim" à correção): 87 de 460 linhas de `reclamacoes_ml` desligadas da devolução** (`devolucao_id` e `return_id` nulos).
+           - **Efeito:** a devolução saía do filtro "Afetam a reputação", da urgência e da triagem no detalhe, das "Respostas para dar no ML" e da busca por conta, e perdia a conta do Bitbrain (`contaDaDevolucao`). O dossiê não era afetado, porque também liga pelo `claim_id`.
+           - **Causa:** a reclamação lida sem a parte da devolução fazia o upsert gravar nulos por cima da ligação.
+           - **Correção** na branch `religar-reclamacoes` (`8d9b47a`, `ad2b929`, no GitHub):
+             - `coalesce` nas 4 colunas;
+             - migração `0016_religar_reclamacoes`, só de dados e idempotente, que religa pela `devolucoes.reclamacao_id` quando há exatamente uma devolução do ML;
+             - testes: unidade 909; integração 561 (7 pulados).
+           - Em revisão independente. Entra no deploy único.
+           - **Depois do deploy, conferir na VPS** (só leitura): `registro_sem_ligacao` deve dar 0, ou só os casos ambíguos.
         5. **Foto do anúncio no dossiê (o usuário disse "sim" em 23/11):** roda no run `wf_5ca65cea-604`, branch `dossie-foto-anuncio` no worktree `dossie` (porta 3109). O servidor baixa a foto do CDN do ML com lista de hosts, prazo de 5 s e teto de 3 MB; ela entra como referência ("o que foi vendido"), sem SHA-256.
       - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `70801df`). **Revisado em equipe, junto no `main` e publicado na VPS em 23/11 (`97f1fdb`).**
         - **Testes:**
