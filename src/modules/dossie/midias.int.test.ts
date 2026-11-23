@@ -1,17 +1,19 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import sharp from 'sharp';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { obterArmazenamento } from '@/modules/midia/armazenamento';
 import type { ArmazenamentoMemoria } from '@/modules/midia/armazenamento-memoria';
 import { binariosFfmpeg, temFfmpeg } from '@/modules/midia/ffmpeg';
 import { jpegTeste } from '../../../tests/helpers/fabricas-dossie-banco';
 import { IMAGEM_PADRAO, type EvidenciaDossie } from './dominio';
 import { midiasDoArmazenamento } from './midias';
+import { criarSerie } from './serie';
 
 const comFfmpeg = await temFfmpeg();
 let pasta: string;
@@ -20,8 +22,26 @@ beforeEach(async () => {
   pasta = await mkdtemp(join(tmpdir(), 'dossie-midias-'));
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   await rm(pasta, { recursive: true, force: true });
 });
+
+/** Stream que manda alguns bytes e quebra no meio (conexão do S3 resetada, erro de disco). */
+function fluxoQueQuebra(): Readable {
+  let enviados = 0;
+  return new Readable({
+    read() {
+      enviados += 1;
+      if (enviados === 1) this.push(Buffer.alloc(1024, 1));
+      else this.destroy(new Error('aborted'));
+    },
+  });
+}
+
+/** Stream que nunca manda nada nem dá erro (S3 travado). */
+function fluxoParado(): Readable {
+  return new Readable({ read() {} });
+}
 
 let n = 0;
 async function guardada(conteudo: Buffer, p: Partial<EvidenciaDossie> = {}): Promise<EvidenciaDossie> {
@@ -72,6 +92,55 @@ describe('midiasDoArmazenamento: fotos (extra)', () => {
     expect(r).toEqual({ ok: false, motivo: 'Arquivo não encontrado no armazenamento.' });
   });
 
+  it('stream que quebra no meio da leitura: aviso, sem pendurar; a próxima tarefa da fila roda', async () => {
+    const e = await guardada(await jpegTeste({ r: 9, g: 9, b: 9 }));
+    vi.spyOn(obterArmazenamento(), 'ler').mockResolvedValueOnce(fluxoQueQuebra());
+    const emSerie = criarSerie();
+    const primeira = emSerie(() => midiasDoArmazenamento({ pastaTemporaria: pasta }).foto(e, IMAGEM_PADRAO));
+    const segunda = emSerie(async () => 'próxima');
+    await expect(primeira).resolves.toEqual({ ok: false, motivo: 'Não foi possível ler a imagem.' });
+    await expect(segunda).resolves.toBe('próxima');
+  });
+
+  it('disco: o arquivo passou no stat mas não abre (sumiu, permissão): aviso', async () => {
+    const e = await guardada(await jpegTeste({ r: 8, g: 8, b: 8 }));
+    vi.spyOn(obterArmazenamento(), 'ler').mockResolvedValueOnce(createReadStream(join(pasta, 'nao-existe.jpg')));
+    expect(await midiasDoArmazenamento({ pastaTemporaria: pasta }).foto(e, IMAGEM_PADRAO)).toEqual({
+      ok: false,
+      motivo: 'Arquivo não encontrado no armazenamento.',
+    });
+  });
+
+  it('armazenamento travado (sem erro nem dados, ou sem responder): desiste no prazo, com aviso', async () => {
+    const e = await guardada(await jpegTeste({ r: 7, g: 7, b: 7 }));
+    const midias = midiasDoArmazenamento({ pastaTemporaria: pasta, prazoLeituraMs: 50 });
+    const parado = fluxoParado();
+    vi.spyOn(obterArmazenamento(), 'ler').mockResolvedValueOnce(parado);
+    expect(await midias.foto(e, IMAGEM_PADRAO)).toEqual({ ok: false, motivo: 'Não foi possível ler a imagem.' });
+    expect(parado.destroyed).toBe(true);
+    vi.spyOn(obterArmazenamento(), 'ler').mockReturnValueOnce(new Promise<Readable>(() => undefined));
+    expect(await midias.foto(e, IMAGEM_PADRAO)).toEqual({ ok: false, motivo: 'Não foi possível ler a imagem.' });
+  });
+
+  it('arquivo maior que o limite de leitura: aviso (não junta tudo na memória)', async () => {
+    const e = await guardada(Buffer.alloc(4096, 1));
+    expect(await midiasDoArmazenamento({ pastaTemporaria: pasta, limiteFotoBytes: 1024 }).foto(e, IMAGEM_PADRAO)).toEqual({
+      ok: false,
+      motivo: 'Não foi possível ler a imagem.',
+    });
+  });
+
+  it('dossiê cancelado (o pedido foi embora): a leitura para e o erro sobe, sem virar aviso', async () => {
+    const e = await guardada(await jpegTeste({ r: 6, g: 6, b: 6 }));
+    const controle = new AbortController();
+    const parado = fluxoParado();
+    vi.spyOn(obterArmazenamento(), 'ler').mockResolvedValueOnce(parado);
+    const pedido = midiasDoArmazenamento({ pastaTemporaria: pasta }).foto(e, IMAGEM_PADRAO, controle.signal);
+    controle.abort();
+    await expect(pedido).rejects.toThrow();
+    expect(parado.destroyed).toBe(true);
+  });
+
   it('arquivo que não é imagem: aviso', async () => {
     const e = await guardada(Buffer.from('não sou uma foto'));
     expect(await midiasDoArmazenamento({ pastaTemporaria: pasta }).foto(e, IMAGEM_PADRAO)).toEqual({ ok: false, motivo: 'Não foi possível ler a imagem.' });
@@ -91,6 +160,29 @@ describe('midiasDoArmazenamento: vídeo (extra)', () => {
     await (obterArmazenamento() as ArmazenamentoMemoria).apagar(e.caminho!);
     const r = await midiasDoArmazenamento({ pastaTemporaria: pasta }).quadroDoVideo(e, IMAGEM_PADRAO);
     expect(r).toMatchObject({ imagem: null, problema: 'Arquivo do vídeo não encontrado no armazenamento.' });
+  });
+
+  it('stream que quebra no meio da cópia: aviso no lugar do quadro, sem hash parcial; a pasta temporária fica vazia', async () => {
+    const e = await guardada(Buffer.from('x'), { tipo: 'VIDEO_PROVA', sha256Final: null });
+    vi.spyOn(obterArmazenamento(), 'ler').mockResolvedValueOnce(fluxoQueQuebra());
+    const r = await midiasDoArmazenamento({ pastaTemporaria: pasta }).quadroDoVideo(e, IMAGEM_PADRAO);
+    expect(r).toEqual({ imagem: null, duracaoSegundos: null, sha256Calculado: null, problema: 'Não foi possível ler o arquivo do vídeo.' });
+    expect(await readdir(pasta)).toEqual([]);
+  });
+
+  it('cópia travada: desiste no prazo, com aviso', async () => {
+    const e = await guardada(Buffer.from('x'), { tipo: 'VIDEO_PROVA' });
+    vi.spyOn(obterArmazenamento(), 'ler').mockResolvedValueOnce(fluxoParado());
+    const r = await midiasDoArmazenamento({ pastaTemporaria: pasta, prazoLeituraMs: 50 }).quadroDoVideo(e, IMAGEM_PADRAO);
+    expect(r).toMatchObject({ imagem: null, problema: 'Não foi possível ler o arquivo do vídeo.' });
+    expect(await readdir(pasta)).toEqual([]);
+  });
+
+  it('pasta temporária que não pode ser criada (disco cheio, permissão): aviso no lugar do quadro, sem erro', async () => {
+    const e = await guardada(Buffer.from('x'), { tipo: 'VIDEO_PROVA' });
+    await writeFile(join(pasta, 'arquivo'), 'não sou pasta');
+    const r = await midiasDoArmazenamento({ pastaTemporaria: join(pasta, 'arquivo', 'sub') }).quadroDoVideo(e, IMAGEM_PADRAO);
+    expect(r).toEqual({ imagem: null, duracaoSegundos: null, sha256Calculado: null, problema: 'Não foi possível tirar um quadro do vídeo.' });
   });
 
   it.skipIf(!comFfmpeg)('vídeo de verdade (precisa do ffmpeg): um quadro reduzido e a duração; a 2ª tentativa reusa o quadro', async () => {

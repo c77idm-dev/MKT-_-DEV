@@ -1,11 +1,13 @@
-import { createHash, type Hash } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import type { Readable } from 'node:stream';
+import { addAbortSignal, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { lerEnv } from '@/lib/env';
 import { armazenamentoDoProvedor } from '@/modules/midia/armazenamento';
+import { LIMITE_FOTO_BYTES } from '@/modules/midia/dominio';
+import { ErroArquivoNaoEncontrado } from '@/modules/midia/erros';
 import { binariosFfmpeg, executar, sondar, type Binarios } from '@/modules/midia/ffmpeg';
 import type { EvidenciaDossie } from './dominio';
 import { reduzirImagem, type ImagemPdf } from './imagens';
@@ -15,7 +17,15 @@ import { argumentosQuadro, segundoDoQuadro } from './quadro';
 const ARQUIVO_SUMIU = 'Arquivo não encontrado no armazenamento.';
 const IMAGEM_ILEGIVEL = 'Não foi possível ler a imagem.';
 const VIDEO_SUMIU = 'Arquivo do vídeo não encontrado no armazenamento.';
+const VIDEO_ILEGIVEL = 'Não foi possível ler o arquivo do vídeo.';
 const SEM_QUADRO = 'Não foi possível tirar um quadro do vídeo.';
+
+/** Prazo para ler cada mídia do armazenamento: um S3 que trava sem dar erro não segura a fila dos dossiês. */
+const PRAZO_LEITURA_MS = 60_000;
+/** Prazo do ffprobe e do ffmpeg para um quadro só (o worker usa 60 s; aqui o celular está esperando). */
+const PRAZO_QUADRO_MS = 15_000;
+/** A foto final tem até 15 MB; acima do dobro disso o arquivo não é lido para a memória. */
+const LIMITE_LEITURA_FOTO = 2 * LIMITE_FOTO_BYTES;
 
 /** Uma linha JSON por mídia que não entrou no PDF: só o id da evidência e o tipo do erro (nunca a chave nem o caminho). */
 function avisar(evento: string, evidenciaId: string, erro: unknown): void {
@@ -23,54 +33,132 @@ function avisar(evento: string, evidenciaId: string, erro: unknown): void {
   console.warn(JSON.stringify({ em: new Date().toISOString(), nivel: 'aviso', origem: 'web', evento, evidenciaId, erro: tipo }));
 }
 
-/** Lê do armazenamento onde a evidência foi gravada (contrato §10, E15). */
-async function abrir(e: EvidenciaDossie): Promise<Readable> {
-  if (!e.caminho || !e.provedor) throw new Error('Evidência sem arquivo final.');
-  return armazenamentoDoProvedor(e.provedor).ler(e.caminho);
+/** O arquivo não está lá: a chave sumiu do armazenamento ou o disco não achou o arquivo ao abrir. */
+function sumiu(erro: unknown): boolean {
+  return erro instanceof ErroArquivoNaoEncontrado || (erro as { code?: unknown } | null)?.code === 'ENOENT';
 }
 
-/** Calcula o SHA-256 enquanto o stream passa (só quando o hash final não está guardado). */
-function medir(fluxo: Readable, hash: Hash | null): void {
-  if (hash) fluxo.on('data', (parte: Buffer) => hash.update(parte));
+/** O prazo da leitura junto com o cancelamento do dossiê (o pedido foi embora ou o dossiê passou do prazo). */
+function prazoDaLeitura(ms: number, sinal: AbortSignal | undefined): AbortSignal {
+  return sinal ? AbortSignal.any([sinal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
+}
+
+/**
+ * Lê do armazenamento onde a evidência foi gravada (contrato §10, E15), desistindo quando o prazo acaba (o `ler` do S3
+ * pode não responder). Um stream que chegar depois da desistência é fechado.
+ */
+function abrir(e: EvidenciaDossie, prazo: AbortSignal): Promise<Readable> {
+  const { caminho, provedor } = e;
+  if (!caminho || !provedor) return Promise.reject(new ErroArquivoNaoEncontrado('(sem arquivo final)'));
+  if (prazo.aborted) return Promise.reject(prazo.reason);
+  const aberto = Promise.resolve().then(() => armazenamentoDoProvedor(provedor).ler(caminho));
+  return new Promise((resolver, rejeitar) => {
+    const desistir = () => {
+      rejeitar(prazo.reason);
+      aberto.then((fluxo) => fluxo.destroy(), () => undefined);
+    };
+    prazo.addEventListener('abort', desistir, { once: true });
+    aberto.then(
+      (fluxo) => {
+        prazo.removeEventListener('abort', desistir);
+        resolver(fluxo);
+      },
+      (erro: unknown) => {
+        prazo.removeEventListener('abort', desistir);
+        rejeitar(erro);
+      },
+    );
+  });
+}
+
+/**
+ * O arquivo inteiro na memória, com limite e prazo. O `for await` rejeita quando o stream dá erro no meio (S3 resetado,
+ * EIO no disco) e o sinal destrói o stream que trava. O sharp juntaria tudo na memória de qualquer jeito.
+ */
+async function lerAteOLimite(fluxo: Readable, limite: number, prazo: AbortSignal): Promise<Buffer> {
+  addAbortSignal(prazo, fluxo);
+  const partes: Buffer[] = [];
+  let total = 0;
+  for await (const parte of fluxo) {
+    const b = Buffer.isBuffer(parte) ? parte : Buffer.from(parte);
+    total += b.length;
+    if (total > limite) {
+      fluxo.destroy();
+      throw new Error(`Arquivo acima de ${limite} bytes.`);
+    }
+    partes.push(b);
+  }
+  return Buffer.concat(partes, total);
 }
 
 type Video = { quadro: Buffer | null; duracaoSegundos: number | null; sha256Calculado: string | null; problema: string | null };
 
-/**
- * As mídias do dossiê lidas do armazenamento (disco ou S3), uma por vez. Foto: o stream vai direto ao sharp.
- * Vídeo: o stream vai para um arquivo temporário (MIDIA_TMP_DIR), o ffprobe mede a duração e o ffmpeg tira um quadro;
- * a pasta temporária é apagada logo depois. O quadro fica guardado para a 2ª tentativa do PDF (acima de 8 MB).
- */
-export function midiasDoArmazenamento(o: { binarios?: Binarios; pastaTemporaria?: string } = {}): MidiasDossie {
-  const videos = new Map<string, Promise<Video>>();
+const semVideo = (problema: string): Video => ({ quadro: null, duracaoSegundos: null, sha256Calculado: null, problema });
 
-  async function extrair(e: EvidenciaDossie): Promise<Video> {
+/**
+ * As mídias do dossiê lidas do armazenamento (disco ou S3), uma por vez. Foto: lida inteira (com limite e prazo) e
+ * reduzida pelo sharp. Vídeo: copiado para um arquivo temporário (MIDIA_TMP_DIR), o ffprobe mede a duração e o ffmpeg
+ * tira um quadro; a pasta temporária é apagada logo depois. O quadro fica guardado para a 2ª tentativa do PDF.
+ * Erro de leitura, prazo estourado ou pasta temporária impossível viram aviso no PDF; só o cancelamento do dossiê
+ * (`sinal`) sobe como erro.
+ */
+export function midiasDoArmazenamento(
+  o: { binarios?: Binarios; pastaTemporaria?: string; prazoLeituraMs?: number; limiteFotoBytes?: number } = {},
+): MidiasDossie {
+  const videos = new Map<string, Promise<Video>>();
+  const prazoMs = o.prazoLeituraMs ?? PRAZO_LEITURA_MS;
+
+  async function extrair(e: EvidenciaDossie, sinal: AbortSignal | undefined): Promise<Video> {
     const binarios = o.binarios ?? binariosFfmpeg();
-    const base = o.pastaTemporaria ?? resolve(lerEnv().MIDIA_TMP_DIR, 'dossie');
-    await mkdir(base, { recursive: true });
-    const pasta = await mkdtemp(join(base, 'dossie-'));
+    let pasta: string;
+    try {
+      const base = o.pastaTemporaria ?? resolve(lerEnv().MIDIA_TMP_DIR, 'dossie');
+      await mkdir(base, { recursive: true });
+      pasta = await mkdtemp(join(base, 'dossie-'));
+    } catch (erro) {
+      avisar('dossie_video_sem_pasta', e.id, erro);
+      return semVideo(SEM_QUADRO);
+    }
     try {
       const arquivo = join(pasta, 'video');
       const hash = e.sha256Final ? null : createHash('sha256');
+      const prazo = prazoDaLeitura(prazoMs, sinal);
       let fluxo: Readable;
       try {
-        fluxo = await abrir(e);
+        fluxo = await abrir(e, prazo);
       } catch (erro) {
+        sinal?.throwIfAborted();
         avisar('dossie_video_indisponivel', e.id, erro);
-        return { quadro: null, duracaoSegundos: null, sha256Calculado: null, problema: VIDEO_SUMIU };
+        return semVideo(sumiu(erro) ? VIDEO_SUMIU : VIDEO_ILEGIVEL);
       }
-      medir(fluxo, hash);
-      await pipeline(fluxo, createWriteStream(arquivo));
+      try {
+        // O pipeline destrói a origem quando algo falha; o hash só vale se a cópia terminou inteira.
+        await pipeline(
+          fluxo,
+          async function* (origem: AsyncIterable<Buffer>) {
+            for await (const parte of origem) {
+              hash?.update(parte);
+              yield parte;
+            }
+          },
+          createWriteStream(arquivo),
+          { signal: prazo },
+        );
+      } catch (erro) {
+        sinal?.throwIfAborted();
+        avisar('dossie_video_ilegivel', e.id, erro);
+        return semVideo(sumiu(erro) ? VIDEO_SUMIU : VIDEO_ILEGIVEL);
+      }
       const sha256Calculado = hash ? hash.digest('hex') : null;
       let duracaoSegundos: number | null = null;
       try {
-        duracaoSegundos = (await sondar(binarios.ffprobe, arquivo)).duracao;
+        duracaoSegundos = (await sondar(binarios.ffprobe, arquivo, { limiteMs: PRAZO_QUADRO_MS })).duracao;
       } catch (erro) {
         avisar('dossie_video_sem_duracao', e.id, erro);
       }
       const saida = join(pasta, 'quadro.jpg');
       try {
-        const r = await executar(binarios.ffmpeg, argumentosQuadro(arquivo, saida, segundoDoQuadro(duracaoSegundos)), { limiteMs: 60_000 });
+        const r = await executar(binarios.ffmpeg, argumentosQuadro(arquivo, saida, segundoDoQuadro(duracaoSegundos)), { limiteMs: PRAZO_QUADRO_MS });
         if (r.codigo !== 0) throw new Error(`ffmpeg saiu com o código ${r.codigo}`);
         return { quadro: await readFile(saida), duracaoSegundos, sha256Calculado, problema: null };
       } catch (erro) {
@@ -78,33 +166,37 @@ export function midiasDoArmazenamento(o: { binarios?: Binarios; pastaTemporaria?
         return { quadro: null, duracaoSegundos, sha256Calculado, problema: SEM_QUADRO };
       }
     } finally {
-      await rm(pasta, { recursive: true, force: true });
+      // Uma falha ao limpar (EBUSY no Windows) não troca o resultado por um erro.
+      await rm(pasta, { recursive: true, force: true }).catch((erro: unknown) => avisar('dossie_video_tmp_nao_apagado', e.id, erro));
     }
   }
 
   return {
-    async foto(e, opcoes): Promise<ResultadoFoto> {
-      let fluxo: Readable;
+    async foto(e, opcoes, sinal): Promise<ResultadoFoto> {
+      const prazo = prazoDaLeitura(prazoMs, sinal);
+      let conteudo: Buffer;
       try {
-        fluxo = await abrir(e);
+        conteudo = await lerAteOLimite(await abrir(e, prazo), o.limiteFotoBytes ?? LIMITE_LEITURA_FOTO, prazo);
       } catch (erro) {
-        avisar('dossie_foto_indisponivel', e.id, erro);
-        return { ok: false, motivo: ARQUIVO_SUMIU };
+        sinal?.throwIfAborted();
+        if (sumiu(erro)) {
+          avisar('dossie_foto_indisponivel', e.id, erro);
+          return { ok: false, motivo: ARQUIVO_SUMIU };
+        }
+        avisar('dossie_foto_ilegivel', e.id, erro);
+        return { ok: false, motivo: IMAGEM_ILEGIVEL };
       }
-      const hash = e.sha256Final ? null : createHash('sha256');
-      medir(fluxo, hash);
+      const sha256Calculado = e.sha256Final ? null : createHash('sha256').update(conteudo).digest('hex');
       try {
-        const imagem = await reduzirImagem(fluxo, opcoes);
-        return { ok: true, imagem, sha256Calculado: hash ? hash.digest('hex') : null };
+        return { ok: true, imagem: await reduzirImagem(conteudo, opcoes), sha256Calculado };
       } catch (erro) {
-        fluxo.destroy();
         avisar('dossie_foto_ilegivel', e.id, erro);
         return { ok: false, motivo: IMAGEM_ILEGIVEL };
       }
     },
 
-    async quadroDoVideo(e, opcoes): Promise<ResultadoQuadro> {
-      if (!videos.has(e.id)) videos.set(e.id, extrair(e));
+    async quadroDoVideo(e, opcoes, sinal): Promise<ResultadoQuadro> {
+      if (!videos.has(e.id)) videos.set(e.id, extrair(e, sinal));
       const v = await videos.get(e.id)!;
       let imagem: ImagemPdf | null = null;
       let problema = v.problema;

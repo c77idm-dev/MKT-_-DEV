@@ -1,4 +1,3 @@
-import { Readable } from 'node:stream';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { IMAGEM_PADRAO, IMAGEM_REDUZIDA } from './dominio';
@@ -42,13 +41,8 @@ describe('reduzirImagem (dossiê)', () => {
     expect({ largura: r.largura, altura: r.altura }).toEqual({ largura: 800, altura: 600 });
   });
 
-  it('lê de um stream (o armazenamento entrega Readable)', async () => {
-    const r = await reduzirImagem(Readable.from([await foto(1600, 1200)]), IMAGEM_PADRAO);
-    expect(r.largura).toBe(1280);
-  });
-
   it('recusa o que não é imagem', async () => {
     await expect(reduzirImagem(Buffer.from('não sou uma foto'), IMAGEM_PADRAO)).rejects.toThrow();
-    await expect(reduzirImagem(Readable.from([Buffer.from('nada')]), IMAGEM_PADRAO)).rejects.toThrow();
+    await expect(reduzirImagem(Buffer.alloc(0), IMAGEM_PADRAO)).rejects.toThrow();
   });
 });

@@ -88,8 +88,11 @@ export function executar(binario: string, argumentos: string[], opcoes: { limite
   });
 }
 
-export async function sondar(ffprobe: string, arquivo: string): Promise<Sondagem> {
-  const r = await executar(ffprobe, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', arquivo], { limiteMs: 60_000 });
+/** `limiteMs`: prazo do ffprobe (60 s no worker; o dossiê usa um prazo curto). */
+export async function sondar(ffprobe: string, arquivo: string, opcoes: { limiteMs?: number } = {}): Promise<Sondagem> {
+  const r = await executar(ffprobe, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', arquivo], {
+    limiteMs: opcoes.limiteMs ?? 60_000,
+  });
   if (r.codigo !== 0) throw new Error(`ffprobe falhou: ${r.stderr.trim() || `código ${r.codigo}`}`);
   return interpretarSondagem(r.stdout);
 }

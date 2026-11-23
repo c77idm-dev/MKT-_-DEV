@@ -31,10 +31,13 @@ import type { ImagemPdf } from './imagens';
 export type ResultadoFoto = { ok: true; imagem: ImagemPdf; sha256Calculado: string | null } | { ok: false; motivo: string };
 export type ResultadoQuadro = { imagem: ImagemPdf | null; duracaoSegundos: number | null; sha256Calculado: string | null; problema: string | null };
 
-/** De onde vêm as imagens (o armazenamento, em produção). Chamado uma imagem por vez, só para as evidências PRONTA. */
+/**
+ * De onde vêm as imagens (o armazenamento, em produção). Chamado uma imagem por vez, só para as evidências PRONTA.
+ * `sinal`: o cancelamento do dossiê (o pedido foi embora ou passou do prazo); a leitura para e o erro sobe.
+ */
 export type MidiasDossie = {
-  foto(e: EvidenciaDossie, opcoes: OpcoesImagem): Promise<ResultadoFoto>;
-  quadroDoVideo(e: EvidenciaDossie, opcoes: OpcoesImagem): Promise<ResultadoQuadro>;
+  foto(e: EvidenciaDossie, opcoes: OpcoesImagem, sinal?: AbortSignal): Promise<ResultadoFoto>;
+  quadroDoVideo(e: EvidenciaDossie, opcoes: OpcoesImagem, sinal?: AbortSignal): Promise<ResultadoQuadro>;
 };
 
 export type SecaoPdf = { titulo: string; pagina: number };
