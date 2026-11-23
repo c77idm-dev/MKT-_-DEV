@@ -36,7 +36,21 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
            - as 2 pastas de evidências sem dono foram apagadas, com cópia em `~/backups-devolucoes/midias-sem-dono_20261123-1652.tar.gz`;
            - o backup solto de 12/11 foi para `~/backups-devolucoes`;
            - a imagem `97f1fdb` saiu.
-           Ficam as imagens `a274ecb` (atual) e `0200335` (para voltar atrás). Havia 454 devoluções no banco.
+           Ficam as imagens `a274ecb` (atual) e `0200335` (para voltar atrás). Havia 454 devoluções no banco: 108 pendentes de chegada, 345 "No CD do marketplace" e 1 cancelada.
+        4. **Ocorrido em 23/11, 13h49: a DEV-000437 (Wahl Home Cut, SKU 101708, rastreio `AP616030620BR`) foi cancelada por engano.**
+           - **O que aconteceu:** o usuário tentou dar a chegada pelo detalhe da devolução. O quadro "Encerrar sem chegada" vinha com "Cancelada" marcada e um botão verde "Registrar".
+           - **O código bipado:** `000018992531744` não é rastreio de nenhuma devolução; deve ser outro código da etiqueta.
+           - **Correção na VPS às 17h07:** a devolução voltou a `PENDENTE_CHEGADA`, com o evento `cancelamento_desfeito`. Backup antes em `~/backups-devolucoes/banco-antes-reabrir-dev437_20261123-1707.dump`.
+           - **Lição para roteiros de VPS:** o INSERT do histórico deve depender do UPDATE ter mudado a linha (usar CTE com `RETURNING`), não rodar solto na mesma transação.
+           - **A correção da tela (opção "b" do usuário)** roda no run `wf_a18edbd3-238`, branch `cancelar-explicito` no worktree `reputacao` (porta 3108, banco `devolucoes_test_f8`). Ela traz:
+             - o quadro fechado em "Mais ações do Gestor";
+             - nenhuma opção marcada;
+             - o botão vermelho "Cancelar devolução" ou "Marcar como extraviada";
+             - um passo de confirmação;
+             - o rótulo `cancelamento_desfeito`;
+             - a emenda E24.
+           - **O usuário recusou** o botão "Registrar chegada" no detalhe e o "Procurar pelo produto" no Recebimento.
+        5. **Foto do anúncio no dossiê (o usuário disse "sim" em 23/11):** roda no run `wf_5ca65cea-604`, branch `dossie-foto-anuncio` no worktree `dossie` (porta 3109). O servidor baixa a foto do CDN do ML com lista de hosts, prazo de 5 s e teto de 3 MB; ela entra como referência ("o que foi vendido"), sem SHA-256.
       - **Produtos do ML com foto (extra), aprovado em 19/11:** construído na branch `produtos-do-ml` (`ae1ebf3` até `70801df`). **Revisado em equipe, junto no `main` e publicado na VPS em 23/11 (`97f1fdb`).**
         - **Testes:**
           - unidade: 853;
