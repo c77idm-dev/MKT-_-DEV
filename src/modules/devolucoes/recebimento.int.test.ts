@@ -37,6 +37,26 @@ async function ultimoEvento(id: string) {
   const e = (await listarEventos(db, 'devolucao', id)).at(-1);
   return e && { acao: e.acao, de: e.de, para: e.para, usuarioNome: e.usuarioNome, dados: e.dados };
 }
+/**
+ * O banco de teste com uma ação logo antes (e outra logo depois) da transação do recebimento, ou seja, entre a busca e
+ * o registro: simula a sincronização do ML (ou outra leitura) mudando o status no meio.
+ */
+function comAcaoNaTransacao(antes: () => Promise<void>, depois?: () => Promise<void>): typeof db {
+  return new Proxy(db, {
+    get(alvo, prop) {
+      if (prop === 'transaction') {
+        return async (fn: Parameters<typeof db.transaction>[0]) => {
+          await antes();
+          const resultado = await alvo.transaction(fn);
+          await depois?.();
+          return resultado;
+        };
+      }
+      const valor: unknown = Reflect.get(alvo, prop, alvo);
+      return typeof valor === 'function' ? valor.bind(alvo) : valor;
+    },
+  });
+}
 
 describe('receberPorRastreio (spec §6.2)', () => {
   it('registra a chegada com data, hora e usuário, e grava o histórico', async () => {
@@ -161,6 +181,51 @@ describe('receberPorRastreio: pacote que voltou do armazém do ML (extra, emenda
     expect(await receberPorRastreio(db, 'BR560', operador)).toEqual({ tipo: 'bloqueada', codigo: e.codigo, status: 'EXTRAVIADA' });
     expect((await statusDe(c.id)).status).toBe('CANCELADA');
     expect((await statusDe(e.id)).status).toBe('EXTRAVIADA');
+  });
+
+  it('a sincronização do ML põe a pendente na No CD entre a busca e o registro: a chegada é registrada assim mesmo', async () => {
+    const d = await criarDevolucaoTeste(db, operador, { rastreio: 'BR561' });
+    const noMeio = comAcaoNaTransacao(() => mudarStatus(d.id, 'NO_CD_MARKETPLACE'));
+    const agora = new Date();
+    expect(await receberPorRastreio(noMeio, 'BR561', operador, agora)).toEqual({
+      tipo: 'recebidas',
+      codigos: [d.codigo],
+      em: agora,
+      doArmazemML: [d.codigo],
+    });
+    expect(await ultimoEvento(d.id)).toMatchObject({
+      acao: 'recebida',
+      de: 'NO_CD_MARKETPLACE',
+      para: 'AGUARDANDO_CONFERENCIA',
+      dados: { rastreio: 'BR561', voltouDoArmazemML: true },
+    });
+  });
+
+  it('o reenvio da triagem volta a No CD para pendente entre a busca e o registro: a chegada é registrada assim mesmo', async () => {
+    const d = await criarDevolucaoTeste(db, operador, { rastreio: 'BR562' });
+    await mudarStatus(d.id, 'NO_CD_MARKETPLACE');
+    const noMeio = comAcaoNaTransacao(() => mudarStatus(d.id, 'PENDENTE_CHEGADA'));
+    const agora = new Date();
+    expect(await receberPorRastreio(noMeio, 'BR562', operador, agora)).toEqual({ tipo: 'recebidas', codigos: [d.codigo], em: agora });
+    expect(await ultimoEvento(d.id)).toMatchObject({ de: 'PENDENTE_CHEGADA', para: 'AGUARDANDO_CONFERENCIA', dados: { rastreio: 'BR562' } });
+  });
+
+  it('a sincronização do ML cancela entre a busca e o registro: fica bloqueada (Fale com o Gestor)', async () => {
+    const d = await criarDevolucaoTeste(db, operador, { rastreio: 'BR563' });
+    const noMeio = comAcaoNaTransacao(() => mudarStatus(d.id, 'CANCELADA'));
+    expect(await receberPorRastreio(noMeio, 'BR563', operador)).toEqual({ tipo: 'bloqueada', codigo: d.codigo, status: 'CANCELADA' });
+    expect((await statusDe(d.id)).status).toBe('CANCELADA');
+  });
+
+  it('(defensivo) nada registrado e a devolução de novo sem chegada: pede para ler de novo, em vez de dizer que já chegou', async () => {
+    const d = await criarDevolucaoTeste(db, operador, { rastreio: 'BR564' });
+    const noMeio = comAcaoNaTransacao(
+      () => mudarStatus(d.id, 'AGUARDANDO_CONFERENCIA'),
+      () => mudarStatus(d.id, 'PENDENTE_CHEGADA'),
+    );
+    await expect(receberPorRastreio(noMeio, 'BR564', operador)).rejects.toThrow(
+      new ErroDevolucao('A situação desta devolução mudou agora. Leia o pacote de novo.'),
+    );
   });
 });
 

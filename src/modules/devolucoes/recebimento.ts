@@ -114,8 +114,10 @@ async function procurar(db: DbOuTx, codigo: string): Promise<{ achadas: Candidat
  * (extra, E25) Sem nenhum rastreio igual, o código só de dígitos é procurado como número do pedido e do envio do ML
  * (`procurar`); todas as devoluções achadas que ainda não chegaram são recebidas juntas, como no rastreio repetido.
  *
- * Duas leituras simultâneas (dois celulares): a mudança é um UPDATE condicional ao status, então só uma
- * leitura registra a chegada e grava o evento; a outra recebe `ja_recebida`.
+ * Duas leituras simultâneas (dois celulares): dentro da transação o status é relido com trava (SELECT … FOR UPDATE),
+ * então só uma leitura registra a chegada e grava o evento; a outra recebe `ja_recebida`. A mesma releitura cobre a
+ * sincronização do ML que, entre a busca e o registro, troca "Pendente de chegada" e "No CD do marketplace" entre si:
+ * vale o status de agora.
  */
 export async function receberPorRastreio(
   db: DbOuTx,
@@ -136,19 +138,24 @@ export async function receberPorRastreio(
     const recebidas = await db.transaction(async (tx) => {
       const feitas: { codigo: string; doArmazemML: boolean }[] = [];
       for (const d of aReceber) {
-        exigirTransicao({ de: d.status, para: 'AGUARDANDO_CONFERENCIA', ator: usuario.perfil }, MENSAGEM_PERFIL);
+        // O status de agora, com trava: outra leitura pode ter acabado de registrar a chegada (fica a dela), e a
+        // sincronização do ML pode ter trocado Pendente e No CD entre si, ou cancelado (fica para o fallback).
+        const [linha] = await tx.select({ status: devolucoes.status }).from(devolucoes).where(eq(devolucoes.id, d.id)).for('update');
+        if (!linha || !A_RECEBER.includes(linha.status)) continue;
+        const de = linha.status;
+        exigirTransicao({ de, para: 'AGUARDANDO_CONFERENCIA', ator: usuario.perfil }, MENSAGEM_PERFIL);
         const [atualizada] = await tx
           .update(devolucoes)
           .set({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: agora, recebidaPor: usuario.id, atualizadaEm: agora })
-          .where(and(eq(devolucoes.id, d.id), eq(devolucoes.status, d.status)))
+          .where(and(eq(devolucoes.id, d.id), eq(devolucoes.status, de)))
           .returning({ id: devolucoes.id, codigo: devolucoes.codigo });
-        if (!atualizada) continue; // outro operador registrou a chegada no mesmo instante (ou a sincronização do ML mudou o status)
-        const doArmazemML = d.status === 'NO_CD_MARKETPLACE';
+        if (!atualizada) continue; // não acontece com a trava; fica por segurança
+        const doArmazemML = de === 'NO_CD_MARKETPLACE';
         await registrarEvento(tx, {
           entidade: 'devolucao',
           entidadeId: atualizada.id,
           acao: 'recebida',
-          de: d.status,
+          de,
           para: 'AGUARDANDO_CONFERENCIA',
           usuarioId: usuario.id,
           dados: { ...lido, ...(doArmazemML ? { voltouDoArmazemML: true } : {}) },
@@ -172,6 +179,9 @@ export async function receberPorRastreio(
 
   const atual = await maisRecenteEntre(db, achadas.map((d) => d.id));
   if (!atual) return { tipo: 'nao_encontrada', rastreio };
+  // Defensivo: nada foi registrado e a devolução está esperando o pacote de novo, ou seja, o status mudou agora. Dizer
+  // "Este pacote já chegou" seria falso (a chegada não foi registrada).
+  if (A_RECEBER.includes(atual.status)) throw new ErroDevolucao('A situação desta devolução mudou agora. Leia o pacote de novo.');
   if (BLOQUEADAS.includes(atual.status)) return { tipo: 'bloqueada', codigo: atual.codigo, status: atual.status, ...comoAchou };
   return { tipo: 'ja_recebida', codigo: atual.codigo, status: atual.status, recebidaEm: atual.recebidaEm, ...comoAchou };
 }
