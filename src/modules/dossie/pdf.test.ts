@@ -416,6 +416,9 @@ describe('foto do anúncio no ML no dossiê (extra)', () => {
   const FOTO_B = 'https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg';
   const LEGENDA = 'Foto do anúncio no ML (o que foi vendido)';
   const INDISPONIVEL = 'Foto do anúncio indisponível';
+  const COMPARAR = 'Compare com as fotos da unidade';
+  const REFERENCIA = 'Referência do anúncio (não é prova)';
+  const SO_REFERENCIA = 'A foto do anúncio no ML, nas unidades, é só referência: não tem carimbo nem SHA-256.';
   /** O texto de cada caixa quebra em linhas: compara sem as quebras. */
   const corrido = (t: string) => t.replace(/\s+/g, ' ');
   const hashes = (t: string) => t.match(/\b[0-9a-f]{64}\b/g) ?? [];
@@ -455,6 +458,17 @@ describe('foto do anúncio no ML no dossiê (extra)', () => {
     expect(imagens.filter((i) => Math.max(i.largura, i.altura) === IMAGEM_ANUNCIO.ladoMaior)).toHaveLength(2);
     // Nada da URL no PDF.
     expect(await textoDoPdf(r.bytes)).not.toContain('mlstatic');
+    // O convite a comparar só onde há o que comparar: a foto entrou e a unidade veio (a 3 é ausente).
+    expect(corrido(secao('Unidade 1 de 3'))).toContain(COMPARAR);
+    expect(corrido(secao('Unidade 2 de 3'))).toContain(COMPARAR);
+    expect(corrido(secao('Unidade 3 de 3'))).not.toContain(COMPARAR);
+  });
+
+  it('sem a foto do anúncio no PDF: nada de "Compare com as fotos da unidade" ao lado de "indisponível"', async () => {
+    const r = await gerarPdfDossie(comFotos({}, [FOTO_A, null, FOTO_B]), midiasTeste({ anuncio: 'falha' }));
+    expect(corrido(await textoDoPdf(r.bytes))).not.toContain(COMPARAR);
+    const semFoto = await gerarPdfDossie(dadosTeste(), midiasTeste({ anuncio: 'ok' }));
+    expect(corrido(await textoDoPdf(semFoto.bytes))).not.toContain(COMPARAR);
   });
 
   it('uma vez por URL (unidades com o mesmo produto), uma por vez e com o prazo de 5 s', async () => {
@@ -503,6 +517,25 @@ describe('foto do anúncio no ML no dossiê (extra)', () => {
     // Só a que entrou no PDF: indisponível não vai à integridade.
     const falhou = await secoes(await gerarPdfDossie(comFotos(), midiasTeste({ anuncio: 'falha' })));
     expect(corrido(falhou('Integridade dos arquivos'))).not.toContain('Foto do anúncio');
+    expect(corrido(falhou('Integridade dos arquivos'))).not.toContain(REFERENCIA);
+  });
+
+  it('integridade: a abertura fala das fotos da conferência; com a foto do anúncio, diz que ela não tem carimbo nem SHA-256', async () => {
+    const sem = corrido((await secoes(await gerarPdfDossie(dadosTeste(), midiasTeste())))('Integridade dos arquivos'));
+    const com = corrido((await secoes(await gerarPdfDossie(comFotos(), midiasTeste({ anuncio: 'ok' }))))('Integridade dos arquivos'));
+    for (const t of [sem, com]) {
+      expect(t).toContain('As fotos da conferência neste PDF');
+      expect(t).toContain('Cada foto da conferência tem gravado o carimbo');
+      // A frase antiga dizia que toda imagem do PDF era cópia de arquivo guardado, com carimbo.
+      expect(t).not.toContain('As imagens deste PDF');
+      expect(t).not.toContain('Cada foto tem gravado');
+    }
+    expect(sem).not.toContain(SO_REFERENCIA);
+    expect(sem).not.toContain(REFERENCIA);
+    expect(com).toContain(SO_REFERENCIA);
+    // Um subtítulo separa a foto do anúncio dos arquivos com hash, antes das linhas dela.
+    expect(com.indexOf(REFERENCIA)).toBeGreaterThan(com.lastIndexOf('SHA-256 do original recebido'));
+    expect(com.indexOf(REFERENCIA)).toBeLessThan(com.indexOf('Foto do anúncio no ML · Unidades 1 e 2'));
   });
 
   it('teto de fotos: a do anúncio conta no teto, mas nunca tira o lugar de uma prova', async () => {

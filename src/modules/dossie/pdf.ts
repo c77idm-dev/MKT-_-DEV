@@ -160,6 +160,8 @@ const LEGENDA_ANUNCIO = 'Foto do anúncio no ML (o que foi vendido)';
 const NOTA_ANUNCIO = 'Referência do anúncio no Mercado Livre, não da conferência: não é arquivo guardado no sistema (sem carimbo e sem SHA-256).';
 const COMPARAR_ANUNCIO = 'Compare com as fotos da unidade (o que voltou).';
 const ANUNCIO_INDISPONIVEL = 'Foto do anúncio indisponível';
+const SO_REFERENCIA_ANUNCIO = 'A foto do anúncio no ML, nas unidades, é só referência: não tem carimbo nem SHA-256.';
+const TITULO_REFERENCIA_ANUNCIO = 'Referência do anúncio (não é prova)';
 /** Com menos tempo que isso no orçamento das fotos do anúncio, nem pede. */
 const PRAZO_MINIMO_ANUNCIO_MS = 200;
 
@@ -485,7 +487,9 @@ async function montar(
     const xTexto = x + CAIXA_ANUNCIO + 12;
     const larguraTexto = MARGEM + LARGURA - xTexto;
     const legenda = quebrar(LEGENDA_ANUNCIO, f.negrito, 9.5, larguraTexto);
-    const nota = quebrar(ausente ? NOTA_ANUNCIO : `${NOTA_ANUNCIO} ${COMPARAR_ANUNCIO}`, f.normal, 8.5, larguraTexto);
+    // O convite a comparar só quando há o que comparar: a foto entrou e a unidade veio no pacote.
+    const comparar = !ausente && 'embutida' in conteudo;
+    const nota = quebrar(comparar ? `${NOTA_ANUNCIO} ${COMPARAR_ANUNCIO}` : NOTA_ANUNCIO, f.normal, 8.5, larguraTexto);
     const altura = Math.max(CAIXA_ANUNCIO, legenda.length * 13 + 4 + nota.length * 11);
     e.caber(altura + 10);
     const topo = e.y;
@@ -602,8 +606,10 @@ async function montar(
   abrirSecao('Integridade dos arquivos');
   e.escrever(`Gerado em ${geradoEm} por ${d.geradoPorNome}, pelo sistema ${SISTEMA}.`, { tamanho: 10.5, fonte: f.negrito });
   e.y -= 2;
+  // A foto do anúncio (extra) também é imagem do PDF, mas não é arquivo guardado nem tem carimbo: a abertura fala só
+  // das fotos da conferência e, quando a do anúncio entrou, diz isso.
   e.escrever(
-    'O SHA-256 é a impressão digital de cada arquivo guardado no sistema: qualquer mudança no arquivo muda o código. As imagens deste PDF são cópias reduzidas; os códigos abaixo são dos arquivos guardados. Cada foto tem gravado o carimbo com a data e a hora em que o servidor a recebeu, o código da devolução e o usuário.',
+    `O SHA-256 é a impressão digital de cada arquivo guardado no sistema: qualquer mudança no arquivo muda o código. As fotos da conferência neste PDF (e o quadro do vídeo) são cópias reduzidas; os códigos abaixo são dos arquivos guardados. Cada foto da conferência tem gravado o carimbo com a data e a hora em que o servidor a recebeu, o código da devolução e o usuário.${anunciosNoCorpo.size > 0 ? ` ${SO_REFERENCIA_ANUNCIO}` : ''}`,
     { tamanho: 9.5, cor: CINZA },
   );
   e.y -= 6;
@@ -630,7 +636,9 @@ async function montar(
     e.y -= 10;
   }
   if (d.evidencias.length === 0) e.escrever('Esta devolução não tem fotos nem vídeo.');
-  // A foto do anúncio (extra) não é prova guardada: aparece só para dizer isso, sem código de integridade.
+  // A foto do anúncio (extra) não é prova guardada: aparece só para dizer isso, sem código de integridade, num bloco
+  // à parte dos arquivos com hash.
+  if (anunciosNoCorpo.size > 0) e.subtitulo(TITULO_REFERENCIA_ANUNCIO, 2 * 14 + 10);
   for (const unidades of anunciosNoCorpo.values()) {
     const onde = unidades.length === 1 ? `Unidade ${unidades[0]}` : `Unidades ${juntarNumeros(unidades)}`;
     e.caber(2 * 14 + 10);
