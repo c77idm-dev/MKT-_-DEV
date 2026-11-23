@@ -8,6 +8,7 @@ import { listarEventos } from '@/modules/historico/eventos';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { dadosDevolucaoMLTeste, devolucaoExternaTeste } from '../../../tests/helpers/fabricas-ml';
+import { contaDaDevolucao } from './fabrica-conector';
 import { aplicarReclamacao, type ResultadoAplicacao } from './sincronizar';
 
 const { db, sql } = criarDbTeste();
@@ -288,6 +289,28 @@ describe('extras e conta em reclamacoes_ml (integração Bitbrain, D8)', () => {
       dinheiro: 'RETIDO',
       conta: 'loja-falsa-1',
     });
+  });
+
+  it('a reclamação lida sem a devolução não desfaz a ligação: devolução, return_id, subtipo, status da devolução e conta ficam (E26)', async () => {
+    const externa = devolucaoExternaTeste();
+    const { devolucaoId } = comDevolucao(await aplicarReclamacao(db, dadosDevolucaoMLTeste(externa, { extras: EXTRAS }), AGORA, undefined, 'loja-falsa-1'));
+    const antes = await linha(externa.reclamacaoId);
+    expect(antes).toMatchObject({ devolucaoId, returnId: externa.devolucaoExternaId, subtipo: 'return_total' });
+    expect(antes.statusDevolucao).not.toBeNull();
+
+    const semDevolucao = dadosDevolucaoMLTeste(null, { reclamacaoId: externa.reclamacaoId, statusReclamacao: 'closed' });
+    expect(await aplicarReclamacao(db, semDevolucao, AGORA, undefined, 'loja-falsa-1')).toEqual({ acao: 'sem_devolucao' });
+    expect(await linha(externa.reclamacaoId)).toMatchObject({
+      devolucaoId,
+      returnId: externa.devolucaoExternaId,
+      subtipo: 'return_total',
+      statusDevolucao: antes.statusDevolucao,
+      statusReclamacao: 'closed',
+      triagemEtapa: 'closed',
+      conta: 'loja-falsa-1',
+    });
+    // O que se perdia na produção (23/11): sem a ligação, o sistema não sabia de qual conta era a devolução.
+    expect(await contaDaDevolucao(db, devolucaoId)).toBe('loja-falsa-1');
   });
 
   it('modo api (sem conta): a conta fica nula; reclamação sem devolução também guarda os extras', async () => {

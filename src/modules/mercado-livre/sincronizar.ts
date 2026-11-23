@@ -138,6 +138,12 @@ async function gravarReclamacao(tx: DbOuTx, dados: DadosDevolucaoML, devolucaoId
       target: reclamacoesMl.claimId,
       set: {
         ...valores,
+        // E26: a reclamação lida sem a parte da devolução (o ML nem sempre a traz) não desfaz a ligação nem apaga o que
+        // se sabia da devolução. Desligada, a devolução saía do filtro de reputação, das respostas a dar e da conta certa.
+        devolucaoId: sql`coalesce(excluded."devolucao_id", ${reclamacoesMl.devolucaoId})`,
+        returnId: sql`coalesce(excluded."return_id", ${reclamacoesMl.returnId})`,
+        subtipo: sql`coalesce(excluded."subtipo", ${reclamacoesMl.subtipo})`,
+        statusDevolucao: sql`coalesce(excluded."status_devolucao", ${reclamacoesMl.statusDevolucao})`,
         // D8: uma leitura opcional recusada (nulo) não apaga o que o ML já tinha dito. Urgente e ação seguem o ML.
         afetaReputacao: sql`coalesce(excluded."afeta_reputacao", ${reclamacoesMl.afetaReputacao})`,
         ehFull: sql`coalesce(excluded."eh_full", ${reclamacoesMl.ehFull})`,
