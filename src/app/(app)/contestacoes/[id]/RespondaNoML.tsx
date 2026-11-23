@@ -1,5 +1,6 @@
 'use client';
 
+import { BotaoDossie } from '@/components/dossie/BotaoDossie';
 import { ListaErros } from '@/components/ListaErros';
 import { BOTAO_PRIMARIO, CARTAO, ROTULO } from '@/components/estilos';
 import { BotaoConfirmar } from '@/components/mercado-livre/BotaoConfirmar';
@@ -20,10 +21,12 @@ type Props = {
   rotuloMotivo: string;
   mensagem: string;
   fotos: Foto[];
+  /** (extra) Link temporário do Vídeo de Prova pronto; null quando não há. */
+  video: string | null;
 };
 
 /** Modo bitbrain (§4.6, D14): o sistema não envia ao ML; o Gestor responde à mão e marca aqui. */
-export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motivo, rotuloMotivo, mensagem, fotos }: Props) {
+export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motivo, rotuloMotivo, mensagem, fotos, video }: Props) {
   const [estado, aoEnviar, pendente] = useEnvioFormulario(acao, { erros: [] }, 'erros-responda');
   const prontas = fotos.filter((f): f is Foto & { url: string } => f.url !== null);
   return (
@@ -34,7 +37,8 @@ export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motiv
       <p className="text-sm text-texto-2">
         No modo Bitbrain o sistema não envia ao Mercado Livre. Abra no ML a venda {pedidos}
         {reclamacaoId ? ` (reclamação ${reclamacaoId})` : ''}
-        {conta ? `, na conta ${conta}` : ''}, escolha o motivo, cole a mensagem e anexe as fotos. Depois, toque em &quot;Marcar como respondida&quot;.
+        {conta ? `, na conta ${conta}` : ''}, escolha o motivo, cole a mensagem e anexe o dossiê de provas (PDF) ou as fotos e, à parte, o
+        vídeo (extra). Depois, toque em &quot;Marcar como respondida&quot;.
       </p>
       <dl className="grid gap-3">
         <Dado rotulo="Motivo">
@@ -61,6 +65,21 @@ export function RespondaNoML({ acao, codigo, conta, pedidos, reclamacaoId, motiv
               </li>
             ))}
           </ul>
+        )}
+        <BotaoDossie codigo={codigo} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <h3 className={ROTULO}>Vídeo de Prova</h3>
+        <p className="text-sm text-texto-2">O vídeo vai separado: o ML não aceita vídeo dentro do PDF.</p>
+        {video ? (
+          <a href={video} download={`${codigo}-video.mp4`} className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-destaque underline">
+            Baixar vídeo
+          </a>
+        ) : (
+          <p className="text-sm text-texto-2">Nenhum vídeo pronto desta devolução.</p>
+        )}
+        {(prontas.length > 0 || video) && (
+          <p className="text-xs text-texto-2">Os links das fotos e do vídeo valem 10 minutos. Para gerar novos, recarregue a página.</p>
         )}
       </div>
       <form onSubmit={aoEnviar} className="flex flex-col gap-2 border-t border-borda pt-3">

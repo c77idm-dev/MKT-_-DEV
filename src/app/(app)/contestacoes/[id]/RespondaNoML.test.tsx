@@ -17,6 +17,7 @@ const props = {
   rotuloMotivo: 'Produto avariado',
   mensagem: 'Na conferência da devolução DEV-000001 encontramos:\n- Unidade 1: avariado.',
   fotos: FOTOS,
+  video: '/api/arquivos?c=video',
 };
 
 beforeAll(() => {
@@ -32,10 +33,31 @@ describe('RespondaNoML (§4.6)', () => {
     expect(screen.getByText(/na conta Loja 1/)).toBeTruthy();
     expect(screen.getByText(/Abra no ML a venda 2000001, 2000002 \(reclamação 5200000001\)/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copiar' })).toBeTruthy();
-    const baixar = screen.getAllByRole('link', { name: /^Baixar/ });
+    const baixar = screen.getAllByRole('link', { name: /^Baixar Foto/ });
     expect(baixar).toHaveLength(1);
     expect(baixar[0].getAttribute('download')).toBe('DEV-000001-1.jpg');
     expect(baixar[0].getAttribute('href')).toBe('/api/arquivos?c=1');
+  });
+
+  it('(extra) junto das fotos: o dossiê de provas em PDF e o vídeo, que vai separado', () => {
+    render(<RespondaNoML acao={vi.fn()} {...props} />);
+    const dossie = screen.getByRole('link', { name: 'Baixar dossiê de provas (PDF)' });
+    expect(dossie.getAttribute('href')).toBe('/api/devolucoes/DEV-000001/dossie');
+    expect(dossie.hasAttribute('download')).toBe(false);
+    expect(screen.getByText('(extra) Tudo da devolução num arquivo só, para anexar na resposta ao ML.')).toBeTruthy();
+    expect(screen.getByText('O vídeo vai separado: o ML não aceita vídeo dentro do PDF.')).toBeTruthy();
+    const video = screen.getByRole('link', { name: 'Baixar vídeo' });
+    expect(video.getAttribute('href')).toBe('/api/arquivos?c=video');
+    expect(video.getAttribute('download')).toBe('DEV-000001-video.mp4');
+    // O passo a passo cita o dossiê e o vídeo à parte, e avisa da validade dos links (como o detalhe).
+    expect(screen.getByText(/cole a mensagem e anexe o dossiê de provas \(PDF\) ou as fotos e, à parte, o vídeo \(extra\)\. Depois/)).toBeTruthy();
+    expect(screen.getByText('Os links das fotos e do vídeo valem 10 minutos. Para gerar novos, recarregue a página.')).toBeTruthy();
+  });
+
+  it('sem vídeo pronto: avisa em vez do link', () => {
+    render(<RespondaNoML acao={vi.fn()} {...props} video={null} />);
+    expect(screen.queryByRole('link', { name: 'Baixar vídeo' })).toBeNull();
+    expect(screen.getByText('Nenhum vídeo pronto desta devolução.')).toBeTruthy();
   });
 
   it('"Marcar como respondida" pede o 2º toque e chama a ação', () => {

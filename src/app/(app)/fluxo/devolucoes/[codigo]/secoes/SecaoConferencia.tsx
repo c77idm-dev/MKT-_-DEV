@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { BotaoDossie } from '@/components/dossie/BotaoDossie';
 import { ALERTA_ATENCAO, BOTAO_PRIMARIO, CARTAO } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { formatarDataHora } from '@/lib/formatar';
@@ -94,6 +95,8 @@ export async function SecaoConferencia({ devolucaoId, codigo, status, usuario }:
       <p role="status" className="text-[15px]">
         {situacao(d)}
       </p>
+      {/* (extra) Dossiê de provas em PDF: só depois da conferência (antes, a rota responde 409). */}
+      {d.conferidaEm && <BotaoDossie codigo={codigo} />}
 
       {status === 'AGUARDANDO_CONFERENCIA' && podeConferir && d.naoIdentificada && (
         <p className={ALERTA_ATENCAO}>Pacote não identificado: o Gestor identifica o pedido antes da conferência.</p>

@@ -118,6 +118,13 @@ nginx -t && systemctl reload nginx
 ```
 Se `nginx -t` acusar erro, não recarregue e confira o arquivo.
 
+## Dossiê de provas (PDF): prazo de 120 s no nginx
+Numa devolução com muitas fotos, gerar o dossiê pode passar dos 60 s que o nginx espera por padrão; o sistema corta em 100 s. Uma vez, na VPS, abra `/etc/nginx/sites-available/devolucoes` e cole o bloco `location ~ ^/api/devolucoes/[^/]+/dossie$ { ... }` de `docker/nginx/devolucoes.conf` antes do `location / {` de **cada** `server` (o da porta 80 e o da 443, que o certbot criou). Depois:
+```sh
+nginx -t && systemctl reload nginx
+```
+Se `nginx -t` acusar erro, não recarregue e confira o arquivo. Sem o bloco, o dossiê de uma devolução grande dá 504 no celular.
+
 ## Ligar o modo Bitbrain (devoluções do ML pelo Bitbrain)
 
 Pré-requisito: a sessão do Bitbrain publicou a rota (`docs/integracao/bitbrain-rota-devolucoes.md`), e o Nathan gerou o `DEVOLUCOES_TOKEN` (`openssl rand -hex 32`) e o pôs no `.env` do Bitbrain.

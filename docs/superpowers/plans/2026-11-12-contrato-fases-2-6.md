@@ -616,3 +616,9 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
   - **Falsos:** `tests/fixtures/ml-falso/cenarios.json` ganha `anuncios` (título, GTIN e foto por SKU); a foto é de um domínio reservado (`.example`) e o e2e responde a imagem com `page.route`.
   - **Pendente:** `?include_attributes=all` no `/items` (o GTIN da variação), quando a rota do Bitbrain aceitar a query (adendo na branch `catalogo-ml`). Sem ele, vale o GTIN do anúncio.
   - **Motivo:** o catálogo da produção foi apagado; sem produto, a bancada não tem foto para reconhecer o item nem EAN esperado para conferir.
+- **E23. Dossiê de provas (PDF) (extra, aprovado em 19/11):**
+  - **Histórico:** arquivo novo `src/modules/historico/rotulos/dossie.ts` (`ROTULOS_DOSSIE`, prefixo `dossie_`), ligado ao `ROTULO_ACAO`, com a chave `dossie_gerado` ("Dossiê de provas (PDF) gerado"). O evento vai na entidade `devolucao` e guarda só números (páginas, tamanho, imagens).
+  - **Rota:** `GET /api/devolucoes/[codigo]/dossie`, com `ver_listas` antes de qualquer leitura (sem sessão vai ao login; sem permissão ou código desconhecido, 404; antes do fim da conferência, 409). Módulo `src/modules/dossie/`.
+    - Revisão de 23/11: pedido de outro site (`Sec-Fetch-Site: cross-site`), 403; fila cheia (um dossiê rodando e outro esperando) ou prazo de 100 s estourado, 503 com `Retry-After: 30`; `HEAD`, 405. O 409 e o 503 voltam como uma página curta em pt-BR com o link de volta à devolução. O `nginx` ganha a `location` da rota com `proxy_read_timeout 120s`.
+  - **Telas:** o botão do detalhe entra na `SecaoConferencia` (o `[codigo]/page.tsx` continua congelado) e no bloco "Responda no ML".
+  - **Motivo:** os arquivos de rótulos são congelados.
