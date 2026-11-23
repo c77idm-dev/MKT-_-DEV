@@ -78,8 +78,11 @@ function LinksDevolucoes({ codigos }: { codigos: string[] }) {
   );
 }
 
-/** Cartão grande do resultado. O texto visível fica escondido do leitor de tela porque a região aria-live (acima) já o anuncia. */
-function Cartao({ tom, titulo, mensagem, children }: { tom: Tom; titulo: string; mensagem: ReactNode; children?: ReactNode }) {
+/**
+ * Cartão grande do resultado. O texto visível fica escondido do leitor de tela porque a região aria-live (acima) já o anuncia.
+ * `nota` (extra, E25): por qual número da etiqueta do ML a devolução foi achada.
+ */
+function Cartao({ tom, titulo, mensagem, nota, children }: { tom: Tom; titulo: string; mensagem: ReactNode; nota?: string; children?: ReactNode }) {
   const cores =
     tom === 'sucesso' ? 'border-bom bg-bom-suave text-bom' : tom === 'aviso' ? 'border-atencao bg-atencao-suave text-atencao' : 'border-erro bg-erro-suave text-erro';
   return (
@@ -91,6 +94,11 @@ function Cartao({ tom, titulo, mensagem, children }: { tom: Tom; titulo: string;
       <p aria-hidden="true" className="text-[15px] font-medium">
         {mensagem}
       </p>
+      {nota && (
+        <p aria-hidden="true" className="text-sm font-semibold">
+          {nota}
+        </p>
+      )}
       {children}
     </div>
   );
@@ -100,7 +108,7 @@ function textoAnunciado(estado: EstadoRecebimento): string {
   switch (estado.tipo) {
     case 'sucesso':
     case 'aviso':
-      return `${estado.titulo}. ${estado.mensagem}`;
+      return `${estado.titulo}. ${estado.mensagem}${estado.nota ? ` ${estado.nota}` : ''}`;
     case 'nao_encontrada':
       return `Rastreio não encontrado. Nenhuma devolução com o rastreio ${estado.rastreio}.`;
     case 'erro':
@@ -121,7 +129,7 @@ function Resultado({ estado, acao, pendente }: { estado: EstadoRecebimento; acao
         {textoAnunciado(estado)}
       </div>
       {(estado.tipo === 'sucesso' || estado.tipo === 'aviso') && (
-        <Cartao tom={estado.tipo} titulo={estado.titulo} mensagem={estado.mensagem}>
+        <Cartao tom={estado.tipo} titulo={estado.titulo} mensagem={estado.mensagem} nota={estado.nota}>
           <LinksDevolucoes codigos={estado.codigos} />
         </Cartao>
       )}
