@@ -98,7 +98,16 @@ Atualizado em 23/11/2026, de manhã. Retomado depois da queda da sessão de 19/1
           - **Conteúdo do PDF:** capa (DEV, venda e reclamação do ML, rastreio, motivos, chegada e conferência), fotos do pacote, cada unidade (código de barras, nº de série, Fotos 3 e 4, avarias, destino), um quadro do vídeo, o histórico e um rodapé com o SHA-256 de cada arquivo.
           - **Onde baixar:** botão "Baixar dossiê de provas (PDF)" no detalhe, depois da conferência, e no "Responda no ML".
           - **Regras:** o vídeo vai à parte, porque o ML não aceita vídeo no PDF. Nenhum dado do comprador entra no documento. O PDF fica abaixo de 8 MB, reduzindo as fotos.
-          - **Ao terminar:** mostrar ao usuário o PDF de exemplo (`scratchpad\dossie\exemplo-dossie.pdf`).
+          - **Pronto em 23/11.** A revisão por 3 olhares (run `wf_5f9f5de2-57b`) achou 1 CRITICO e 5 IMPORTANTES, todos corrigidos e re-revisados (`31729e1` até `2cb4125`):
+            - uma foto que falhava no meio da leitura pendurava a fila de dossiês;
+            - um erro na cópia do vídeo derrubava o PDF inteiro;
+            - saía "Confere" sem EAN de referência;
+            - o custo de gerar não tinha limite: agora há fila de 1, junção de pedidos iguais, teto de fotos, prazo de 100 s e 503 com `Retry-After`;
+            - com o login vencido, o `<a download>` salvava a tela de login como .pdf.
+          - **Junção:** o `main` foi juntado na branch (`42733b7`); a emenda do dossiê virou **E23** porque a E22 é dos produtos do ML. A bateria com as três frentes passou: unidade 909, integração 557, e2e 227 (9 pulados), Bitbrain 16.
+          - **O usuário viu o PDF de exemplo e aprovou ("ficou bom demais"). Junto no `main` em `a274ecb`.** Sem migração nem variável nova.
+          - **Falta:** publicar na VPS com o bloco de 120 s no nginx (`docs/operacao/deploy-vps.md`, seção "Dossiê de provas"), só no site das devoluções.
+          - **Pergunta aberta ao usuário:** pôr a foto do anúncio do ML no dossiê, ao lado do produto esperado. É um passo à parte: o servidor teria que baixar a imagem do CDN do ML, com lista de hosts, prazo e teto de tamanho, e precisa de revisão própria.
       - **Se esta sessão cair:**
         - os fluxos e agentes em segundo plano param, mas as branches estão no GitHub;
         - confira `git log` de cada branch da tabela acima e os arquivos `.superpowers/sdd/fases-2-6/progress-rep.md` e `progress-prod.md`;
