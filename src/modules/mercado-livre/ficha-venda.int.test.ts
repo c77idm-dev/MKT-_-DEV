@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { VendaML } from '@/conectores/marketplace/mercadolivre/tipos';
-import { contasBitbrain, devolucoes, motivosReclamacaoMl, produtos, vendasMl } from '@/db/schema';
+import { contasBitbrain, devolucoes, motivosReclamacaoMl, produtos, reclamacoesMl, vendasMl } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarDevolucaoTeste, criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { dadosDevolucaoMLTeste, devolucaoExternaTeste } from '../../../tests/helpers/fabricas-ml';
@@ -58,6 +58,7 @@ describe('fichaDaDevolucao (E27)', () => {
       conta: 'Loja Falsa 1',
       motivo: 'Comprador se arrependeu',
       situacaoReclamacao: 'opened',
+      temReclamacao: true,
       vendas: [
         {
           pedidoId: pedido,
@@ -90,7 +91,7 @@ describe('fichaDaDevolucao (E27)', () => {
     await db.insert(vendasMl).values({ pedidoId: vazia.pedidos[0], atualizadaEm: AGORA });
     for (const d of [semLinha, vazia]) {
       const ficha = await fichaDaDevolucao(db, d.id);
-      expect(ficha).toMatchObject({ codigo: d.codigo, situacaoReclamacao: 'opened', motivo: null, conta: null });
+      expect(ficha).toMatchObject({ codigo: d.codigo, situacaoReclamacao: 'opened', motivo: null, conta: null, temReclamacao: true });
       expect(ficha?.vendas).toEqual([
         {
           pedidoId: d.pedidos[0],
@@ -109,13 +110,37 @@ describe('fichaDaDevolucao (E27)', () => {
 
   it('motivo sem o texto no cache: o código; sem reclamação gravada (devolução manual do ML): motivo e situação nulos', async () => {
     const comCodigo = await devolucaoML({ motivoId: 'PDD0000' });
-    expect(await fichaDaDevolucao(db, comCodigo.id)).toMatchObject({ motivo: 'PDD0000' });
+    expect(await fichaDaDevolucao(db, comCodigo.id)).toMatchObject({ motivo: 'PDD0000', temReclamacao: true });
     const operador = await criarUsuarioTeste(db);
     const manual = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido: 'P-DIGITADO' });
     expect(await fichaDaDevolucao(db, manual.id)).toMatchObject({
       motivo: null,
       situacaoReclamacao: null,
+      temReclamacao: false,
       vendas: [expect.objectContaining({ pedidoId: 'P-DIGITADO', temDados: false, urlNoML: null })],
+    });
+  });
+
+  it('(24/11) temReclamacao: só com uma linha em reclamacoes_ml ligada à devolução; o número digitado à mão não conta', async () => {
+    const operador = await criarUsuarioTeste(db);
+    // Criada à mão, com o número da reclamação digitado, sem linha em reclamacoes_ml: a venda nunca vai ser lida.
+    const manual = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido: '2000000000000777' });
+    await db.update(devolucoes).set({ reclamacaoId: '5999999999' }).where(eq(devolucoes.id, manual.id));
+    expect(await fichaDaDevolucao(db, manual.id)).toMatchObject({ temReclamacao: false, vendas: [expect.objectContaining({ temDados: false })] });
+    // A sincronização ligou uma reclamação a ela depois: tem reclamação.
+    await db.insert(reclamacoesMl).values({ claimId: '5999999999', devolucaoId: manual.id, statusReclamacao: 'opened', sincronizadaEm: AGORA });
+    expect(await fichaDaDevolucao(db, manual.id)).toMatchObject({ temReclamacao: true, situacaoReclamacao: 'opened' });
+  });
+
+  it('(24/11) sem reclamação, mas com a venda do pedido já lida por outra devolução: a ficha mostra a venda', async () => {
+    const pedido = '2000000000000888';
+    await devolucaoML({ pedidos: [pedido], vendas: [vendaTeste(pedido)] });
+    const operador = await criarUsuarioTeste(db);
+    const manual = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido: `${pedido}-2` });
+    await db.update(devolucoes).set({ pedidosExternos: [pedido] }).where(eq(devolucoes.id, manual.id));
+    expect(await fichaDaDevolucao(db, manual.id)).toMatchObject({
+      temReclamacao: false,
+      vendas: [expect.objectContaining({ pedidoId: pedido, temDados: true, situacao: 'paid' })],
     });
   });
 

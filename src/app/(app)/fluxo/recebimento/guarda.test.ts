@@ -11,6 +11,7 @@ const ficha = (devolucaoId: string, codigo: string) => ({
   conta: null,
   motivo: null,
   situacaoReclamacao: null,
+  temReclamacao: true,
   vendas: [],
   produtos: [],
 });

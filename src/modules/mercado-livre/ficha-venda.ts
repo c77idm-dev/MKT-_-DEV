@@ -45,6 +45,11 @@ export type FichaVenda = {
   motivo: string | null;
   /** Código do ML (opened, closed); o texto vem de rotuloSituacaoReclamacao. */
   situacaoReclamacao: string | null;
+  /**
+   * (24/11) false = nenhuma reclamação do ML ligada à devolução no sistema (sem linha em reclamacoes_ml; o número
+   * digitado à mão não conta), como a criada à mão: a venda só é lida pela reclamação, então nunca vai chegar.
+   */
+  temReclamacao: boolean;
   /** Uma por pedido da devolução, na ordem dela. */
   vendas: VendaDaFicha[];
   produtos: ProdutoDaDevolucao[];
@@ -118,6 +123,7 @@ export async function fichasDasDevolucoes(db: DbOuTx, ids: readonly string[]): P
           conta: r?.conta ?? contaDaVenda,
           motivo: r?.motivo ?? null,
           situacaoReclamacao: r?.situacao ?? null,
+          temReclamacao: r !== undefined,
           vendas: d.pedidos.map((pedidoId): VendaDaFicha => {
             const v = vendaDo.get(pedidoId);
             const itensDaVenda = (v?.itens ?? []).map((i): ItemFichaVenda => ({ ...i, fotoUrl: i.sku ? (fotoDo.get(normalizarSku(i.sku)) ?? null) : null }));

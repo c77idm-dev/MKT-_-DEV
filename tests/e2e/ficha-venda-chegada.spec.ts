@@ -94,11 +94,12 @@ test.describe('Receber pacote pelo número do pedido do ML', () => {
     await expect(resultado).toContainText(b.codigo);
     expect(await statusDas([a.codigo, b.codigo, c.codigo])).toEqual(['PENDENTE_CHEGADA', 'AGUARDANDO_CONFERENCIA', 'CONCLUIDA']);
 
-    // O mesmo pedido de novo: só a outra ainda espera, e aparece a ficha dela (sem os dados da venda ainda).
+    // O mesmo pedido de novo: só a outra ainda espera, e aparece a ficha dela (sem os dados da venda; criada à mão, sem
+    // reclamação no sistema, a ficha diz por quê).
     await campo.fill(pedido);
     await campo.press('Enter');
     await expect(escolha).toContainText(a.codigo);
-    await expect(escolha).toContainText('Os dados da venda ainda não chegaram do ML.');
+    await expect(escolha).toContainText('Sem os dados da venda do ML (devolução sem reclamação no sistema).');
     // (extra) Sem os itens da venda, a ficha mostra o produto esperado, para comparar com o pacote na mão.
     await expect(escolha.getByRole('list', { name: 'Produto esperado' })).toContainText(a.produto);
     await expect(escolha.getByRole('list', { name: 'Devoluções do pedido' })).toHaveCount(0);

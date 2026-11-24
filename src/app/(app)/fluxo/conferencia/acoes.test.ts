@@ -24,7 +24,7 @@ import { ErroConferencia } from '@/modules/conferencia/erros';
 import { abrirConferenciaAcao, type EstadoConferirPacote } from './acoes';
 
 function ficha(devolucaoId: string, codigo: string): FichaVenda {
-  return { devolucaoId, codigo, status: 'AGUARDANDO_CONFERENCIA', conta: null, motivo: null, situacaoReclamacao: null, vendas: [], produtos: [] };
+  return { devolucaoId, codigo, status: 'AGUARDANDO_CONFERENCIA', conta: null, motivo: null, situacaoReclamacao: null, temReclamacao: true, vendas: [], produtos: [] };
 }
 
 function form(campos: Record<string, string>): FormData {

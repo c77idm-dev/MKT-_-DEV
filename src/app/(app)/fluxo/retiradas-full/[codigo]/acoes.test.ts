@@ -28,7 +28,7 @@ import { darChegadaEtiquetaAmarelaAcao, procurarEtiquetaAmarelaAcao } from './ac
 const PEDIDO = '2000018992531744';
 
 function ficha(devolucaoId: string, codigo: string): FichaVenda {
-  return { devolucaoId, codigo, status: 'NO_CD_MARKETPLACE', conta: null, motivo: null, situacaoReclamacao: null, vendas: [], produtos: [] };
+  return { devolucaoId, codigo, status: 'NO_CD_MARKETPLACE', conta: null, motivo: null, situacaoReclamacao: null, temReclamacao: true, vendas: [], produtos: [] };
 }
 
 beforeEach(() => {

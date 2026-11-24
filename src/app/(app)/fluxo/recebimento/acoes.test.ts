@@ -24,7 +24,7 @@ const INICIAL: EstadoRecebimento = { tipo: 'inicial' };
 const PEDIDO = '2000018992531744';
 
 function ficha(devolucaoId: string, codigo: string): FichaVenda {
-  return { devolucaoId, codigo, status: 'PENDENTE_CHEGADA', conta: null, motivo: null, situacaoReclamacao: null, vendas: [], produtos: [] };
+  return { devolucaoId, codigo, status: 'PENDENTE_CHEGADA', conta: null, motivo: null, situacaoReclamacao: null, temReclamacao: true, vendas: [], produtos: [] };
 }
 
 /** A resposta `escolher` do servidor: as que esperam o pacote ([id, código]) e todos os códigos do pedido. */

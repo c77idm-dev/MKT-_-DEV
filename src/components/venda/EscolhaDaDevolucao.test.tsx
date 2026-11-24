@@ -13,6 +13,7 @@ function ficha(devolucaoId: string, codigo: string, descricao: string): FichaVen
     conta: null,
     motivo: null,
     situacaoReclamacao: null,
+    temReclamacao: true,
     vendas: [],
     produtos: [{ sku: `SKU-${devolucaoId}`, descricao, fotoUrl: null, quantidade: 1 }],
   };

@@ -33,6 +33,7 @@ const FICHA: DadosFicha = {
   conta: 'Megadino 2',
   motivo: 'Comprador se arrependeu',
   situacaoReclamacao: 'opened',
+  temReclamacao: true,
   vendas: [VENDA],
   produtos: [{ sku: 'FONE-01', descricao: 'Fone de Ouvido (cadastro)', fotoUrl: 'https://http2.mlstatic.com/fone.jpg', quantidade: 2 }],
 };
@@ -77,6 +78,29 @@ describe('FichaVenda (E27, extra)', () => {
     expect(screen.getByText('Comprador se arrependeu')).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Itens vendidos' })).toBeNull();
     expect(screen.getByRole('link', { name: /Abrir a venda no ML/ })).toBeTruthy();
+  });
+
+  it('(24/11) devolução do ML sem reclamação no sistema e sem os dados da venda: o aviso diz por quê, no lugar do "ainda não chegaram"', () => {
+    const vazia: VendaDaFicha = { ...VENDA, temDados: false, vendidaEm: null, situacao: null, situacaoEnvio: null, itens: [], total: null };
+    const semReclamacao: DadosFicha = { ...FICHA, motivo: null, situacaoReclamacao: null, temReclamacao: false, vendas: [vazia] };
+    render(<FichaVenda ficha={semReclamacao} mostrarCodigo />);
+    expect(screen.getByText('Sem os dados da venda do ML (devolução sem reclamação no sistema).')).toBeTruthy();
+    expect(screen.queryByText('Os dados da venda ainda não chegaram do ML.')).toBeNull();
+    // O resto continua: o pedido, o link e o produto esperado.
+    expect(screen.getByText('2000008003035430')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Abrir a venda no ML/ })).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Produto esperado' })).toBeTruthy();
+    // Sem nenhum pedido na ficha, o mesmo aviso.
+    cleanup();
+    render(<FichaVenda ficha={{ ...semReclamacao, vendas: [] }} />);
+    expect(screen.getByText('Sem os dados da venda do ML (devolução sem reclamação no sistema).')).toBeTruthy();
+    expect(screen.queryByText('Os dados da venda ainda não chegaram do ML.')).toBeNull();
+    // Com a venda do pedido já lida (por outra devolução do pedido), a ficha mostra a venda, sem aviso nenhum.
+    cleanup();
+    render(<FichaVenda ficha={{ ...semReclamacao, vendas: [VENDA] }} />);
+    expect(screen.getByText('Paga · Entregue')).toBeTruthy();
+    expect(screen.queryByText('Sem os dados da venda do ML (devolução sem reclamação no sistema).')).toBeNull();
+    expect(screen.queryByText('Os dados da venda ainda não chegaram do ML.')).toBeNull();
   });
 
   it('código que o sistema não conhece aparece como veio; sem valor de um item, o total fica "—"', () => {

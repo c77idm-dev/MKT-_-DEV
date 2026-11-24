@@ -5,8 +5,9 @@
  */
 import { expect, test } from '@playwright/test';
 import { idReclamacaoFalsa, idsDaReclamacaoFalsa } from '../../src/conectores/marketplace/mercadolivre/falso';
+import { reclamacoesMl } from '../../src/db/schema';
 import { criarDevolucaoTeste } from '../helpers/fabricas';
-import { comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { codigoUnico, comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { alvosDeToque44, avisarML, emModoFalso, esperarDevolucaoDaReclamacao, garantirContaFalsa } from './apoio-ml';
 import { FOTO_FONE_FALSO, fotoCarregada, responderFotosML, TITULO_FONE_FALSO } from './apoio-produtos-ml';
 import { USUARIOS_E2E } from './dados';
@@ -49,7 +50,7 @@ test('a devolução do ML mostra a ficha da venda: situação em pt-BR, itens co
   await semRolagemLateral(page);
 });
 
-test('sem os dados da venda: o aviso; devolução de outro canal: sem a seção', async ({ page }) => {
+test('sem os dados da venda: o aviso (sem reclamação no sistema, o motivo); devolução de outro canal: sem a seção', async ({ page }) => {
   // Um pedido por execução: só uma devolução em andamento por pedido e canal (cada projeto roda o teste uma vez).
   const pedido = `2000${Date.now()}`;
   const { semVenda, shopee } = await comBanco(async (db) => {
@@ -62,11 +63,19 @@ test('sem os dados da venda: o aviso; devolução de outro canal: sem a seção'
   await entrarComo(page, USUARIOS_E2E.operador);
   await page.goto(`/fluxo/devolucoes/${semVenda.codigo}`);
   const secao = page.getByRole('region', { name: 'Venda (extra)' });
-  await expect(secao).toContainText('Os dados da venda ainda não chegaram do ML.');
+  // (24/11) Criada à mão, sem reclamação no sistema: a venda nunca vai ser lida, e o aviso diz por quê.
+  await expect(secao).toContainText('Sem os dados da venda do ML (devolução sem reclamação no sistema).');
+  await expect(secao).not.toContainText('Os dados da venda ainda não chegaram do ML.');
   await expect(secao).toContainText(pedido);
   await expect(secao.getByRole('link', { name: /Abrir a venda no ML/ })).toHaveAttribute('href', `https://www.mercadolivre.com.br/vendas/${pedido}/detalhe`);
   await alvosDeToque44(secao);
   await semRolagemLateral(page);
+
+  // Com uma reclamação ligada a ela (como a sincronização faz), a venda ainda pode chegar: o aviso de sempre.
+  await comBanco((db) => db.insert(reclamacoesMl).values({ claimId: codigoUnico('E2EVENDA'), devolucaoId: semVenda.id, sincronizadaEm: new Date() }));
+  await page.reload();
+  await expect(secao).toContainText('Os dados da venda ainda não chegaram do ML.');
+  await expect(secao).not.toContainText('devolução sem reclamação no sistema');
 
   await page.goto(`/fluxo/devolucoes/${shopee.codigo}`);
   await expect(page.getByRole('region', { name: /^Itens/ })).toBeVisible();

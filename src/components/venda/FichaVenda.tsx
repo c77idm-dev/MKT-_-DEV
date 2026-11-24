@@ -54,6 +54,18 @@ function ItensVendidos({ venda }: { venda: VendaDaFicha }) {
 const unidades = (n: number) => `${n} ${n === 1 ? 'unidade' : 'unidades'}`;
 
 /**
+ * Sem os dados da venda. (24/11) A devolução do ML sem reclamação no sistema (criada à mão) nunca os recebe: a venda só
+ * é lida pela reclamação. Aí a ficha diz por quê, em vez de "ainda não chegaram".
+ */
+function SemDadosDaVenda({ temReclamacao }: { temReclamacao: boolean }) {
+  return (
+    <p className="text-sm text-texto-2">
+      {temReclamacao ? 'Os dados da venda ainda não chegaram do ML.' : 'Sem os dados da venda do ML (devolução sem reclamação no sistema).'}
+    </p>
+  );
+}
+
+/**
  * (extra) Sem os itens da venda, a ficha de uma devolução nas telas do Fluxo mostra o que ela espera receber (os itens
  * da devolução, com a foto do cadastro), para a pessoa comparar com o pacote na mão antes de tocar.
  */
@@ -83,7 +95,7 @@ function ProdutosEsperados({ produtos }: { produtos: ProdutoDaDevolucao[] }) {
   );
 }
 
-function BlocoVenda({ venda, conta }: { venda: VendaDaFicha; conta: string | null }) {
+function BlocoVenda({ venda, conta, temReclamacao }: { venda: VendaDaFicha; conta: string | null; temReclamacao: boolean }) {
   const situacao = rotuloSituacaoVenda(venda.situacao, venda.situacaoEnvio);
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -95,7 +107,7 @@ function BlocoVenda({ venda, conta }: { venda: VendaDaFicha; conta: string | nul
         {conta && <Dado rotulo="Conta">{conta}</Dado>}
         {situacao && <Dado rotulo="Situação">{situacao}</Dado>}
       </dl>
-      {!venda.temDados && <p className="text-sm text-texto-2">Os dados da venda ainda não chegaram do ML.</p>}
+      {!venda.temDados && <SemDadosDaVenda temReclamacao={temReclamacao} />}
       {venda.itens.length > 0 && <ItensVendidos venda={venda} />}
       {venda.urlNoML && (
         <a href={venda.urlNoML} target="_blank" rel="noopener noreferrer" className={`${BOTAO_SECUNDARIO} w-full sm:w-auto sm:self-start`}>
@@ -114,11 +126,11 @@ export function FichaVenda({ ficha, mostrarCodigo = false, children }: { ficha: 
     <div className="flex min-w-0 flex-col gap-3">
       {mostrarCodigo && <p className="font-mono text-lg font-bold">{ficha.codigo}</p>}
       {ficha.vendas.length === 0 ? (
-        <p className="text-sm text-texto-2">Os dados da venda ainda não chegaram do ML.</p>
+        <SemDadosDaVenda temReclamacao={ficha.temReclamacao} />
       ) : (
         ficha.vendas.map((venda, i) => (
           <div key={venda.pedidoId} className={i > 0 ? 'border-t border-borda pt-3' : undefined}>
-            <BlocoVenda venda={venda} conta={ficha.conta} />
+            <BlocoVenda venda={venda} conta={ficha.conta} temReclamacao={ficha.temReclamacao} />
           </div>
         ))
       )}

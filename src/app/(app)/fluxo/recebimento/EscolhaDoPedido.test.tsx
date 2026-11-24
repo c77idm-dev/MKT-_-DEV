@@ -14,6 +14,7 @@ function ficha(devolucaoId: string, codigo: string): FichaVenda {
     conta: null,
     motivo: null,
     situacaoReclamacao: null,
+    temReclamacao: true,
     vendas: [],
     produtos: [{ sku: `SKU-${codigo}`, descricao: `Produto ${codigo}`, fotoUrl: null, quantidade: 1 }],
   };
