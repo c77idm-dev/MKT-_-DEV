@@ -112,7 +112,7 @@ test.describe('Conferir pacote pelo número do pedido do ML', () => {
     await gravarVenda(pedido, { titulo: 'Carregador da venda', sku: 'SKU-CARREGADOR-E27', valor: 59.5 });
     await entrarComo(page, USUARIOS_E2E.operador);
     await page.goto('/fluxo/conferencia');
-    await page.getByLabel('Código de Rastreamento ou código DEV').fill(pedido.slice(1));
+    await page.getByLabel('Código de Rastreamento, código DEV ou número do pedido do ML (extra)').fill(pedido.slice(1));
     await page.getByRole('button', { name: 'Abrir conferência' }).click();
 
     const ficha = page.getByRole('region', { name: /Achada pelo número do pedido do ML/ });
@@ -132,7 +132,7 @@ test.describe('Conferir pacote pelo número do pedido do ML', () => {
     const [a, b, c] = await devolucoesDoPedido(pedido, ['AGUARDANDO_CONFERENCIA', 'AGUARDANDO_CONFERENCIA', 'PENDENTE_CHEGADA']);
     await entrarComo(page, USUARIOS_E2E.operador);
     await page.goto('/fluxo/conferencia');
-    const campo = page.getByLabel('Código de Rastreamento ou código DEV');
+    const campo = page.getByLabel('Código de Rastreamento, código DEV ou número do pedido do ML (extra)');
     await campo.fill(pedidoML());
     await page.getByRole('button', { name: 'Abrir conferência' }).click();
     await expect(page.locator('#erros-formulario')).toContainText('Nenhuma devolução com este código de rastreamento ou número do pedido do ML.');

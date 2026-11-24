@@ -80,10 +80,10 @@ export function FormularioConferirPacote({ acao }: { acao: Acao }) {
     <div className="flex flex-col gap-4">
       <ListaErros erros={estado.erros} />
       {estado.pedido && <FichasDoPedido key={estado.pedido.lidaEm} pedido={estado.pedido} aoEnviar={aoEnviar} pendente={pendente} />}
-      <LeitorCodigo rotulo="Ler com a câmera" titulo="Leitor da etiqueta do pacote" instrucao="Aponte para a etiqueta de rastreio do pacote." aoLer={aoLer} />
+      <LeitorCodigo rotulo="Ler com a câmera" titulo="Leitor da etiqueta do pacote" instrucao="Aponte para o rastreio da etiqueta do pacote ou para o número do pedido do ML (extra)." aoLer={aoLer} />
       <form ref={formularioRef} onSubmit={aoEnviar} className="flex flex-col gap-3">
         <label htmlFor="codigo" className={ROTULO}>
-          Código de Rastreamento ou código DEV
+          Código de Rastreamento, código DEV ou número do pedido do ML (extra)
         </label>
         <input
           ref={campoRef}

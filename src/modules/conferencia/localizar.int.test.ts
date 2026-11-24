@@ -30,11 +30,19 @@ describe('localizarParaConferencia ("Conferir pacote", extra)', () => {
   });
 
   it('explica quando não dá', async () => {
-    await expect(localizarParaConferencia(db, '  ', operador)).rejects.toThrow('Leia ou digite o código de rastreamento ou o código DEV.');
+    await expect(localizarParaConferencia(db, '  ', operador)).rejects.toThrow(
+      'Leia ou digite o código de rastreamento, o código DEV ou o número do pedido do ML (extra).',
+    );
     // (extra, E27) A mensagem cita também o número do pedido do ML, que o Conferir pacote passou a aceitar.
     await expect(localizarParaConferencia(db, 'BRNADA', operador)).rejects.toThrow(new ErroConferencia(NAO_ACHOU));
     const pendente = await criarDevolucaoTeste(db, operador, { rastreio: 'BRPENDENTE' });
     await expect(localizarParaConferencia(db, 'BRPENDENTE', operador)).rejects.toThrow(`${pendente.codigo} está pendente de chegada. Registre a chegada no Recebimento primeiro.`);
+    // (extra) A No CD também chega pelo Recebimento (E25), e a sigla "CD" fica.
+    const noCd = await criarDevolucaoTeste(db, operador, { rastreio: 'BRNOCD' });
+    await db.update(devolucoes).set({ status: 'NO_CD_MARKETPLACE' }).where(eq(devolucoes.id, noCd.id));
+    await expect(localizarParaConferencia(db, 'BRNOCD', operador)).rejects.toThrow(
+      new ErroConferencia(`${noCd.codigo} está no CD do marketplace. Registre a chegada no Recebimento primeiro.`),
+    );
   });
 
   it('mesmo rastreio em duas devoluções abertas (o mesmo pacote, Fase 1 decisão 8): pede para escolher pela lista', async () => {
@@ -71,10 +79,20 @@ describe('localizarParaConferencia pelo número do pedido do ML (extra, emenda E
     expect(await localizarParaConferencia(db, '2000018992531745', operador)).toEqual({ tipo: 'pedido', codigoLido: '2000018992531745', ids: [a.id, b.id] });
   });
 
-  it('nenhuma aberta: diz como está a mais recente (a pendente pede a chegada primeiro)', async () => {
+  it('nenhuma aberta: diz como está a mais recente, achada pelo número do pedido (a que espera o pacote pede a chegada primeiro)', async () => {
     const [, pendente] = await doPedido('2000018992531746', ['CONCLUIDA', 'PENDENTE_CHEGADA']);
     await expect(localizarParaConferencia(db, '2000018992531746', operador)).rejects.toThrow(
-      new ErroConferencia(`${pendente.codigo} está pendente de chegada. Registre a chegada no Recebimento primeiro.`),
+      new ErroConferencia(
+        `${pendente.codigo} está pendente de chegada. Registre a chegada no Recebimento primeiro. Achada pelo número do pedido do ML (extra).`,
+      ),
+    );
+    const [, noCd] = await doPedido('2000018992531749', ['CONCLUIDA', 'NO_CD_MARKETPLACE']);
+    await expect(localizarParaConferencia(db, '2000018992531749', operador)).rejects.toThrow(
+      new ErroConferencia(`${noCd.codigo} está no CD do marketplace. Registre a chegada no Recebimento primeiro. Achada pelo número do pedido do ML (extra).`),
+    );
+    const [, concluida] = await doPedido('2000018992531750', ['CANCELADA', 'CONCLUIDA']);
+    await expect(localizarParaConferencia(db, '2000018992531750', operador)).rejects.toThrow(
+      new ErroConferencia(`${concluida.codigo} está concluída. Achada pelo número do pedido do ML (extra).`),
     );
   });
 

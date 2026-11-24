@@ -17,10 +17,20 @@ export type Localizada = { tipo: 'devolucao'; id: string; codigo: string } | { t
 /** Abertas para a conferência. */
 const ABERTAS: StatusDevolucao[] = ['AGUARDANDO_CONFERENCIA', 'EM_CONFERENCIA'];
 
-/** Nenhuma aberta: diz como está a mais recente. */
-function erroDaMaisRecente(d: { codigo: string; status: StatusDevolucao }): ErroConferencia {
-  const dica = d.status === 'PENDENTE_CHEGADA' ? ' Registre a chegada no Recebimento primeiro.' : '';
-  return new ErroConferencia(`${d.codigo} está ${rotuloStatus(d.status).toLowerCase()}.${dica}`);
+/** Esperam o pacote: a chegada vem antes, no Recebimento (a No CD também, desde a E25). */
+const ESPERANDO_PACOTE: StatusDevolucao[] = ['PENDENTE_CHEGADA', 'NO_CD_MARKETPLACE'];
+
+/** O rótulo do status no meio da frase: só a primeira letra em minúscula, para a sigla "CD" ficar. */
+function statusNaFrase(status: StatusDevolucao): string {
+  const rotulo = rotuloStatus(status);
+  return rotulo.charAt(0).toLowerCase() + rotulo.slice(1);
+}
+
+/** Nenhuma aberta: diz como está a mais recente; (extra, E27) achada pelo pedido, diz isso também. */
+function erroDaMaisRecente(d: { codigo: string; status: StatusDevolucao }, peloPedido = false): ErroConferencia {
+  const dica = ESPERANDO_PACOTE.includes(d.status) ? ' Registre a chegada no Recebimento primeiro.' : '';
+  const nota = peloPedido ? ' Achada pelo número do pedido do ML (extra).' : '';
+  return new ErroConferencia(`${d.codigo} está ${statusNaFrase(d.status)}.${dica}${nota}`);
 }
 
 /**
@@ -33,7 +43,7 @@ function erroDaMaisRecente(d: { codigo: string; status: StatusDevolucao }): Erro
 export async function localizarParaConferencia(db: DbOuTx, texto: string, usuario: UsuarioSessao): Promise<Localizada> {
   void usuario;
   const limpo = texto.trim();
-  if (!limpo) throw new ErroConferencia('Leia ou digite o código de rastreamento ou o código DEV.');
+  if (!limpo) throw new ErroConferencia('Leia ou digite o código de rastreamento, o código DEV ou o número do pedido do ML (extra).');
   if (/^DEV-\d+$/i.test(limpo)) {
     const [d] = await db.select({ id: devolucoes.id, codigo: devolucoes.codigo }).from(devolucoes).where(eq(devolucoes.codigo, limpo.toUpperCase()));
     if (!d) throw new ErroConferencia(`Devolução ${limpo.toUpperCase()} não encontrada.`);
@@ -50,7 +60,7 @@ export async function localizarParaConferencia(db: DbOuTx, texto: string, usuari
     if (doPedido.length > 0) {
       const abertas = doPedido.filter((d) => ABERTAS.includes(d.status));
       if (abertas.length > 0) return { tipo: 'pedido', codigoLido: codigo, ids: abertas.map((d) => d.id) };
-      throw erroDaMaisRecente(doPedido[doPedido.length - 1]);
+      throw erroDaMaisRecente(doPedido[doPedido.length - 1], true);
     }
     throw new ErroConferencia(
       'Nenhuma devolução com este código de rastreamento ou número do pedido do ML. Use o código DEV ou abra a devolução pela lista da etapa 2.',
