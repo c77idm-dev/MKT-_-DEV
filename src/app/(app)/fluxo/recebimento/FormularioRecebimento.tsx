@@ -83,7 +83,8 @@ function LinksDevolucoes({ codigos }: { codigos: string[] }) {
 /**
  * Cartão grande do resultado. O texto visível fica escondido do leitor de tela porque a região aria-live (acima) já o anuncia.
  * `nota` (extra, E25): por qual número da etiqueta do ML a devolução foi achada.
- * `aviso` (extra, E27): no cartão verde, as outras devoluções do mesmo pedido que ainda esperam o pacote, em destaque.
+ * `aviso` (extra, E27): no cartão verde (e, 24/11, no amarelo "Este pacote já chegou"), as outras devoluções do mesmo
+ * pedido que ainda esperam o pacote, em destaque.
  */
 function Cartao({
   tom,
@@ -131,9 +132,12 @@ function Cartao({
   );
 }
 
-/** (extra, E27) O aviso das devoluções do mesmo pedido que ainda esperam o pacote, só no cartão verde que o tem. */
+/**
+ * (extra, E27) O aviso das devoluções do mesmo pedido que ainda esperam o pacote, só no cartão que o tem: o verde e
+ * (24/11) o amarelo "Este pacote já chegou".
+ */
 function avisoDoCartao(estado: EstadoRecebimento): string | undefined {
-  return estado.tipo === 'sucesso' && estado.aindaEsperam?.length ? avisoAindaEsperam(estado.aindaEsperam) : undefined;
+  return (estado.tipo === 'sucesso' || estado.tipo === 'aviso') && estado.aindaEsperam?.length ? avisoAindaEsperam(estado.aindaEsperam) : undefined;
 }
 
 function textoAnunciado(estado: EstadoRecebimento): string {

@@ -220,3 +220,92 @@ describe('registrarChegadaAcao: o cartão verde diante de outro código do mesmo
     expect(mocks.fichas).not.toHaveBeenCalled();
   });
 });
+
+describe('registrarChegadaAcao: o amarelo "Este pacote já chegou" diante do número do pedido, pela câmera (extra, E27; 24/11)', () => {
+  /** A DEV-000001 (A) já tinha chegado; a câmera leu o rastreio dela. B, do mesmo pedido, ainda espera o pacote. */
+  const RASTREIO_A = 'MM48503476449BRSP02';
+  const JA_A = { tipo: 'ja_recebida', codigo: 'DEV-000001', status: 'AGUARDANDO_CONFERENCIA', recebidaEm: new Date('2026-11-23T17:30:00-03:00') };
+
+  async function amareloDeA(): Promise<EstadoRecebimento> {
+    mocks.receber.mockResolvedValueOnce(JA_A);
+    const estado = await registrarChegadaAcao(INICIAL, form({ intencao: 'receber', rastreio: RASTREIO_A, origem: 'camera' }));
+    expect(estado).toMatchObject({ tipo: 'aviso', titulo: 'Este pacote já chegou', codigos: ['DEV-000001'] });
+    return estado;
+  }
+
+  it('a câmera lê o pedido depois do rastreio: o amarelo fica, sem a ficha da outra devolução, e avisa a que ainda espera', async () => {
+    const amarelo = await amareloDeA();
+    mocks.receber.mockResolvedValue(escolher(PEDIDO.slice(1), [['b', 'DEV-000002']], ['DEV-000001', 'DEV-000002']));
+    const estado = await registrarChegadaAcao(amarelo, form({ intencao: 'receber', rastreio: PEDIDO.slice(1), origem: 'camera' }));
+    expect(estado).toEqual({ ...amarelo, aindaEsperam: ['DEV-000002'] });
+    expect(mocks.fichas).not.toHaveBeenCalled();
+    expect(mocks.darChegada).not.toHaveBeenCalled();
+    // A câmera relê a mesma etiqueta: nada muda (o mesmo estado).
+    expect(await registrarChegadaAcao(estado, form({ intencao: 'receber', rastreio: PEDIDO, origem: 'camera' }))).toBe(estado);
+  });
+
+  it('pelo campo (digitação ou leitor USB), o mesmo pedido mostra a ficha da que espera o pacote, como antes', async () => {
+    const amarelo = await amareloDeA();
+    mocks.receber.mockResolvedValue(escolher(PEDIDO, [['b', 'DEV-000002']], ['DEV-000001', 'DEV-000002']));
+    mocks.fichas.mockResolvedValue([ficha('b', 'DEV-000002')]);
+    expect(await registrarChegadaAcao(amarelo, form({ intencao: 'receber', rastreio: PEDIDO }))).toMatchObject({
+      tipo: 'escolher',
+      fichas: [{ codigo: 'DEV-000002' }],
+    });
+  });
+
+  it('outro pedido pela câmera: a ficha dele aparece', async () => {
+    const amarelo = await amareloDeA();
+    mocks.receber.mockResolvedValue(escolher('2000011112222333', [['c', 'DEV-000003']], ['DEV-000003']));
+    mocks.fichas.mockResolvedValue([ficha('c', 'DEV-000003')]);
+    expect(await registrarChegadaAcao(amarelo, form({ intencao: 'receber', rastreio: '2000011112222333', origem: 'camera' }))).toMatchObject({
+      tipo: 'escolher',
+      fichas: [{ codigo: 'DEV-000003' }],
+    });
+  });
+
+  it('o pedido só tem devoluções que já chegaram (o "já chegou" é da mais recente, outra): pela câmera o amarelo de A fica e o aviso sai', async () => {
+    const amarelo = await amareloDeA();
+    const comAviso = { ...amarelo, aindaEsperam: ['DEV-000002'] } as EstadoRecebimento;
+    mocks.receber.mockResolvedValue({
+      tipo: 'ja_recebida',
+      codigo: 'DEV-000002',
+      status: 'AGUARDANDO_CONFERENCIA',
+      recebidaEm: new Date('2026-11-24T09:00:00-03:00'),
+      achadaPor: 'PEDIDO_ML',
+      codigosDoPedido: ['DEV-000001', 'DEV-000002'],
+    });
+    expect(await registrarChegadaAcao(amarelo, form({ intencao: 'receber', rastreio: PEDIDO, origem: 'camera' }))).toBe(amarelo);
+    expect(await registrarChegadaAcao(comAviso, form({ intencao: 'receber', rastreio: PEDIDO, origem: 'camera' }))).toEqual(amarelo);
+    // Pelo campo, o "já chegou" da mais recente aparece como sempre.
+    expect(await registrarChegadaAcao(amarelo, form({ intencao: 'receber', rastreio: PEDIDO }))).toMatchObject({
+      tipo: 'aviso',
+      titulo: 'Este pacote já chegou',
+      codigos: ['DEV-000002'],
+    });
+  });
+
+  it('"Fale com o Gestor" de A (pelo rastreio) não ganhou a proteção: o pedido pela câmera mostra a ficha de B, como antes', async () => {
+    mocks.receber.mockResolvedValueOnce({ tipo: 'bloqueada', codigo: 'DEV-000001', status: 'CANCELADA' });
+    const gestor = await registrarChegadaAcao(INICIAL, form({ intencao: 'receber', rastreio: RASTREIO_A, origem: 'camera' }));
+    expect(gestor).toMatchObject({ tipo: 'aviso', titulo: 'Fale com o Gestor' });
+    mocks.receber.mockResolvedValue(escolher(PEDIDO, [['b', 'DEV-000002']], ['DEV-000001', 'DEV-000002']));
+    mocks.fichas.mockResolvedValue([ficha('b', 'DEV-000002')]);
+    expect(await registrarChegadaAcao(gestor, form({ intencao: 'receber', rastreio: PEDIDO, origem: 'camera' }))).toMatchObject({
+      tipo: 'escolher',
+      fichas: [{ codigo: 'DEV-000002' }],
+    });
+  });
+
+  it('o "já chegou" depois de "Dar chegada" (outro celular deu antes) também fica diante do pedido pela câmera', async () => {
+    mocks.darChegada.mockResolvedValueOnce({ tipo: 'ja_recebida', codigo: 'DEV-000001', status: 'AGUARDANDO_CONFERENCIA', recebidaEm: null, achadaPor: 'PEDIDO_ML' });
+    const amarelo = await registrarChegadaAcao(INICIAL, form({ intencao: 'dar_chegada', devolucaoId: 'a', codigoLido: PEDIDO }));
+    expect(amarelo).toMatchObject({ tipo: 'aviso', titulo: 'Este pacote já chegou' });
+    mocks.receber.mockResolvedValue(escolher(PEDIDO, [['b', 'DEV-000002']], ['DEV-000001', 'DEV-000002']));
+    expect(await registrarChegadaAcao(amarelo, form({ intencao: 'receber', rastreio: PEDIDO, origem: 'camera' }))).toEqual({
+      ...amarelo,
+      aindaEsperam: ['DEV-000002'],
+    });
+    expect(mocks.fichas).not.toHaveBeenCalled();
+  });
+});

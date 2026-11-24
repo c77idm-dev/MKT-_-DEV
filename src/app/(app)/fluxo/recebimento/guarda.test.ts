@@ -23,6 +23,21 @@ const ESCOLHA: EstadoRecebimento = {
 };
 /** O cartão verde de uma chegada dada pelo rastreio (sem nada do pedido). */
 const VERDE_A: EstadoRecebimento = { tipo: 'sucesso', titulo: 'Chegada registrada', mensagem: 'DEV-000001 · 24/11/2026 10:30', codigos: ['DEV-000001'] };
+/** O cartão amarelo "Este pacote já chegou" da DEV-000001, lida pelo rastreio (sem nada do pedido). */
+const AMARELO_A: EstadoRecebimento = {
+  tipo: 'aviso',
+  titulo: 'Este pacote já chegou',
+  mensagem: 'DEV-000001 já tinha chegado em 23/11/2026 17:30. Status: Aguardando conferência.',
+  codigos: ['DEV-000001'],
+  jaChegou: true,
+};
+/** O cartão amarelo "Fale com o Gestor" da DEV-000001: fica como está (só o "já chegou" ganhou a proteção). */
+const GESTOR_A: EstadoRecebimento = {
+  tipo: 'aviso',
+  titulo: 'Fale com o Gestor',
+  mensagem: 'DEV-000001 está cancelada. Separe o pacote e avise o Gestor.',
+  codigos: ['DEV-000001'],
+};
 
 describe('podeAceitarLeitura', () => {
   it('aceita leitura quando está livre', () => {
@@ -82,6 +97,14 @@ describe('mesmoPedidoDaCamera (extra, E27)', () => {
     expect(mesmoPedidoDaCamera(VERDE_A, true, ['DEV-000001', 'DEV-000002'])).toBe(true);
   });
 
+  it('(24/11) pela câmera, o amarelo "Este pacote já chegou" de uma devolução do pedido também fica', () => {
+    expect(mesmoPedidoDaCamera(AMARELO_A, true, ['DEV-000001', 'DEV-000002'])).toBe(true);
+    // Pelo campo, outro pedido, ou o "Fale com o Gestor": a resposta nova aparece, como antes.
+    expect(mesmoPedidoDaCamera(AMARELO_A, false, ['DEV-000001', 'DEV-000002'])).toBe(false);
+    expect(mesmoPedidoDaCamera(AMARELO_A, true, ['DEV-000003', 'DEV-000004'])).toBe(false);
+    expect(mesmoPedidoDaCamera(GESTOR_A, true, ['DEV-000001', 'DEV-000002'])).toBe(false);
+  });
+
   it('pelo campo (digitação ou leitor USB), outro pedido ou outra tela: a resposta nova aparece', () => {
     expect(mesmoPedidoDaCamera(VERDE_A, false, ['DEV-000001', 'DEV-000002'])).toBe(false);
     expect(mesmoPedidoDaCamera(ESCOLHA, false, ['DEV-000001'])).toBe(false);
@@ -107,9 +130,17 @@ describe('comAvisoDoPedido (extra, E27)', () => {
     expect(comAvisoDoPedido({ ...VERDE_A, aindaEsperam: ['DEV-000002'] }, [])).toEqual(VERDE_A);
   });
 
-  it('a devolução do próprio cartão não entra no aviso; fora do cartão verde, nada muda', () => {
+  it('a devolução do próprio cartão não entra no aviso; fora do cartão verde (e do amarelo "já chegou"), nada muda', () => {
     expect(comAvisoDoPedido(VERDE_A, ['DEV-000001'])).toBe(VERDE_A);
     expect(comAvisoDoPedido(ESCOLHA, ['DEV-000002'])).toBe(ESCOLHA);
     expect(comAvisoDoPedido(INICIAL, ['DEV-000002'])).toBe(INICIAL);
+    expect(comAvisoDoPedido(GESTOR_A, ['DEV-000002'])).toBe(GESTOR_A);
+  });
+
+  it('(24/11) o amarelo "Este pacote já chegou" ganha o mesmo aviso, e o perde quando nenhuma espera mais', () => {
+    const comAviso = comAvisoDoPedido(AMARELO_A, ['DEV-000001', 'DEV-000002']);
+    expect(comAviso).toEqual({ ...AMARELO_A, aindaEsperam: ['DEV-000002'] });
+    expect(comAvisoDoPedido(comAviso, ['DEV-000002'])).toBe(comAviso);
+    expect(comAvisoDoPedido(comAviso, [])).toEqual(AMARELO_A);
   });
 });

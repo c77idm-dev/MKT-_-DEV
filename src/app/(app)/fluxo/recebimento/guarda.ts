@@ -29,34 +29,55 @@ export function mesmaLeituraDaCamera(anterior: EstadoRecebimento, daCamera: bool
 }
 
 /**
+ * (extra, E27) O cartão que fica diante de outro código do mesmo pedido lido pela câmera: o verde de qualquer chegada e
+ * (24/11, aprovado pelo usuário) o amarelo "Este pacote já chegou". Os códigos DEV dele; em outra tela (o "Fale com o
+ * Gestor" inclusive), nenhum.
+ */
+function codigosDoCartaoQueFica(estado: EstadoRecebimento): readonly string[] {
+  return estado.tipo === 'sucesso' || (estado.tipo === 'aviso' && estado.jaChegou) ? estado.codigos : [];
+}
+
+/**
+ * (extra, E27) Pela câmera, o cartão verde (ou, 24/11, o amarelo "Este pacote já chegou") de uma devolução do pedido
+ * lido: a leitura é da mesma etiqueta e o cartão fica. `codigosDoPedido`: todas as devoluções do pedido, em qualquer
+ * status. Pelo campo (digitação ou leitor USB), não.
+ */
+export function cartaoDoMesmoPedidoDaCamera(anterior: EstadoRecebimento, daCamera: boolean, codigosDoPedido: readonly string[]): boolean {
+  return daCamera && codigosDoCartaoQueFica(anterior).some((c) => codigosDoPedido.includes(c));
+}
+
+/**
  * (extra, E27) Pelo número do pedido a tela mostra a ficha (ou a lista) e espera o toque em "Dar chegada".
  * `codigosDoPedido`: todas as devoluções do pedido lido, em qualquer status. Pela câmera, a leitura é da mesma etiqueta:
  * - com o cartão verde de uma devolução do pedido, qualquer que tenha sido a chegada (pelo rastreio, pelo número do
  *   envio ou por "Dar chegada"). Sem isso, a outra devolução do mesmo pedido, que ainda espera o pacote, apareceria no
  *   lugar dele em menos de 1 s com "Dar chegada", e um toque registraria a chegada de um pacote que não veio. O cartão
  *   fica, com o aviso das que ainda esperam (comAvisoDoPedido);
+ * - (24/11) com o amarelo "Este pacote já chegou" de uma devolução do pedido (lida pelo rastreio, pelo número do envio
+ *   ou pelo pedido, ou depois de "Dar chegada"), pelo mesmo motivo. O "Fale com o Gestor" continua dando lugar à ficha;
  * - com a ficha aberta e alguma devolução dela no pedido. É só defesa: com a ficha na tela a câmera não manda nada
  *   (podeAceitarLeitura); vale para uma leitura mandada logo antes de a ficha aparecer.
  * Pelo campo (digitação ou leitor USB) a resposta nova aparece.
  */
 export function mesmoPedidoDaCamera(anterior: EstadoRecebimento, daCamera: boolean, codigosDoPedido: readonly string[]): boolean {
-  if (!daCamera) return false;
-  const naTela = anterior.tipo === 'escolher' ? anterior.fichas.map((f) => f.codigo) : anterior.tipo === 'sucesso' ? anterior.codigos : [];
-  return naTela.some((c) => codigosDoPedido.includes(c));
+  if (anterior.tipo === 'escolher') return daCamera && anterior.fichas.some((f) => codigosDoPedido.includes(f.codigo));
+  return cartaoDoMesmoPedidoDaCamera(anterior, daCamera, codigosDoPedido);
 }
 
 /**
- * (extra, E27) O cartão verde que fica diante de outro código do mesmo pedido avisa quais devoluções desse pedido ainda
- * esperam o pacote (`aindaEsperam`; vazio tira o aviso): quem recebe pela câmera os pacotes do mesmo pedido não segue
- * achando que o 2º também chegou. Sem mudança, devolve o mesmo estado; fora do cartão verde, nada muda.
+ * (extra, E27) O cartão que fica diante de outro código do mesmo pedido (o verde ou, 24/11, o amarelo "Este pacote já
+ * chegou") avisa quais devoluções desse pedido ainda esperam o pacote (`aindaEsperam`; vazio tira o aviso): quem recebe
+ * pela câmera os pacotes do mesmo pedido não segue achando que o 2º também chegou. Sem mudança, devolve o mesmo estado;
+ * fora desses cartões, nada muda.
  */
 export function comAvisoDoPedido(anterior: EstadoRecebimento, aindaEsperam: readonly string[]): EstadoRecebimento {
-  if (anterior.tipo !== 'sucesso') return anterior;
-  const novas = aindaEsperam.filter((c) => !anterior.codigos.includes(c));
-  const atuais = anterior.aindaEsperam ?? [];
-  if (novas.length === atuais.length && novas.every((c, i) => c === atuais[i])) return anterior;
-  if (novas.length > 0) return { ...anterior, aindaEsperam: novas };
-  const semAviso = { ...anterior };
+  const cartao = anterior.tipo === 'sucesso' || (anterior.tipo === 'aviso' && anterior.jaChegou) ? anterior : null;
+  if (!cartao) return anterior;
+  const novas = aindaEsperam.filter((c) => !cartao.codigos.includes(c));
+  const atuais = cartao.aindaEsperam ?? [];
+  if (novas.length === atuais.length && novas.every((c, i) => c === atuais[i])) return cartao;
+  if (novas.length > 0) return { ...cartao, aindaEsperam: novas };
+  const semAviso = { ...cartao };
   delete semAviso.aindaEsperam;
   return semAviso;
 }

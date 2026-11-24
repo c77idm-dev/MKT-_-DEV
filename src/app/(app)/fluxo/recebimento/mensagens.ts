@@ -37,8 +37,9 @@ function listaComE(itens: readonly string[]): string {
 }
 
 /**
- * (extra, E27) O cartão verde ficou diante de outro código do mesmo pedido lido pela câmera (ver comAvisoDoPedido): as
- * outras devoluções do pedido que ainda esperam o pacote. Pelo campo, o número do pedido mostra a ficha delas.
+ * (extra, E27) O cartão verde (ou, 24/11, o amarelo "Este pacote já chegou") ficou diante de outro código do mesmo
+ * pedido lido pela câmera (ver comAvisoDoPedido): as outras devoluções do pedido que ainda esperam o pacote. Pelo
+ * campo, o número do pedido mostra a ficha delas.
  */
 export function avisoAindaEsperam(codigos: readonly string[]): string {
   return codigos.length > 1
