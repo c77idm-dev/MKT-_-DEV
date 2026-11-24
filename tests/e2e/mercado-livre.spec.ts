@@ -75,7 +75,8 @@ test('a devolução do ML falso mostra o motivo da reclamação no cartão e no 
 
   await page.goto(`/fluxo/devolucoes/${codigo}`);
   await expect(page.getByRole('heading', { level: 1, name: codigo })).toBeVisible();
-  await expect(page.getByText('Comprador se arrependeu', { exact: true })).toBeVisible();
+  // No "Motivo do cliente" dos dados (a ficha da venda, E27, também mostra o motivo da reclamação).
+  await expect(page.getByRole('region', { name: 'Dados' }).getByText('Comprador se arrependeu', { exact: true })).toBeVisible();
 
   // Motivo longo (digitado à mão, por exemplo): uma linha com reticências, sem rolagem lateral no celular.
   const longo = 'O comprador disse que o produto chegou diferente do anunciado, com a cor e o tamanho trocados e a caixa amassada';
