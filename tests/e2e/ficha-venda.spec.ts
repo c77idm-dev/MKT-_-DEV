@@ -50,10 +50,12 @@ test('a devolução do ML mostra a ficha da venda: situação em pt-BR, itens co
 });
 
 test('sem os dados da venda: o aviso; devolução de outro canal: sem a seção', async ({ page }) => {
+  // Um pedido por execução: só uma devolução em andamento por pedido e canal (cada projeto roda o teste uma vez).
+  const pedido = `2000${Date.now()}`;
   const { semVenda, shopee } = await comBanco(async (db) => {
     const operador = await usuarioPorEmail(db, USUARIOS_E2E.operador.email);
     return {
-      semVenda: await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido: '2000009999999991' }),
+      semVenda: await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido }),
       shopee: await criarDevolucaoTeste(db, operador, { canal: 'SHOPEE' }),
     };
   });
@@ -61,8 +63,8 @@ test('sem os dados da venda: o aviso; devolução de outro canal: sem a seção'
   await page.goto(`/fluxo/devolucoes/${semVenda.codigo}`);
   const secao = page.getByRole('region', { name: 'Venda (extra)' });
   await expect(secao).toContainText('Os dados da venda ainda não chegaram do ML.');
-  await expect(secao).toContainText('2000009999999991');
-  await expect(secao.getByRole('link', { name: /Abrir a venda no ML/ })).toHaveAttribute('href', 'https://www.mercadolivre.com.br/vendas/2000009999999991/detalhe');
+  await expect(secao).toContainText(pedido);
+  await expect(secao.getByRole('link', { name: /Abrir a venda no ML/ })).toHaveAttribute('href', `https://www.mercadolivre.com.br/vendas/${pedido}/detalhe`);
   await alvosDeToque44(secao);
   await semRolagemLateral(page);
 
