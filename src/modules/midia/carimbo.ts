@@ -8,9 +8,12 @@ sharp.concurrency(1);
 /** Spec §9: ~1600 px no maior lado. */
 export const LADO_MAIOR = 1600;
 
-/** "12/11/2026 14:03 · DEV-000123 · Ana Souza": hora de Brasília em que o servidor recebeu (decisão 6). */
-export function textoCarimbo(p: { quando: Date; codigo: string; usuario: string }): string {
-  return `${formatarDataHora(p.quando)} · ${p.codigo} · ${p.usuario}`;
+/**
+ * "12/11/2026 14:03 · DEV-000123": hora de Brasília em que o servidor recebeu e o código (decisão 6, mudada pela E28 em
+ * 24/11/2026: sem o nome de quem enviou). As fotos antigas ficam com o nome gravado; o histórico da tela diz quem enviou.
+ */
+export function textoCarimbo(p: { quando: Date; codigo: string }): string {
+  return `${formatarDataHora(p.quando)} · ${p.codigo}`;
 }
 
 export function escaparXml(texto: string): string {
@@ -31,7 +34,7 @@ export function svgCarimbo(largura: number, altura: number, texto: string): stri
 
 export async function carimbarFoto(
   entrada: Buffer,
-  p: { quando: Date; codigo: string; usuario: string },
+  p: { quando: Date; codigo: string },
 ): Promise<{ conteudo: Buffer; largura: number; altura: number }> {
   const { data, info } = await sharp(entrada, { failOn: 'error', limitInputPixels: 50_000_000 })
     .autoOrient()

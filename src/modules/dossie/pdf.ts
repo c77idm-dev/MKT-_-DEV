@@ -342,7 +342,7 @@ async function montar(
   }
 
   function carimboDe(x: EvidenciaDossie): string {
-    return textoCarimbo({ quando: x.enviadoEm, codigo: d.codigo, usuario: x.enviadoPorNome ?? 'usuário removido' });
+    return textoCarimbo({ quando: x.enviadoEm, codigo: d.codigo });
   }
 
   async function conteudoDaCelula(c: Celula): Promise<{ imagem: ImagemPdf } | { aviso: string }> {

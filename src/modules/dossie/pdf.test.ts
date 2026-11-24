@@ -230,12 +230,13 @@ describe('gerarPdfDossie (extra)', () => {
     expect(comSubtitulo[0]).toContain('Foto da avaria 1');
   });
 
-  it('pacote e unidades levam o carimbo de cada foto (data e hora da captura)', async () => {
+  it('pacote e unidades levam o carimbo de cada foto (data e hora da captura e o código, sem o nome: E28)', async () => {
     const paginas = await paginasDoPdf((await gerarPdfDossie(dadosTeste(), midiasTeste())).bytes);
     expect(paginas[1]).toContain('Foto 1');
     expect(paginas[1]).toContain('Etiqueta de rastreio e declaração de conteúdo');
     expect(paginas[1]).toContain('Foto 2');
-    expect(paginas[1]).toContain('19/11/2026 10:02 · DEV-000123 · Operador Teste');
+    expect(paginas[1]).toContain('Carimbo: 19/11/2026 10:02 · DEV-000123');
+    expect(paginas[1]).not.toContain('Operador Teste');
   });
 
   it('vídeo: um quadro, a data e a duração, e o aviso de que vai em arquivo separado', async () => {
@@ -321,7 +322,7 @@ describe('gerarPdfDossie (extra)', () => {
       if (e.sha256Final) expect(integridade).toContain(e.sha256Final);
     }
     expect(integridade).toContain(`${'c'.repeat(64)} (calculado agora)`);
-    expect(integridade).toContain('19/11/2026 10:02 · DEV-000123 · Operador Teste');
+    expect(integridade).toContain('19/11/2026 10:02 · DEV-000123');
     expect(integridade).toContain('Foto da avaria 2 · Unidade 1');
     expect(integridade).toContain('Vídeo de Prova');
   });
