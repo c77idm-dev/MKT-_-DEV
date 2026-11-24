@@ -19,7 +19,7 @@ export default async function PaginaConferirPacote() {
       </Link>
       <div>
         <h1 className="text-xl font-bold">Conferir pacote</h1>
-        <p className="text-sm text-texto-2">Leia a etiqueta de rastreio do pacote (ou digite o código DEV) para abrir a conferência.</p>
+        <p className="text-sm text-texto-2">Leia a etiqueta de rastreio do pacote, ou digite o código DEV ou o número do pedido do ML (extra), para abrir a conferência.</p>
       </div>
       <FormularioConferirPacote acao={abrirConferenciaAcao} />
     </div>
