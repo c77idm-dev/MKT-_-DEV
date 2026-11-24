@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { contestacoesCanal, devolucoes, itensDevolucao, motivosReclamacaoMl, reclamacoesMl } from '@/db/schema';
 import { EXTRAS_VAZIOS } from '@/conectores/marketplace/mercadolivre/mapeamento';
 import { obterContestacao } from './contestacoes';
-import { receberPorRastreio } from '@/modules/devolucoes/recebimento';
+import { darChegadaPeloPedido, receberPorRastreio } from '@/modules/devolucoes/recebimento';
 import { FilaMemoria } from '@/modules/fila/fila';
 import { listarEventos } from '@/modules/historico/eventos';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
@@ -200,7 +200,13 @@ describe('aplicarReclamacao (contrato §5.5, spec §7.2 e §7.3)', () => {
 
     // O ML mandou o pacote de volta; a etiqueta trazia o pedido sem o "2" do começo.
     const operador = await criarUsuarioTeste(db, 'OPERADOR');
-    expect(await receberPorRastreio(db, '000018992531744', operador)).toMatchObject({ tipo: 'recebidas', achadaPor: 'PEDIDO_ML', doArmazemML: [expect.any(String)] });
+    // (E27) Pelo pedido a chegada não é registrada sozinha: a pessoa toca em "Dar chegada" na ficha.
+    expect(await receberPorRastreio(db, '000018992531744', operador)).toMatchObject({ tipo: 'escolher', ids: [devolucaoId] });
+    expect(await darChegadaPeloPedido(db, { devolucaoId, codigoLido: '000018992531744' }, operador)).toMatchObject({
+      tipo: 'recebidas',
+      achadaPor: 'PEDIDO_ML',
+      doArmazemML: [expect.any(String)],
+    });
     const depoisDaChegada = await acoes(devolucaoId);
 
     // A mesma reclamação de novo, ainda com destino armazém: nada muda, nem evento novo.

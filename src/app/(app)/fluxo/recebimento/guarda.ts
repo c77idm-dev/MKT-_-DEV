@@ -17,3 +17,16 @@ export function podeAceitarLeitura(pendente: boolean, estado: EstadoRecebimento)
 export function mesmaLeituraDaCamera(anterior: EstadoRecebimento, daCamera: boolean, codigoJaRecebido: string): boolean {
   return daCamera && anterior.tipo === 'sucesso' && anterior.codigos.includes(codigoJaRecebido);
 }
+
+/**
+ * (extra, E27) Pelo número do pedido a tela mostra a ficha (ou a lista) e espera o toque em "Dar chegada". A câmera
+ * continua lendo a mesma etiqueta: ler de novo o mesmo pedido (alguma das devoluções `ids` está na tela) é a mesma
+ * leitura, e a ficha fica. Vale também para o cartão verde da chegada dada pela ficha: sem isso, a outra devolução do
+ * mesmo pedido apareceria no lugar dele em menos de 1 s, e a pessoa poderia tocar de novo, na devolução errada. Pelo
+ * campo (digitação ou leitor USB) a resposta nova aparece.
+ */
+export function mesmoPedidoDaCamera(anterior: EstadoRecebimento, daCamera: boolean, ids: readonly string[]): boolean {
+  if (!daCamera) return false;
+  const naTela = anterior.tipo === 'escolher' ? anterior.fichas.map((f) => f.devolucaoId) : anterior.tipo === 'sucesso' ? (anterior.idsDoPedido ?? []) : [];
+  return ids.some((id) => naTela.includes(id));
+}

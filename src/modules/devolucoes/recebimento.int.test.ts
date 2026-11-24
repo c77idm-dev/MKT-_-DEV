@@ -8,7 +8,7 @@ import { criarDevolucaoTeste, criarUsuarioTeste } from '../../../tests/helpers/f
 import type { DadosNovaDevolucao } from './criar';
 import type { StatusDevolucao } from './dominio';
 import { ErroDevolucao } from './erros';
-import { criarNaoIdentificada, receberPorRastreio } from './recebimento';
+import { criarNaoIdentificada, darChegadaPeloPedido, procurarPeloPedidoML, receberPorRastreio } from './recebimento';
 import { ErroTransicao } from './transicoes';
 
 const { db, sql } = criarDbTeste();
@@ -25,6 +25,19 @@ afterAll(async () => {
 /** Devolução do ML (cadastro manual basta aqui: o que importa é o pedido e o rastreio). */
 function devolucaoML(dados: Partial<DadosNovaDevolucao>) {
   return criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', ...dados });
+}
+/**
+ * (E27) Várias devoluções do ML com o mesmo pedido. A criação manual recusa o segundo pedido em andamento no mesmo canal;
+ * pela API, cada devolução externa do mesmo pedido vira uma devolução. Aqui o pedido é trocado direto no banco.
+ */
+async function devolucoesDoMesmoPedido(pedido: string, quantas: number) {
+  const criadas = [];
+  for (let i = 0; i < quantas; i++) {
+    const d = await devolucaoML({ pedido: `${pedido}-${i}` });
+    await db.update(devolucoes).set({ pedidosExternos: [pedido] }).where(eq(devolucoes.id, d.id));
+    criadas.push(d);
+  }
+  return criadas;
 }
 async function mudarStatus(id: string, status: StatusDevolucao) {
   await db.update(devolucoes).set({ status }).where(eq(devolucoes.id, id));
@@ -252,41 +265,28 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
     expect((await statusDe(porPedido.id)).status).toBe('PENDENTE_CHEGADA');
   });
 
-  it('pelo número do pedido do ML: registra a chegada, diz por onde achou e guarda o código lido no histórico', async () => {
+  it('(E27) pelo número do pedido do ML: acha a devolução, mas NÃO registra a chegada sozinha (a pessoa escolhe)', async () => {
     const d = await devolucaoML({ pedido: '2000018992531744', rastreio: 'MM48351759365BRSP06' });
-    const agora = new Date();
-    expect(await receberPorRastreio(db, ' 2000018992531744 ', operador, agora)).toEqual({
-      tipo: 'recebidas',
-      codigos: [d.codigo],
-      em: agora,
+    expect(await receberPorRastreio(db, ' 2000018992531744 ', operador)).toEqual({
+      tipo: 'escolher',
+      codigoLido: '2000018992531744',
+      ids: [d.id],
       achadaPor: 'PEDIDO_ML',
     });
-    const [linha] = await db.select().from(devolucoes).where(eq(devolucoes.id, d.id));
-    // O rastreio guardado não muda: o código lido foi o do pedido.
-    expect(linha).toMatchObject({ status: 'AGUARDANDO_CONFERENCIA', rastreio: 'MM48351759365BRSP06', recebidaEm: agora, recebidaPor: operador.id });
-    expect(await ultimoEvento(d.id)).toEqual({
-      acao: 'recebida',
-      de: 'PENDENTE_CHEGADA',
-      para: 'AGUARDANDO_CONFERENCIA',
-      usuarioNome: operador.nome,
-      dados: { codigoLido: '2000018992531744', achadaPor: 'PEDIDO_ML' },
-    });
+    expect(await statusDe(d.id)).toEqual({ status: 'PENDENTE_CHEGADA', rastreio: 'MM48351759365BRSP06' });
+    expect((await listarEventos(db, 'devolucao', d.id)).filter((e) => e.acao === 'recebida')).toHaveLength(0);
   });
 
   it('pedido com 15 dígitos: vale com o "2" na frente (caso real: a etiqueta da DEV-000071 trazia 000018992531744)', async () => {
     const d = await devolucaoML({ pedido: '2000018992531744', rastreio: 'MM48351759365BRSP06' });
     await mudarStatus(d.id, 'NO_CD_MARKETPLACE');
-    expect(await receberPorRastreio(db, '000018992531744', operador)).toMatchObject({
-      tipo: 'recebidas',
-      codigos: [d.codigo],
+    expect(await receberPorRastreio(db, '000018992531744', operador)).toEqual({
+      tipo: 'escolher',
+      codigoLido: '000018992531744',
+      ids: [d.id],
       achadaPor: 'PEDIDO_ML',
-      doArmazemML: [d.codigo],
     });
-    expect(await ultimoEvento(d.id)).toMatchObject({
-      de: 'NO_CD_MARKETPLACE',
-      para: 'AGUARDANDO_CONFERENCIA',
-      dados: { codigoLido: '000018992531744', achadaPor: 'PEDIDO_ML', voltouDoArmazemML: true },
-    });
+    expect((await statusDe(d.id)).status).toBe('NO_CD_MARKETPLACE');
   });
 
   it('o pedido é comparado inteiro: um pedaço do número ou o número com um dígito a mais não acha', async () => {
@@ -326,14 +326,13 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
     expect((await statusDe(magalu.id)).status).toBe('PENDENTE_CHEGADA');
   });
 
-  it('o mesmo pedido no ML e em outro canal: só a do ML é recebida', async () => {
+  it('o mesmo pedido no ML e em outro canal: só a do ML é achada', async () => {
     const ml = await devolucaoML({ pedido: '2000044443333222' });
     const tiktok = await criarDevolucaoTeste(db, operador, { canal: 'TIKTOK_SHOP', pedido: '2000044443333222' });
-    const agora = new Date();
-    expect(await receberPorRastreio(db, '2000044443333222', operador, agora)).toEqual({
-      tipo: 'recebidas',
-      codigos: [ml.codigo],
-      em: agora,
+    expect(await receberPorRastreio(db, '2000044443333222', operador)).toEqual({
+      tipo: 'escolher',
+      codigoLido: '2000044443333222',
+      ids: [ml.id],
       achadaPor: 'PEDIDO_ML',
     });
     expect((await statusDe(tiktok.id)).status).toBe('PENDENTE_CHEGADA');
@@ -353,27 +352,22 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
     expect((await statusDe(d.id)).status).toBe('PENDENTE_CHEGADA');
   });
 
-  it('várias devoluções do mesmo pedido: todas as pendentes e No CD chegam juntas; a concluída fica como está', async () => {
+  it('(E27) várias devoluções do mesmo pedido: lista só as que esperam o pacote (pendente e No CD), sem registrar nenhuma', async () => {
     const PEDIDO = '2000099998888777';
-    const a = await devolucaoML({ pedido: 'P-A' });
-    const b = await devolucaoML({ pedido: 'P-B' });
-    const c = await devolucaoML({ pedido: 'P-C' });
-    for (const d of [a, b, c]) await db.update(devolucoes).set({ pedidosExternos: [PEDIDO] }).where(eq(devolucoes.id, d.id));
+    const [a, b, c, e] = await devolucoesDoMesmoPedido(PEDIDO, 4);
     await mudarStatus(b.id, 'NO_CD_MARKETPLACE');
     await mudarStatus(c.id, 'CONCLUIDA');
-    expect(await receberPorRastreio(db, PEDIDO, operador)).toMatchObject({
-      tipo: 'recebidas',
-      codigos: [a.codigo, b.codigo],
-      achadaPor: 'PEDIDO_ML',
-      doArmazemML: [b.codigo],
-    });
+    await mudarStatus(e.id, 'CANCELADA');
+    expect(await receberPorRastreio(db, PEDIDO, operador)).toEqual({ tipo: 'escolher', codigoLido: PEDIDO, ids: [a.id, b.id], achadaPor: 'PEDIDO_ML' });
+    expect((await statusDe(a.id)).status).toBe('PENDENTE_CHEGADA');
+    expect((await statusDe(b.id)).status).toBe('NO_CD_MARKETPLACE');
     expect((await statusDe(c.id)).status).toBe('CONCLUIDA');
   });
 
   it('achada pelo pedido mas já recebida: avisa que já chegou e diz por onde achou', async () => {
     const d = await devolucaoML({ pedido: '2000077776666555' });
     const agora = new Date();
-    await receberPorRastreio(db, '2000077776666555', operador, agora);
+    await darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: '2000077776666555' }, operador, agora);
     expect(await receberPorRastreio(db, '000077776666555', operador)).toEqual({
       tipo: 'ja_recebida',
       codigo: d.codigo,
@@ -397,12 +391,180 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
     expect(await receberPorRastreio(db, '40000000001', operador)).toEqual({ tipo: 'bloqueada', codigo: e.codigo, status: 'EXTRAVIADA', achadaPor: 'ENVIO_ML' });
   });
 
-  it('duas leituras ao mesmo tempo pelo número do pedido: só uma registra a chegada e grava um evento', async () => {
+  it('(E27) achada pelo pedido, uma esperando e outra cancelada: a cancelada fica fora da escolha', async () => {
+    const PEDIDO = '2000012121212121';
+    const [cancelada, pendente] = await devolucoesDoMesmoPedido(PEDIDO, 2);
+    await mudarStatus(cancelada.id, 'CANCELADA');
+    expect(await receberPorRastreio(db, PEDIDO, operador)).toEqual({ tipo: 'escolher', codigoLido: PEDIDO, ids: [pendente.id], achadaPor: 'PEDIDO_ML' });
+  });
+});
+
+describe('darChegadaPeloPedido: "Dar chegada" numa devolução escolhida (extra, emenda E27)', () => {
+  it('registra a chegada só da devolução tocada, com o código lido e por onde achou no histórico; a outra do pedido continua esperando', async () => {
+    const PEDIDO = '2000018992531744';
+    const [a, b] = await devolucoesDoMesmoPedido(PEDIDO, 2);
+    const agora = new Date();
+    expect(await darChegadaPeloPedido(db, { devolucaoId: b.id, codigoLido: ' 000018992531744 ' }, operador, agora)).toEqual({
+      tipo: 'recebidas',
+      codigos: [b.codigo],
+      em: agora,
+      achadaPor: 'PEDIDO_ML',
+    });
+    const [linha] = await db.select().from(devolucoes).where(eq(devolucoes.id, b.id));
+    expect(linha).toMatchObject({ status: 'AGUARDANDO_CONFERENCIA', recebidaEm: agora, recebidaPor: operador.id });
+    expect(await ultimoEvento(b.id)).toEqual({
+      acao: 'recebida',
+      de: 'PENDENTE_CHEGADA',
+      para: 'AGUARDANDO_CONFERENCIA',
+      usuarioNome: operador.nome,
+      dados: { codigoLido: '000018992531744', achadaPor: 'PEDIDO_ML' },
+    });
+    expect((await statusDe(a.id)).status).toBe('PENDENTE_CHEGADA');
+    // A lista do pedido agora só tem a outra.
+    expect(await receberPorRastreio(db, PEDIDO, operador)).toMatchObject({ tipo: 'escolher', ids: [a.id] });
+  });
+
+  it('No CD do marketplace: vai para Aguardando conferência e o histórico guarda que voltou do armazém do ML', async () => {
+    const d = await devolucaoML({ pedido: '2000018992531745' });
+    await mudarStatus(d.id, 'NO_CD_MARKETPLACE');
+    const agora = new Date();
+    expect(await darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: '2000018992531745' }, operador, agora)).toEqual({
+      tipo: 'recebidas',
+      codigos: [d.codigo],
+      em: agora,
+      achadaPor: 'PEDIDO_ML',
+      doArmazemML: [d.codigo],
+    });
+    expect(await ultimoEvento(d.id)).toMatchObject({
+      de: 'NO_CD_MARKETPLACE',
+      para: 'AGUARDANDO_CONFERENCIA',
+      dados: { codigoLido: '2000018992531745', achadaPor: 'PEDIDO_ML', voltouDoArmazemML: true },
+    });
+  });
+
+  it('o Gestor também dá a chegada', async () => {
+    const gestor = await criarUsuarioTeste(db, 'GESTOR');
+    const d = await devolucaoML({ pedido: '2000018992531746' });
+    expect(await darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: '2000018992531746' }, gestor)).toMatchObject({ tipo: 'recebidas' });
+  });
+
+  it('dois toques ao mesmo tempo (dois celulares): só um registra a chegada e grava um evento', async () => {
     const outro = await criarUsuarioTeste(db, 'OPERADOR');
     const d = await devolucaoML({ pedido: '2000033332222111' });
-    const resultados = await Promise.all([receberPorRastreio(db, '2000033332222111', operador), receberPorRastreio(db, '000033332222111', outro)]);
+    await mudarStatus(d.id, 'NO_CD_MARKETPLACE');
+    const resultados = await Promise.all([
+      darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: '2000033332222111' }, operador),
+      darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: '000033332222111' }, outro),
+    ]);
     expect(resultados.map((r) => r.tipo).sort()).toEqual(['ja_recebida', 'recebidas']);
     expect((await listarEventos(db, 'devolucao', d.id)).filter((e) => e.acao === 'recebida')).toHaveLength(1);
+  });
+
+  it('a segunda vez responde "já chegou", com a data da chegada', async () => {
+    const d = await devolucaoML({ pedido: '2000033332222112' });
+    const agora = new Date();
+    await darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: '2000033332222112' }, operador, agora);
+    expect(await darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: '2000033332222112' }, operador)).toEqual({
+      tipo: 'ja_recebida',
+      codigo: d.codigo,
+      status: 'AGUARDANDO_CONFERENCIA',
+      recebidaEm: agora,
+      achadaPor: 'PEDIDO_ML',
+    });
+  });
+
+  it('cancelada ou extraviada (por exemplo, pela sincronização depois de a ficha abrir): bloqueada, nada muda', async () => {
+    const c = await devolucaoML({ pedido: '2000055554444331' });
+    const e = await devolucaoML({ pedido: '2000055554444332' });
+    await mudarStatus(c.id, 'CANCELADA');
+    await mudarStatus(e.id, 'EXTRAVIADA');
+    expect(await darChegadaPeloPedido(db, { devolucaoId: c.id, codigoLido: '2000055554444331' }, operador)).toEqual({
+      tipo: 'bloqueada',
+      codigo: c.codigo,
+      status: 'CANCELADA',
+      achadaPor: 'PEDIDO_ML',
+    });
+    expect(await darChegadaPeloPedido(db, { devolucaoId: e.id, codigoLido: '2000055554444332' }, operador)).toEqual({
+      tipo: 'bloqueada',
+      codigo: e.codigo,
+      status: 'EXTRAVIADA',
+      achadaPor: 'PEDIDO_ML',
+    });
+    expect((await statusDe(c.id)).status).toBe('CANCELADA');
+    expect((await statusDe(e.id)).status).toBe('EXTRAVIADA');
+    expect((await listarEventos(db, 'devolucao', c.id)).filter((x) => x.acao === 'recebida')).toHaveLength(0);
+  });
+
+  it('a sincronização troca pendente por No CD entre a ficha e o toque: vale o status de agora', async () => {
+    const d = await devolucaoML({ pedido: '2000055554444334' });
+    const noMeio = comAcaoNaTransacao(() => mudarStatus(d.id, 'NO_CD_MARKETPLACE'));
+    expect(await darChegadaPeloPedido(noMeio, { devolucaoId: d.id, codigoLido: '2000055554444334' }, operador)).toMatchObject({
+      tipo: 'recebidas',
+      doArmazemML: [d.codigo],
+    });
+    expect(await ultimoEvento(d.id)).toMatchObject({ de: 'NO_CD_MARKETPLACE', dados: { voltouDoArmazemML: true } });
+  });
+
+  it('nunca registra a devolução de outro pedido ou de outro canal (o id veio da tela, o pedido é conferido de novo)', async () => {
+    const outroPedido = await devolucaoML({ pedido: '2000066665555444' });
+    const shopee = await criarDevolucaoTeste(db, operador, { canal: 'SHOPEE', pedido: '2000066665555443' });
+    const mensagem = new ErroDevolucao('Esta devolução não é deste pedido. Leia o número do pedido de novo.');
+    await expect(darChegadaPeloPedido(db, { devolucaoId: outroPedido.id, codigoLido: '2000066665555443' }, operador)).rejects.toThrow(mensagem);
+    await expect(darChegadaPeloPedido(db, { devolucaoId: shopee.id, codigoLido: '2000066665555443' }, operador)).rejects.toThrow(mensagem);
+    // Um pedaço do número também não vale.
+    await expect(darChegadaPeloPedido(db, { devolucaoId: outroPedido.id, codigoLido: '66665555444' }, operador)).rejects.toThrow(mensagem);
+    expect((await statusDe(outroPedido.id)).status).toBe('PENDENTE_CHEGADA');
+    expect((await statusDe(shopee.id)).status).toBe('PENDENTE_CHEGADA');
+  });
+
+  it('recusa código com letras, id que não existe e o perfil Fiscal, com mensagem para a tela', async () => {
+    const d = await devolucaoML({ pedido: '2000066665555445' });
+    await expect(darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: 'BR2000066665555445' }, operador)).rejects.toThrow(
+      new ErroDevolucao('Leia o número do pedido de novo.'),
+    );
+    await expect(darChegadaPeloPedido(db, { devolucaoId: 'nao-e-uuid', codigoLido: '2000066665555445' }, operador)).rejects.toThrow(
+      new ErroDevolucao('Devolução não encontrada.'),
+    );
+    await expect(
+      darChegadaPeloPedido(db, { devolucaoId: '00000000-0000-4000-8000-000000000000', codigoLido: '2000066665555445' }, operador),
+    ).rejects.toThrow(new ErroDevolucao('Devolução não encontrada.'));
+    const fiscal = await criarUsuarioTeste(db, 'FISCAL');
+    const erro = await darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: '2000066665555445' }, fiscal).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroTransicao);
+    expect((erro as Error).message).toBe('Seu perfil não pode registrar o recebimento de pacotes.');
+    expect((await statusDe(d.id)).status).toBe('PENDENTE_CHEGADA');
+  });
+
+  it('pela Retirada do Full: o histórico guarda o código da retirada', async () => {
+    const d = await devolucaoML({ pedido: '2000066665555446' });
+    await darChegadaPeloPedido(db, { devolucaoId: d.id, codigoLido: '2000066665555446', retiradaFull: 'RF-000007' }, operador);
+    expect((await ultimoEvento(d.id))?.dados).toEqual({ codigoLido: '2000066665555446', achadaPor: 'PEDIDO_ML', retiradaFull: 'RF-000007' });
+  });
+});
+
+describe('procurarPeloPedidoML: só o número do pedido (Retirada do Full, extra, emenda E27)', () => {
+  it('acha as que esperam o pacote; sem nenhuma esperando, diz se já chegou ou se está bloqueada', async () => {
+    const [a, b] = await devolucoesDoMesmoPedido('2000077770000001', 2);
+    expect(await procurarPeloPedidoML(db, ' 2000077770000001 ', operador)).toEqual({
+      tipo: 'escolher',
+      codigoLido: '2000077770000001',
+      ids: [a.id, b.id],
+      achadaPor: 'PEDIDO_ML',
+    });
+    await mudarStatus(a.id, 'CANCELADA');
+    await mudarStatus(b.id, 'CANCELADA');
+    expect(await procurarPeloPedidoML(db, '2000077770000001', operador)).toMatchObject({ tipo: 'bloqueada', codigo: b.codigo, achadaPor: 'PEDIDO_ML' });
+    await mudarStatus(b.id, 'AGUARDANDO_CONFERENCIA');
+    expect(await procurarPeloPedidoML(db, '000077770000001', operador)).toMatchObject({ tipo: 'ja_recebida', codigo: b.codigo, achadaPor: 'PEDIDO_ML' });
+  });
+
+  it('não procura pelo rastreio nem pelo envio; recusa letras e vazio', async () => {
+    await devolucaoML({ pedido: 'P-X', rastreio: 'MM48503476449BRSP02' });
+    await criarDevolucaoTeste(db, operador, { rastreio: '2000077770000002' });
+    expect(await procurarPeloPedidoML(db, '48503476449', operador)).toEqual({ tipo: 'nao_encontrada', rastreio: '48503476449' });
+    expect(await procurarPeloPedidoML(db, '2000077770000002', operador)).toEqual({ tipo: 'nao_encontrada', rastreio: '2000077770000002' });
+    await expect(procurarPeloPedidoML(db, '  ', operador)).rejects.toThrow(new ErroDevolucao('Digite o número do pedido.'));
+    await expect(procurarPeloPedidoML(db, 'AB12', operador)).rejects.toThrow(new ErroDevolucao('O número do pedido tem só algarismos.'));
   });
 });
 
