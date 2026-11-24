@@ -57,6 +57,7 @@ const VERDE = rgb(0.07, 0.35, 0.25);
 const AZUL_LINK = rgb(0.04, 0.32, 0.72);
 /** Só ASCII visível, sem parêntese nem barra invertida: a URI vai como string literal do PDF, sem escape. */
 const URI_SEGURA = /^https?:\/\/[\x21-\x7e]+$/;
+const linkAceito = (url: string) => URI_SEGURA.test(url) && !/[()\\]/.test(url);
 const TEXTO_ASSISTIR = 'Assistir ao vídeo';
 
 type Fontes = { normal: PDFFont; negrito: PDFFont };
@@ -221,7 +222,7 @@ class Escritor {
    * visível, parêntese ou barra invertida não entra: o PDF nunca sai quebrado por causa de um link.
    */
   link(x: number, y: number, largura: number, altura: number, url: string): void {
-    if (!URI_SEGURA.test(url) || /[()\\]/.test(url)) return;
+    if (!linkAceito(url)) return;
     const contexto = this.doc.context;
     const anotacao = contexto.register(
       contexto.obj({
@@ -302,10 +303,20 @@ async function montar(
     return textoCarimbo({ quando: x.enviadoEm, codigo: d.codigo });
   }
 
+  /** O link público da prova pronta (E28), quando ele entra no PDF (Escritor.link). */
+  function linkDa(x: EvidenciaDossie | null): string | undefined {
+    const url = x && pronta(x) ? plano.links.get(x.id) : undefined;
+    return url && linkAceito(url) ? url : undefined;
+  }
+
   async function conteudoDaCelula(c: Celula): Promise<{ imagem: ImagemPdf } | { aviso: string }> {
     if (!c.evidencia) return { aviso: `${c.legenda} não enviada.` };
     if (!pronta(c.evidencia)) return { aviso: avisoDaSituacao(c.evidencia.situacao) };
-    if (!plano.noPdf.has(c.evidencia.id)) return { aviso: `Foto fora deste PDF (limite de ${plano.maxFotos} fotos): veja no sistema.` };
+    if (!plano.noPdf.has(c.evidencia.id)) {
+      // Quem lê o PDF (o analista do ML) não tem login: com o link, a caixa abre a foto (E28).
+      const onde = linkDa(c.evidencia) ? 'toque aqui para abrir' : 'veja no sistema';
+      return { aviso: `Foto fora deste PDF (limite de ${plano.maxFotos} fotos): ${onde}.` };
+    }
     sinal?.throwIfAborted();
     const r = await midias.foto(c.evidencia, opcoes, sinal);
     return r.ok ? { imagem: r.imagem } : { aviso: r.motivo };
@@ -326,7 +337,7 @@ async function montar(
         if (c.descricao) e.desenhar(cortar(c.descricao, f.normal, 8.5, largura), x, topo - 23, 8.5, f.normal, CINZA);
         await e.caixa(x, topo - 28, largura, alturaCaixa, await conteudoDaCelula(c));
         // A caixa inteira abre a foto guardada, em tamanho original (E28); também a que ficou fora do teto.
-        const url = c.evidencia && pronta(c.evidencia) ? plano.links.get(c.evidencia.id) : undefined;
+        const url = linkDa(c.evidencia);
         if (url) e.link(x, topo - 28 - alturaCaixa, largura, alturaCaixa, url);
         if (c.evidencia) {
           const legenda = pronta(c.evidencia)
@@ -385,7 +396,11 @@ async function montar(
   e.y -= 8;
   e.quadro('O Vídeo de Prova vai em arquivo separado: o Mercado Livre não aceita vídeo dentro do PDF.');
   if (plano.fora > 0) {
-    e.quadro(`${plano.fora === 1 ? '1 foto não entrou' : `${plano.fora} fotos não entraram`} neste PDF: veja no sistema.`, { negrito: true });
+    const abremPeloLink = fotosDoCorpo(d)
+      .filter((x) => !plano.noPdf.has(x.id))
+      .every((x) => linkDa(x));
+    const onde = abremPeloLink ? 'toque na caixa da foto para abrir' : 'veja no sistema';
+    e.quadro(`${plano.fora === 1 ? '1 foto não entrou' : `${plano.fora} fotos não entraram`} neste PDF: ${onde}.`, { negrito: true });
   }
 
   // 2. Pacote
@@ -473,7 +488,7 @@ async function montar(
       conteudo = q.imagem ? { imagem: q.imagem } : { aviso: q.problema ?? 'Quadro do vídeo indisponível.' };
     }
     // O quadro e o "Assistir ao vídeo" abrem a página que toca o vídeo no navegador (E28), mesmo sem o quadro.
-    const url = pronta(video) ? plano.links.get(video.id) : undefined;
+    const url = linkDa(video);
     e.escrever('Um quadro do vídeo:', { tamanho: 9, cor: CINZA });
     e.caber(url ? 330 : 300);
     await e.caixa(MARGEM, e.y, LARGURA, 290, conteudo);

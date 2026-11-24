@@ -55,6 +55,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const ORIGEM = 'https://devolucoes.exemplo.com.br';
+/** O que o gerar.ts monta (E28): a foto abre o arquivo; o vídeo, a página que toca. */
+function linksDe(d: DadosDossie): Map<string, string> {
+  return new Map(
+    d.evidencias.map((x) => [x.id, `${ORIGEM}/api/provas/${x.tipo === 'VIDEO_PROVA' ? 'video' : 'arquivo'}?e=${x.id}&exp=1&sig=abc_-`]),
+  );
+}
+
+/** O texto sem as quebras de linha da caixa (um aviso pode ocupar 2 ou 3 linhas). */
+const corrido = (texto: string) => texto.replace(/\s+/g, ' ');
+
 /** Fotos da avaria a mais na unidade 1, para passar da estimativa de tamanho ou do teto de fotos. */
 function comMuitasFotos(n: number) {
   const dados = dadosTeste();
@@ -297,17 +308,52 @@ describe('gerarPdfDossie (extra)', () => {
     expect(await imagensDoPdf(r.bytes)).toHaveLength(54);
   });
 
-  it('teto de fotos por PDF: as de cima viram aviso (sem ler o arquivo)', async () => {
-    expect(MAX_FOTOS_DOSSIE).toBe(120);
-    const dados = comMuitasFotos(2); // 10 fotos no corpo
-    const midias = midiasTeste();
-    const r = await gerarPdfDossie(dados, midias, { maxFotos: 7 });
-    expect(midias.chamadas.filter((c) => c.id !== 'quadro')).toHaveLength(7);
-    expect(await imagensDoPdf(r.bytes)).toHaveLength(8); // 7 fotos + o quadro do vídeo
-    const paginas = await paginasDoPdf(r.bytes);
-    expect(paginas[0]).toContain('3 fotos não entraram neste PDF: veja no sistema.');
-    const texto = paginas.join('\n');
-    expect(texto.match(/Foto fora deste PDF \(limite de 7 fotos\)/g)).toHaveLength(3);
+  describe('teto de fotos por PDF: as de cima viram aviso (sem ler o arquivo)', () => {
+    it('sem links: o aviso manda ver no sistema', async () => {
+      expect(MAX_FOTOS_DOSSIE).toBe(120);
+      const dados = comMuitasFotos(2); // 10 fotos no corpo
+      const midias = midiasTeste();
+      const r = await gerarPdfDossie(dados, midias, { maxFotos: 7 });
+      expect(midias.chamadas.filter((c) => c.id !== 'quadro')).toHaveLength(7);
+      expect(await imagensDoPdf(r.bytes)).toHaveLength(8); // 7 fotos + o quadro do vídeo
+      const paginas = (await paginasDoPdf(r.bytes)).map(corrido);
+      expect(paginas[0]).toContain('3 fotos não entraram neste PDF: veja no sistema.');
+      const texto = paginas.join(' ');
+      expect(texto.match(/Foto fora deste PDF \(limite de 7 fotos\): veja no sistema\./g)).toHaveLength(3);
+      expect(texto).not.toMatch(/toque (aqui|na caixa)/);
+    });
+
+    it('com links (E28): quem lê o PDF não tem login, então o aviso manda tocar na foto, que abre pelo link', async () => {
+      const dados = comMuitasFotos(2);
+      const midias = midiasTeste();
+      const r = await gerarPdfDossie(dados, midias, { maxFotos: 7, links: linksDe(dados) });
+      expect(midias.chamadas.filter((c) => c.id !== 'quadro')).toHaveLength(7);
+      const paginas = (await paginasDoPdf(r.bytes)).map(corrido);
+      expect(paginas[0]).toContain('3 fotos não entraram neste PDF: toque na caixa da foto para abrir.');
+      const texto = paginas.join(' ');
+      expect(texto.match(/Foto fora deste PDF \(limite de 7 fotos\): toque aqui para abrir\./g)).toHaveLength(3);
+      expect(texto).not.toContain('veja no sistema');
+      // As 10 fotos (as 3 de fora também) + o quadro do vídeo + o "Assistir ao vídeo".
+      expect(await linksDoPdf(r.bytes)).toHaveLength(12);
+    });
+
+    it('uma foto de fora sem link (ex.: no S3): ela e a capa mandam ver no sistema; as outras, tocar', async () => {
+      const dados = comMuitasFotos(2);
+      const links = linksDe(dados);
+      links.delete('avx1'); // uma das 3 fotos fora do teto (as de fora: avx1, f3u2 e f4u2)
+      const r = await gerarPdfDossie(dados, midiasTeste(), { maxFotos: 7, links });
+      const paginas = (await paginasDoPdf(r.bytes)).map(corrido);
+      expect(paginas[0]).toContain('3 fotos não entraram neste PDF: veja no sistema.');
+      const texto = paginas.join(' ');
+      expect(texto.match(/Foto fora deste PDF \(limite de 7 fotos\): toque aqui para abrir\./g)).toHaveLength(2);
+      expect(texto.match(/Foto fora deste PDF \(limite de 7 fotos\): veja no sistema\./g)).toHaveLength(1);
+    });
+
+    it('1 foto de fora, com link: a capa fala no singular', async () => {
+      const dados = comMuitasFotos(2);
+      const r = await gerarPdfDossie(dados, midiasTeste(), { maxFotos: 9, links: linksDe(dados) });
+      expect(corrido((await paginasDoPdf(r.bytes))[0])).toContain('1 foto não entrou neste PDF: toque na caixa da foto para abrir.');
+    });
   });
 
   it('dossiê cancelado (o pedido foi embora): para entre uma foto e outra', async () => {
@@ -342,13 +388,6 @@ describe('gerarPdfDossie (extra)', () => {
 });
 
 describe('links das provas no PDF (E28: a foto e o vídeo abrem pelo PDF, sem login)', () => {
-  const ORIGEM = 'https://devolucoes.exemplo.com.br';
-  /** O que o gerar.ts monta: a foto abre o arquivo; o vídeo, a página que toca. */
-  function linksDe(d: DadosDossie): Map<string, string> {
-    return new Map(
-      d.evidencias.map((x) => [x.id, `${ORIGEM}/api/provas/${x.tipo === 'VIDEO_PROVA' ? 'video' : 'arquivo'}?e=${x.id}&exp=1&sig=abc_-`]),
-    );
-  }
   const paginaDe = (r: Awaited<ReturnType<typeof gerarPdfDossie>>, titulo: string) => r.secoes.find((s) => s.titulo === titulo)!.pagina;
 
   it('cada foto da conferência e o quadro do vídeo viram link; o vídeo ganha o link visível "Assistir ao vídeo"', async () => {
@@ -416,6 +455,19 @@ describe('links das provas no PDF (E28: a foto e o vídeo abrem pelo PDF, sem lo
     const links = linksDe(dados);
     const r = await gerarPdfDossie(dados, midiasTeste(), { links, maxFotos: 6 });
     expect(await linksDoPdf(r.bytes)).toHaveLength(10);
+    expect(corrido(await textoDoPdf(r.bytes))).toContain('Foto fora deste PDF (limite de 6 fotos): toque aqui para abrir.');
+  });
+
+  it('o link que não entra no PDF (caractere que o quebraria) não ganha o texto de tocar nem o "Assistir ao vídeo"', async () => {
+    const dados = dadosTeste();
+    const links = linksDe(dados);
+    links.set('video', `${ORIGEM}/api/provas/video?e=(x)`);
+    links.set('f4u2', `${ORIGEM}/api/provas/arquivo?e=a b`); // a última foto do corpo, fora do teto
+    const r = await gerarPdfDossie(dados, midiasTeste(), { links, maxFotos: 7 });
+    const texto = corrido(await textoDoPdf(r.bytes));
+    expect(texto).not.toContain('Assistir ao vídeo');
+    expect(texto).toContain('1 foto não entrou neste PDF: veja no sistema.');
+    expect(texto).toContain('Foto fora deste PDF (limite de 7 fotos): veja no sistema.');
   });
 
   it('os links continuam quando o PDF é refeito com imagens menores', async () => {
