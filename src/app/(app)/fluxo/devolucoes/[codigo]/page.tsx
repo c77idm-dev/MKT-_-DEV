@@ -31,6 +31,7 @@ import { SecaoConferencia } from './secoes/SecaoConferencia';
 import { SecaoFiscal } from './secoes/SecaoFiscal';
 import { SecaoLote } from './secoes/SecaoLote';
 import { SecaoMercadoLivre } from './secoes/SecaoMercadoLivre';
+import { SecaoVenda } from './secoes/SecaoVenda';
 
 /** Confirmações das ações do Gestor (o redirecionamento leva `?ok=`). */
 const MENSAGEM_OK: Record<string, string> = {
@@ -150,6 +151,9 @@ export default async function PaginaDevolucao({ params, searchParams }: Props) {
           </ol>
         )}
       </section>
+
+      {/* (extra, E27) A ficha da venda do ML, logo depois dos itens: o que foi vendido. Some fora do canal ML. */}
+      <SecaoVenda devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
 
       {/* Uma seção por fase (contrato §2, P2 item 9), nesta ordem, entre "Itens" e "Histórico". */}
       <SecaoConferencia devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
