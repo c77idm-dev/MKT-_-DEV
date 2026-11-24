@@ -86,12 +86,17 @@ export type DevolucaoJson = z.output<typeof esquemaDevolucao>;
 
 /** Campo de enriquecimento (extras): fora do formato vira vazio, sem derrubar a devolução. */
 const textoTolerante = textoOuNulo.catch(null);
-/** Ficha da venda (extra, E27): número, ou texto com um número ("59.90"), finito; qualquer outra coisa vira null. */
+/** Texto com um número decimal ("59.90", "-1"): sem hexadecimal, binário, notação científica ou "Infinity". */
+const NUMERO_DECIMAL = /^-?\d+(\.\d+)?$/;
+/**
+ * Ficha da venda (extra, E27): número, ou texto com um número decimal, finito; qualquer outra coisa vira null. A faixa
+ * que a ficha aceita fica no mapeamento (quantidadeDaLinha e valorDaLinha).
+ */
 const numeroTolerante = z
   .union([z.number(), z.string()])
   .nullish()
   .transform((v) => {
-    const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v.trim()) : Number.NaN;
+    const n = typeof v === 'number' ? v : typeof v === 'string' && NUMERO_DECIMAL.test(v.trim()) ? Number(v.trim()) : Number.NaN;
     return Number.isFinite(n) ? n : null;
   })
   .catch(null);

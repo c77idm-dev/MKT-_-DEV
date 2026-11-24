@@ -239,13 +239,20 @@ export function idEnvioDaVenda(pedidos: unknown[]): string | null {
 /** O limite do título na ficha da venda (o mesmo da descrição do cadastro). */
 const MAX_TITULO_VENDA = MAX_DESCRICAO;
 
+/**
+ * A faixa que a ficha da venda aceita em cada linha do pedido; fora dela é lixo e vira null. Com os dois no máximo, o
+ * total em centavos (totalDaVenda) continua um inteiro exato (~1e14, abaixo de Number.MAX_SAFE_INTEGER).
+ */
+const MAX_QUANTIDADE_LINHA = 100_000;
+const MAX_VALOR_LINHA = 10_000_000;
+
 function quantidadeDaLinha(n: number | null): number | null {
-  return n !== null && n > 0 ? Math.round(n) : null;
+  return n !== null && n > 0 && n <= MAX_QUANTIDADE_LINHA ? Math.round(n) : null;
 }
 
-/** Em reais, com 2 casas; negativo vira null. */
+/** Em reais, com 2 casas; negativo, ou acima da faixa, vira null. */
 function valorDaLinha(n: number | null): number | null {
-  return n !== null && n >= 0 ? Math.round(n * 100) / 100 : null;
+  return n !== null && n >= 0 && n <= MAX_VALOR_LINHA ? Math.round(n * 100) / 100 : null;
 }
 
 /**

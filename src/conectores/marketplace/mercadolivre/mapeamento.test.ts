@@ -451,6 +451,13 @@ describe('vendas (ficha da venda, emenda E27, extra)', () => {
     expect(venda.itens[0].titulo).toHaveLength(200);
   });
 
+  it('texto decimal com espaços e com sinal: "  59.90 " vale; "-3" é negativo e vira nulo', () => {
+    const [venda] = vendas([pedidoCom({}, { quantity: ' 3 ', unit_price: '  59.90 ' })]);
+    expect(venda.itens[0]).toMatchObject({ quantidade: 3, valorUnitario: 59.9 });
+    const [negativa] = vendas([pedidoCom({}, { quantity: '-3', unit_price: '-1.5' })]);
+    expect(negativa.itens[0]).toMatchObject({ quantidade: null, valorUnitario: null });
+  });
+
   it('quantidade zero ou negativa e valor negativo viram nulos', () => {
     const [venda] = vendas([pedidoCom({}, { quantity: 0, unit_price: -1 })]);
     expect(venda.itens[0]).toMatchObject({ quantidade: null, valorUnitario: null });
@@ -465,6 +472,14 @@ describe('vendas (ficha da venda, emenda E27, extra)', () => {
     ['quantity (texto sem número)', pedidoCom({}, { quantity: 'um' }), { itens: [expect.objectContaining({ quantidade: null })] }],
     ['unit_price', pedidoCom({}, { unit_price: [129.9] }), { itens: [expect.objectContaining({ valorUnitario: null, sku: 'fone-01' })] }],
     ['unit_price (texto sem número)', pedidoCom({}, { unit_price: 'R$ 10' }), { itens: [expect.objectContaining({ valorUnitario: null })] }],
+    // Só número decimal: Number() leria "0x10" como 16, "0b101" como 5 e "1e3" como 1000.
+    ['quantity (hexadecimal)', pedidoCom({}, { quantity: '0x10' }), { itens: [expect.objectContaining({ quantidade: null })] }],
+    ['quantity (binário)', pedidoCom({}, { quantity: '0b101' }), { itens: [expect.objectContaining({ quantidade: null })] }],
+    ['unit_price (notação científica)', pedidoCom({}, { unit_price: '1e3' }), { itens: [expect.objectContaining({ valorUnitario: null })] }],
+    ['unit_price (Infinity)', pedidoCom({}, { unit_price: 'Infinity' }), { itens: [expect.objectContaining({ valorUnitario: null })] }],
+    // Finito, mas grande demais: em centavos estouraria (Infinity) e o JSON gravaria null.
+    ['unit_price (enorme)', pedidoCom({}, { unit_price: 1e308 }), { itens: [expect.objectContaining({ valorUnitario: null })] }],
+    ['quantity (enorme)', pedidoCom({}, { quantity: 1e308 }), { itens: [expect.objectContaining({ quantidade: null })] }],
     ['item.title', pedidoCom({}, {}, { title: { pt: 'Fone' } }), { itens: [expect.objectContaining({ titulo: null, sku: 'fone-01' })] }],
   ])('lixo em %s: a venda sai com o campo vazio e a devolução e o SKU continuam', (_campo, lixo, esperado) => {
     const r = mapearReclamacao({ ...COMPLETA, pedidos: [lixo], envioVenda: { id: 41800000001, status: 'delivered' } });

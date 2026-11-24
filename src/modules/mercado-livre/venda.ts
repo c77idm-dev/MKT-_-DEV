@@ -59,7 +59,8 @@ export function totalDaVenda(itens: readonly { quantidade: number | null; valorU
     if (i.quantidade === null || i.valorUnitario === null) return null;
     centavos += Math.round(i.valorUnitario * 100) * i.quantidade;
   }
-  return centavos / 100;
+  // Defesa: o mapeamento já limita a faixa de cada linha; um total que não é finito não aparece.
+  return Number.isFinite(centavos) ? centavos / 100 : null;
 }
 
 /**

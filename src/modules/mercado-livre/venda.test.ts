@@ -47,6 +47,8 @@ describe('ficha da venda (emenda E27, extra): rótulos, total e link', () => {
       ]),
     ).toBeNull();
     expect(totalDaVenda([{ quantidade: null, valorUnitario: 10 }])).toBeNull();
+    // Defesa: um total que estoura (não finito) não aparece.
+    expect(totalDaVenda([{ quantidade: 2, valorUnitario: 1e308 }])).toBeNull();
   });
 
   it('"Abrir a venda no ML": o detalhe da venda pelo número do pedido; número com outra coisa além de dígitos: sem link', () => {
