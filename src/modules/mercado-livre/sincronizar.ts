@@ -4,7 +4,7 @@ import { ErroFormatoML } from '@/conectores/marketplace/mercadolivre/mapeamento'
 import type { DadosDevolucaoML } from '@/conectores/marketplace/mercadolivre/tipos';
 import type { DevolucaoExterna } from '@/conectores/marketplace/tipos';
 import type { DbOuTx } from '@/db/client';
-import { contestacoesCanal, devolucoes, reclamacoesMl } from '@/db/schema';
+import { contestacoesCanal, devolucoes, reclamacoesMl, vendasMl } from '@/db/schema';
 import { normalizarSku } from '@/modules/catalogo/documentos';
 import { criarDevolucao, type DadosCanal, type DadosNovaDevolucao } from '@/modules/devolucoes/criar';
 import type { StatusDevolucao } from '@/modules/devolucoes/dominio';
@@ -111,6 +111,47 @@ async function evento(
   await registrarEvento(tx, { entidade: 'devolucao', entidadeId: devolucaoId, acao, usuarioId: null, em: agora, ...extra });
 }
 
+/**
+ * Ficha da venda (extra, emenda E27): o básico de cada pedido lido, uma linha por pedido. Regra da D8 no conflito: o
+ * que veio vazio não apaga o que já havia (os itens só trocam por uma lista com algum item); o que veio preenchido
+ * acompanha o ML. Num savepoint: um erro aqui fica no log e não derruba a sincronização da devolução.
+ */
+async function gravarVendas(tx: DbOuTx, dados: DadosDevolucaoML, agora: Date, conta: string | null): Promise<void> {
+  // Um pedido uma vez só (o ON CONFLICT não aceita a mesma linha duas vezes), em ordem: duas transações travam na mesma ordem.
+  const vendas = [...new Map(dados.vendas.map((v) => [v.pedidoId, v])).values()].sort((a, b) => a.pedidoId.localeCompare(b.pedidoId));
+  if (vendas.length === 0) return;
+  try {
+    await tx.transaction(async (sp) => {
+      await sp
+        .insert(vendasMl)
+        .values(
+          vendas.map((v) => ({
+            pedidoId: v.pedidoId,
+            conta,
+            vendidaEm: v.vendidaEm,
+            situacao: v.situacao,
+            situacaoEnvio: v.situacaoEnvio,
+            itens: v.itens,
+            atualizadaEm: agora,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: vendasMl.pedidoId,
+          set: {
+            conta: sql`coalesce(excluded."conta", ${vendasMl.conta})`,
+            vendidaEm: sql`coalesce(excluded."vendida_em", ${vendasMl.vendidaEm})`,
+            situacao: sql`coalesce(excluded."situacao", ${vendasMl.situacao})`,
+            situacaoEnvio: sql`coalesce(excluded."situacao_envio", ${vendasMl.situacaoEnvio})`,
+            itens: sql`case when jsonb_array_length(excluded."itens") > 0 then excluded."itens" else ${vendasMl.itens} end`,
+            atualizadaEm: sql`excluded."atualizada_em"`,
+          },
+        });
+    });
+  } catch (erro) {
+    logErroML('ficha da venda', new Error(mensagemDoErro(erro)), { reclamacaoId: dados.reclamacaoId });
+  }
+}
+
 async function gravarReclamacao(tx: DbOuTx, dados: DadosDevolucaoML, devolucaoId: string | null, agora: Date, conta: string | null): Promise<void> {
   const x = dados.extras;
   const valores = {
@@ -152,6 +193,8 @@ async function gravarReclamacao(tx: DbOuTx, dados: DadosDevolucaoML, devolucaoId
         dinheiro: sql`coalesce(excluded."dinheiro", ${reclamacoesMl.dinheiro})`,
       },
     });
+  // Ficha da venda (E27): só os pedidos das devoluções do sistema (o low_cost e a reclamação sem devolução ficam de fora).
+  if (devolucaoId) await gravarVendas(tx, dados, agora, conta);
 }
 
 async function atualizar(tx: DbOuTx, atual: Atual, d: DevolucaoExterna, motivo: string | null, agora: Date): Promise<void> {
