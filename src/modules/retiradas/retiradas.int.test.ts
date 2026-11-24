@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { evidencias, itensRetiradaFull, retiradasFull } from '@/db/schema';
+import { devolucoes, evidencias, itensRetiradaFull, retiradasFull } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { buscarDevolucoes } from '@/modules/devolucoes/busca';
 import { montarQuadro } from '@/modules/devolucoes/quadro';
@@ -17,10 +17,18 @@ import type { ArmazenamentoMemoria } from '@/modules/midia/armazenamento-memoria
 import { processarFoto } from '@/modules/midia/processamento';
 import { autorizarEnvio, registrarRecebida, type MetadadosEnvio } from '@/modules/midia/recepcao';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
-import { criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
+import { criarDevolucaoTeste, criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { listarRetiradas, obterRetirada } from './consultas';
 import { ErroRetirada } from './erros';
-import { alterarQuantidade, biparProduto, concluirRetirada, criarRetirada, removerItem } from './retiradas';
+import {
+  alterarQuantidade,
+  biparProduto,
+  concluirRetirada,
+  criarRetirada,
+  darChegadaPelaEtiquetaAmarela,
+  procurarPelaEtiquetaAmarela,
+  removerItem,
+} from './retiradas';
 
 const { db, sql } = criarDbTeste();
 let operador: UsuarioSessao;
@@ -246,5 +254,100 @@ describe('separada das devoluções', () => {
       ['RF-000002', 'FULLL2', 'ABERTA', 0, operador.nome],
       ['RF-000001', 'FULLL1', 'ABERTA', 3, operador.nome],
     ]);
+  });
+});
+
+describe('etiqueta amarela: devolução do ML no meio da retirada (extra, emenda E27)', () => {
+  async function devolucaoML(pedido: string) {
+    return criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido });
+  }
+  async function statusDe(id: string) {
+    const [linha] = await db.select({ status: devolucoes.status }).from(devolucoes).where(eq(devolucoes.id, id));
+    return linha.status;
+  }
+
+  it('procura pelo número do pedido: mostra as que esperam o pacote, sem registrar nada', async () => {
+    const r = await criarRetirada(db, 'FULL-AMARELA-1', operador);
+    const d = await devolucaoML('2000044440000001');
+    expect(await procurarPelaEtiquetaAmarela(db, r.id, '000044440000001', operador)).toEqual({
+      tipo: 'escolher',
+      codigoLido: '000044440000001',
+      ids: [d.id],
+      achadaPor: 'PEDIDO_ML',
+    });
+    expect(await statusDe(d.id)).toBe('PENDENTE_CHEGADA');
+    expect(await procurarPelaEtiquetaAmarela(db, r.id, '2000044449999999', operador)).toEqual({ tipo: 'nao_encontrada', rastreio: '2000044449999999' });
+  });
+
+  it('"Dar chegada nesta devolução": registra a chegada com o código da retirada no histórico, e o produto não entra nos itens', async () => {
+    const r = await criarRetirada(db, 'FULL-AMARELA-2', operador);
+    const d = await devolucaoML('2000044440000002');
+    await db.update(devolucoes).set({ status: 'NO_CD_MARKETPLACE' }).where(eq(devolucoes.id, d.id));
+    const agora = new Date('2026-11-24T13:00:00Z');
+    expect(await darChegadaPelaEtiquetaAmarela(db, r.id, { devolucaoId: d.id, codigoLido: '2000044440000002' }, operador, agora)).toEqual({
+      tipo: 'recebidas',
+      codigos: [d.codigo],
+      em: agora,
+      achadaPor: 'PEDIDO_ML',
+      doArmazemML: [d.codigo],
+    });
+    expect(await statusDe(d.id)).toBe('AGUARDANDO_CONFERENCIA');
+    const recebida = (await listarEventos(db, 'devolucao', d.id)).at(-1);
+    expect(recebida).toMatchObject({
+      acao: 'recebida',
+      de: 'NO_CD_MARKETPLACE',
+      para: 'AGUARDANDO_CONFERENCIA',
+      dados: { codigoLido: '2000044440000002', achadaPor: 'PEDIDO_ML', voltouDoArmazemML: true, retiradaFull: r.codigo },
+    });
+    // Não é estoque: nenhum item na retirada e nenhum evento novo nela.
+    expect(await itensDe(r.id)).toEqual([]);
+    expect((await listarEventos(db, 'retirada_full', r.id)).map((e) => e.acao)).toEqual(['retirada_full_criada']);
+  });
+
+  it('os produtos sem etiqueta amarela continuam pelo EAN, como estoque', async () => {
+    const r = await criarRetirada(db, 'FULL-AMARELA-3', operador);
+    await criarProdutoTeste(db, { sku: 'SKU-AMARELA', ean: '7891000012345' });
+    const d = await devolucaoML('2000044440000003');
+    await darChegadaPelaEtiquetaAmarela(db, r.id, { devolucaoId: d.id, codigoLido: '2000044440000003' }, operador);
+    await biparProduto(db, r.id, '7891000012345', null, operador);
+    expect((await itensDe(r.id)).map((i) => [i.eanLido, i.quantidade])).toEqual([['7891000012345', 1]]);
+  });
+
+  it('dois toques ao mesmo tempo: só um registra; cancelada fica bloqueada', async () => {
+    const r = await criarRetirada(db, 'FULL-AMARELA-4', operador);
+    const outro = await criarUsuarioTeste(db, 'OPERADOR');
+    const d = await devolucaoML('2000044440000004');
+    const resultados = await Promise.all([
+      darChegadaPelaEtiquetaAmarela(db, r.id, { devolucaoId: d.id, codigoLido: '2000044440000004' }, operador),
+      darChegadaPelaEtiquetaAmarela(db, r.id, { devolucaoId: d.id, codigoLido: '2000044440000004' }, outro),
+    ]);
+    expect(resultados.map((x) => x.tipo).sort()).toEqual(['ja_recebida', 'recebidas']);
+    expect((await listarEventos(db, 'devolucao', d.id)).filter((e) => e.acao === 'recebida')).toHaveLength(1);
+
+    const c = await devolucaoML('2000044440000005');
+    await db.update(devolucoes).set({ status: 'CANCELADA' }).where(eq(devolucoes.id, c.id));
+    expect(await darChegadaPelaEtiquetaAmarela(db, r.id, { devolucaoId: c.id, codigoLido: '2000044440000005' }, operador)).toMatchObject({
+      tipo: 'bloqueada',
+      status: 'CANCELADA',
+    });
+    expect(await statusDe(c.id)).toBe('CANCELADA');
+  });
+
+  it('retirada já conferida, inexistente, ou o perfil Fiscal: recusa, sem registrar a chegada', async () => {
+    const r = await criarRetirada(db, 'FULL-AMARELA-5', operador);
+    const d = await devolucaoML('2000044440000006');
+    await db.update(retiradasFull).set({ situacao: 'CONFERIDA', concluidaEm: new Date() }).where(eq(retiradasFull.id, r.id));
+    await expect(darChegadaPelaEtiquetaAmarela(db, r.id, { devolucaoId: d.id, codigoLido: '2000044440000006' }, operador)).rejects.toThrow(
+      new ErroRetirada('Esta retirada já foi conferida.'),
+    );
+    await expect(procurarPelaEtiquetaAmarela(db, r.id, '2000044440000006', operador)).rejects.toThrow(new ErroRetirada('Esta retirada já foi conferida.'));
+    await expect(darChegadaPelaEtiquetaAmarela(db, randomUUID(), { devolucaoId: d.id, codigoLido: '2000044440000006' }, operador)).rejects.toThrow(
+      new ErroRetirada('Retirada não encontrada.'),
+    );
+    const fiscal = await criarUsuarioTeste(db, 'FISCAL');
+    await expect(darChegadaPelaEtiquetaAmarela(db, r.id, { devolucaoId: d.id, codigoLido: '2000044440000006' }, fiscal)).rejects.toThrow(
+      new ErroRetirada('Seu perfil não pode registrar retiradas do Full.'),
+    );
+    expect(await statusDe(d.id)).toBe('PENDENTE_CHEGADA');
   });
 });

@@ -4,6 +4,7 @@ import { evidencias, itensRetiradaFull, produtos, retiradasFull } from '@/db/sch
 import { ehUuid } from '@/lib/uuid';
 import { pode } from '@/modules/auth/permissoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
+import { darChegadaPeloPedido, procurarPeloPedidoML, type ResultadoRecebimento } from '@/modules/devolucoes/recebimento';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { armazenamentoDoProvedor } from '@/modules/midia/armazenamento';
 import { apagarTemporario } from '@/modules/midia/temporarios';
@@ -30,12 +31,45 @@ function etiquetaOuErro(bruta: string): string {
   return etiqueta;
 }
 
-/** Trava a retirada até o fim da transação e exige que ainda esteja Aberta. */
-async function travarAberta(tx: DbOuTx, retiradaId: string): Promise<void> {
+/** Trava a retirada até o fim da transação e exige que ainda esteja Aberta. Devolve o código (RF-…). */
+async function travarAberta(tx: DbOuTx, retiradaId: string, travar = true): Promise<string> {
   if (!ehUuid(retiradaId)) throw new ErroRetirada('Retirada não encontrada.');
-  const [r] = await tx.select({ situacao: retiradasFull.situacao }).from(retiradasFull).where(eq(retiradasFull.id, retiradaId)).for('update');
+  const consulta = tx.select({ situacao: retiradasFull.situacao, codigo: retiradasFull.codigo }).from(retiradasFull).where(eq(retiradasFull.id, retiradaId));
+  const [r] = travar ? await consulta.for('update') : await consulta;
   if (!r) throw new ErroRetirada('Retirada não encontrada.');
   if (r.situacao !== 'ABERTA') throw new ErroRetirada('Esta retirada já foi conferida.');
+  return r.codigo;
+}
+
+/**
+ * (extra, emenda E27) Etiqueta amarela: no meio da retirada vem um pacote com a etiqueta amarela do ML, que é devolução,
+ * não estoque. A pessoa digita o número do pedido impresso nela; a busca é a mesma do Recebimento pelo pedido (regra 2
+ * da E25, só nas devoluções do ML) e nada é registrado.
+ */
+export async function procurarPelaEtiquetaAmarela(db: DbOuTx, retiradaId: string, numeroBruto: string, usuario: UsuarioSessao): Promise<ResultadoRecebimento> {
+  exigirOperador(usuario);
+  await travarAberta(db, retiradaId, false);
+  return procurarPeloPedidoML(db, numeroBruto, usuario);
+}
+
+/**
+ * (extra, emenda E27) "Dar chegada nesta devolução": registra a chegada da devolução escolhida como no Receber pacote
+ * (Pendente de chegada ou No CD → Aguardando conferência, com as garantias da E25), e o histórico dela guarda o código
+ * da retirada (`retiradaFull`). O produto não entra nos itens da retirada (não é estoque). A retirada fica travada na
+ * transação e precisa estar Aberta.
+ */
+export async function darChegadaPelaEtiquetaAmarela(
+  db: Db,
+  retiradaId: string,
+  p: { devolucaoId: string; codigoLido: string },
+  usuario: UsuarioSessao,
+  agora: Date = new Date(),
+): Promise<ResultadoRecebimento> {
+  exigirOperador(usuario);
+  return db.transaction(async (tx) => {
+    const codigo = await travarAberta(tx, retiradaId);
+    return darChegadaPeloPedido(tx, { ...p, retiradaFull: codigo }, usuario, agora);
+  });
 }
 
 /**
