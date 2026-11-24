@@ -25,6 +25,13 @@ function acoesDe(procurar: ResultadoEtiquetaAmarela, darChegada?: ResultadoEtiqu
   return { procurar: vi.fn(async () => procurar), darChegada: vi.fn(async () => darChegada ?? procurar) };
 }
 
+/** (extra) A região role="status" que anuncia a ficha (ou a lista), sempre no DOM. */
+function anuncio(): HTMLElement {
+  const regiao = document.getElementById('anuncio-etiqueta-amarela');
+  if (!regiao || regiao.getAttribute('role') !== 'status') throw new Error('sem a região do anúncio');
+  return regiao;
+}
+
 async function procurarPedido(numero = PEDIDO) {
   fireEvent.click(screen.getByRole('button', { name: 'Etiqueta amarela (devolução do ML)' }));
   fireEvent.change(screen.getByLabelText('Número do pedido (impresso na etiqueta)'), { target: { value: numero } });
@@ -42,6 +49,7 @@ afterEach(() => {
 describe('EtiquetaAmarela (Retirada do Full, extra, E27)', () => {
   it('o botão abre o campo do número do pedido, com o foco nele', () => {
     render(<EtiquetaAmarela retiradaId="r1" acoes={acoesDe({ tipo: 'erro', mensagem: 'x' })} />);
+    expect(anuncio().textContent).toBe('');
     const botao = screen.getByRole('button', { name: 'Etiqueta amarela (devolução do ML)' });
     expect(botao.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByLabelText('Número do pedido (impresso na etiqueta)')).toBeNull();
@@ -55,17 +63,22 @@ describe('EtiquetaAmarela (Retirada do Full, extra, E27)', () => {
       { tipo: 'escolher', codigoLido: PEDIDO, lidaEm: 1, fichas: [ficha('a', 'DEV-000071')] },
       { tipo: 'chegada', codigos: ['DEV-000071'], mensagem: 'DEV-000071 · voltou do armazém do ML (extra) · 24/11/2026 10:30' },
     );
-    render(<EtiquetaAmarela retiradaId="r1" acoes={acoes} />);
+    const aoDarChegada = vi.fn();
+    render(<EtiquetaAmarela retiradaId="r1" acoes={acoes} aoDarChegada={aoDarChegada} />);
     await procurarPedido();
     expect(acoes.procurar).toHaveBeenCalledWith('r1', PEDIDO);
     expect(screen.getByText('DEV-000071', { selector: 'p' })).toBeTruthy();
+    // (extra) A ficha não recebe o foco (o Enter não cai no botão): a região role="status", sempre no DOM, a anuncia.
+    expect(anuncio().textContent).toBe('Achada: DEV-000071. Confira a venda e toque em “Dar chegada nesta devolução”. A chegada ainda não foi registrada.');
+    expect(document.activeElement).toBe(screen.getByLabelText('Número do pedido (impresso na etiqueta)'));
     const dar = screen.getByRole('button', { name: 'Dar chegada nesta devolução DEV-000071' });
     await act(async () => fireEvent.click(dar));
     expect(acoes.darChegada).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(TRAVA_TOQUE_DUPLO_MS));
     await act(async () => fireEvent.click(dar));
     expect(acoes.darChegada).toHaveBeenCalledWith('r1', 'a', PEDIDO);
-    const aviso = screen.getByRole('status');
+    expect(aoDarChegada).toHaveBeenCalledWith(1);
+    const aviso = screen.getByText('Chegada registrada').closest('[role="status"]') as HTMLElement;
     expect(aviso.textContent).toContain('Chegada registrada');
     expect(aviso.textContent).toContain('DEV-000071 · voltou do armazém do ML (extra)');
     expect(aviso.textContent).toContain('não entra nos itens desta retirada');
@@ -81,6 +94,9 @@ describe('EtiquetaAmarela (Retirada do Full, extra, E27)', () => {
       />,
     );
     await procurarPedido();
+    expect(anuncio().textContent).toBe(
+      'Este pedido tem 2 devoluções esperando o pacote: DEV-000071 e DEV-000072. Toque em “Dar chegada nesta devolução” na que chegou.',
+    );
     const itens = within(screen.getByRole('list', { name: 'Devoluções do pedido' })).getAllByRole('listitem');
     expect(itens.map((i) => within(i).getByRole('button').textContent)).toEqual(['Dar chegada nesta devolução DEV-000071', 'Dar chegada nesta devolução DEV-000072']);
   });

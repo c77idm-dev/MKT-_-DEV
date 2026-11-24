@@ -15,6 +15,22 @@ export type AcoesEtiquetaAmarela = {
 
 const ID_PAINEL = 'painel-etiqueta-amarela';
 
+/** "A", "A e B", "A, B e C". */
+function listaComE(itens: readonly string[]): string {
+  return itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}` : (itens[0] ?? '');
+}
+
+/**
+ * (extra) O que a região role="status" anuncia quando a ficha (ou a lista) aparece. A ficha não recebe o foco, para o
+ * Enter não cair em "Dar chegada nesta devolução"; sem esta região o leitor de tela não diria nada.
+ */
+function anuncioDaEscolha(fichas: FichaVenda[]): string {
+  if (fichas.length > 1) {
+    return `Este pedido tem ${fichas.length} devoluções esperando o pacote: ${listaComE(fichas.map((f) => f.codigo))}. Toque em “Dar chegada nesta devolução” na que chegou.`;
+  }
+  return `Achada: ${fichas[0]?.codigo ?? ''}. Confira a venda e toque em “Dar chegada nesta devolução”. A chegada ainda não foi registrada.`;
+}
+
 /** "Dar chegada nesta devolução", com a trava do toque duplo (a ficha aparece depois do "Procurar"). */
 function DarChegada({ ficha, ocupado, aoTocar }: { ficha: FichaVenda; ocupado: boolean; aoTocar: () => void }) {
   const cedoDemais = useTravaToqueDuplo();
@@ -51,7 +67,16 @@ function LinksDevolucoes({ codigos }: { codigos: string[] }) {
  * "Dar chegada nesta devolução", que registra a chegada como no Receber pacote. O produto não entra nos itens da
  * retirada; os produtos sem etiqueta amarela continuam pelo EAN.
  */
-export function EtiquetaAmarela({ retiradaId, acoes }: { retiradaId: string; acoes: AcoesEtiquetaAmarela }) {
+export function EtiquetaAmarela({
+  retiradaId,
+  acoes,
+  aoDarChegada,
+}: {
+  retiradaId: string;
+  acoes: AcoesEtiquetaAmarela;
+  /** Quantas chegadas o toque registrou (a retirada só com etiquetas amarelas também conclui). */
+  aoDarChegada?: (registradas: number) => void;
+}) {
   const [aberta, setAberta] = useState(false);
   const [numero, setNumero] = useState('');
   const [resultado, setResultado] = useState<ResultadoEtiquetaAmarela | null>(null);
@@ -79,7 +104,10 @@ export function EtiquetaAmarela({ retiradaId, acoes }: { retiradaId: string; aco
     iniciar(async () => {
       const r = await acoes.darChegada(retiradaId, ficha.devolucaoId, codigoLido);
       setResultado(r);
-      if (r.tipo === 'chegada') setNumero('');
+      if (r.tipo === 'chegada') {
+        setNumero('');
+        aoDarChegada?.(r.codigos.length);
+      }
     });
   }
 
@@ -89,6 +117,10 @@ export function EtiquetaAmarela({ retiradaId, acoes }: { retiradaId: string; aco
         Devolução do ML no pacote? <span className="font-normal text-texto-2">(extra)</span>
       </h2>
       <p className="text-sm text-texto-2">Produto com a etiqueta amarela do ML é devolução, não estoque: não bipe o EAN dele.</p>
+      {/* (extra) Sempre no DOM, para o leitor de tela anunciar a ficha (ou a lista) sem o foco sair do campo. */}
+      <p id="anuncio-etiqueta-amarela" role="status" className="sr-only">
+        {resultado?.tipo === 'escolher' ? anuncioDaEscolha(resultado.fichas) : ''}
+      </p>
       <button
         type="button"
         aria-expanded={aberta}

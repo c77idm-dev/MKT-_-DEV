@@ -17,6 +17,7 @@ import {
   TAMANHO_ETIQUETA,
   validarDescricao,
 } from './dominio';
+import { contarChegadasEtiquetaAmarela } from './consultas';
 import { ErroRetirada } from './erros';
 
 /** Spec §6.9: Operador e Gestor criam, conferem e concluem; o Fiscal só vê. */
@@ -230,11 +231,14 @@ export async function removerItem(db: Db, retiradaId: string, itemId: string, us
   }
 }
 
-/** "Concluir retirada": exige a foto da etiqueta (que não falhou no servidor) e pelo menos 1 item. Depois, só leitura. */
+/**
+ * "Concluir retirada": exige a foto da etiqueta (que não falhou no servidor) e pelo menos 1 item, ou (extra, E27) pelo
+ * menos 1 chegada dada pela etiqueta amarela nesta retirada. Depois, só leitura.
+ */
 export async function concluirRetirada(db: Db, retiradaId: string, usuario: UsuarioSessao, agora: Date = new Date()): Promise<void> {
   exigirOperador(usuario);
   await db.transaction(async (tx) => {
-    await travarAberta(tx, retiradaId);
+    const codigo = await travarAberta(tx, retiradaId);
     const [foto] = await tx
       .select({ id: evidencias.id })
       .from(evidencias)
@@ -252,7 +256,9 @@ export async function concluirRetirada(db: Db, retiradaId: string, usuario: Usua
       .select({ total: sql<number>`count(*)::int` })
       .from(itensRetiradaFull)
       .where(eq(itensRetiradaFull.retiradaId, retiradaId));
-    const faltas = pendenciasParaConcluir({ fotoEtiqueta: Boolean(foto), itens: total });
+    // A trava da retirada também segura "Dar chegada nesta devolução" (darChegadaPelaEtiquetaAmarela) até aqui.
+    const chegadasEtiquetaAmarela = total > 0 ? 0 : await contarChegadasEtiquetaAmarela(tx, codigo);
+    const faltas = pendenciasParaConcluir({ fotoEtiqueta: Boolean(foto), itens: total, chegadasEtiquetaAmarela });
     if (faltas.length > 0) throw new ErroRetirada(faltas.join(' '));
     await tx.update(retiradasFull).set({ situacao: 'CONFERIDA', concluidaEm: agora }).where(eq(retiradasFull.id, retiradaId));
     await registrarEvento(tx, {

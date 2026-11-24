@@ -28,6 +28,8 @@ export type AcoesRetirada = {
 type Props = {
   retirada: { id: string; codigo: string; codigoEtiqueta: string };
   itensIniciais: ItemRetiradaVista[];
+  /** (extra, E27) Chegadas de devolução do ML já dadas pela etiqueta amarela nesta retirada. */
+  chegadasEtiquetaAmarelaIniciais?: number;
   evidencias: EvidenciaServidor[];
   acoes: AcoesRetirada;
 };
@@ -53,9 +55,11 @@ const total = (itens: ItemRetiradaVista[]) => itens.reduce((n, i) => n + i.quant
  * Tela da retirada do Full (melhoria 3), mobile-first: aviso, foto da etiqueta, "Bipar produto", os itens com − e + e
  * foto opcional, e "Concluir retirada" no rodapé fixo. As fotos usam a mesma captura, compressão e fila offline da conferência.
  */
-export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Props) {
+export function TelaRetirada({ retirada, itensIniciais, chegadasEtiquetaAmarelaIniciais = 0, evidencias, acoes }: Props) {
   const router = useRouter();
   const [itens, setItens] = useState(itensIniciais);
+  // (extra, E27; decisão do usuário de 24/11) Só com devoluções dadas pela etiqueta amarela a retirada também conclui.
+  const [chegadasEtiquetaAmarela, setChegadasEtiquetaAmarela] = useState(chegadasEtiquetaAmarelaIniciais);
   const [ean, setEan] = useState('');
   const [pedido, setPedido] = useState<string | null>(null);
   const [descricao, setDescricao] = useState('');
@@ -132,7 +136,7 @@ export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Pro
   }
 
   function concluir() {
-    const faltas = pendenciasParaConcluir({ fotoEtiqueta: fotoEtiqueta.tipo === 'enviada', itens: itens.length });
+    const faltas = pendenciasParaConcluir({ fotoEtiqueta: fotoEtiqueta.tipo === 'enviada', itens: itens.length, chegadasEtiquetaAmarela });
     if (fotoEtiqueta.tipo === 'enviando' || fotoEtiqueta.tipo === 'aguardando') {
       faltas.splice(faltas.indexOf('Tire a foto da etiqueta.'), 1, 'Espere a foto da etiqueta terminar de enviar.');
     }
@@ -247,7 +251,7 @@ export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Pro
         </p>
       </section>
 
-      <EtiquetaAmarela retiradaId={retirada.id} acoes={acoes.etiquetaAmarela} />
+      <EtiquetaAmarela retiradaId={retirada.id} acoes={acoes.etiquetaAmarela} aoDarChegada={(n) => setChegadasEtiquetaAmarela((atual) => atual + n)} />
 
       <section aria-labelledby="titulo-itens" className="flex flex-col gap-3">
         <h2 id="titulo-itens" className="text-base font-bold">
@@ -277,7 +281,10 @@ export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Pro
           Concluir retirada
         </button>
         <p className="text-center text-xs text-texto-2">
-          {unidades} {unidades === 1 ? 'item' : 'itens'} · {retirada.codigo}
+          {unidades} {unidades === 1 ? 'item' : 'itens'}
+          {chegadasEtiquetaAmarela > 0 &&
+            ` · ${chegadasEtiquetaAmarela} ${chegadasEtiquetaAmarela === 1 ? 'devolução' : 'devoluções'} pela etiqueta amarela (extra)`}{' '}
+          · {retirada.codigo}
         </p>
       </div>
     </div>

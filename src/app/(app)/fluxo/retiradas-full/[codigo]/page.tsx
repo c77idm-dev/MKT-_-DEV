@@ -94,6 +94,7 @@ export default async function PaginaRetirada({ params }: Props) {
         <TelaRetirada
           retirada={{ id: r.id, codigo: r.codigo, codigoEtiqueta: r.codigoEtiqueta }}
           itensIniciais={r.itens}
+          chegadasEtiquetaAmarelaIniciais={r.chegadasEtiquetaAmarela}
           evidencias={evidencias}
           acoes={{
             bipar: biparAcao,

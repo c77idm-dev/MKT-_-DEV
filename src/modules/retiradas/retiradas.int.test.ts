@@ -352,4 +352,31 @@ describe('etiqueta amarela: devolução do ML no meio da retirada (extra, emenda
     );
     expect(await statusDe(d.id)).toBe('PENDENTE_CHEGADA');
   });
+
+  it('(decisão do usuário de 24/11) só com chegadas pela etiqueta amarela, sem item bipado, a retirada conclui; a de outra retirada não conta', async () => {
+    const r = await criarRetirada(db, 'FULL-AMARELA-6', operador);
+    const outra = await criarRetirada(db, 'FULL-AMARELA-7', operador);
+    await enviarFoto(r.id);
+    await enviarFoto(outra.id);
+    const d = await devolucaoML('2000044440000007');
+    await darChegadaPelaEtiquetaAmarela(db, outra.id, { devolucaoId: d.id, codigoLido: '2000044440000007' }, operador);
+    // A chegada foi dada pela outra retirada: esta continua sem item e sem etiqueta amarela.
+    await expect(concluirRetirada(db, r.id, operador)).rejects.toThrow('Bipe pelo menos 1 produto.');
+    expect((await obterRetirada(db, r.codigo))?.chegadasEtiquetaAmarela).toBe(0);
+    expect((await obterRetirada(db, outra.codigo))?.chegadasEtiquetaAmarela).toBe(1);
+
+    const agora = new Date('2026-11-24T14:00:00Z');
+    await concluirRetirada(db, outra.id, operador, agora);
+    const [linha] = await db.select().from(retiradasFull).where(eq(retiradasFull.id, outra.id));
+    expect(linha).toMatchObject({ situacao: 'CONFERIDA', concluidaEm: agora });
+    // A entrada de estoque continua só com os itens bipados: nenhum.
+    expect(await itensDe(outra.id)).toEqual([]);
+    // Uma chegada pela etiqueta que não registrou nada (já tinha chegado) não conta.
+    const e = await devolucaoML('2000044440000008');
+    await darChegadaPelaEtiquetaAmarela(db, r.id, { devolucaoId: e.id, codigoLido: '2000044440000008' }, operador);
+    expect((await obterRetirada(db, r.codigo))?.chegadasEtiquetaAmarela).toBe(1);
+    await darChegadaPelaEtiquetaAmarela(db, r.id, { devolucaoId: e.id, codigoLido: '2000044440000008' }, operador);
+    expect((await obterRetirada(db, r.codigo))?.chegadasEtiquetaAmarela).toBe(1);
+    await concluirRetirada(db, r.id, operador);
+  });
 });

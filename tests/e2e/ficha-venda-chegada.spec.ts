@@ -7,6 +7,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { criarRetiradaTeste } from '../helpers/fabricas-retiradas';
 import { comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { esperarEnviada, fotoDeTeste } from './apoio-conferencia';
 import { alvosDeToque44 } from './apoio-ml';
 import { devolucoesDoPedido, gravarVenda, pedidoML, statusDas } from './apoio-pedido-ml';
 import { USUARIOS_E2E } from './dados';
@@ -192,6 +193,14 @@ test.describe('Retirada do Full: etiqueta amarela (devolução do ML)', () => {
     await expect(page.getByText('Nenhum produto bipado ainda.')).toBeVisible();
     expect(await statusDas([d.codigo])).toEqual(['AGUARDANDO_CONFERENCIA']);
     await semRolagemLateral(page);
+
+    // Decisão do usuário de 24/11: só com a etiqueta amarela, sem produto bipado, a retirada também conclui.
+    await expect(page.getByText(`0 itens · 1 devolução pela etiqueta amarela (extra) · ${rf}`)).toBeVisible();
+    await page.getByLabel('Tirar Foto da etiqueta', { exact: true }).setInputFiles(await fotoDeTeste('etiqueta-amarela.jpg'));
+    await esperarEnviada(page, 'Foto da etiqueta');
+    await page.getByRole('button', { name: 'Concluir retirada' }).click();
+    await expect(page.getByText('Conferida', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Concluir retirada' })).toHaveCount(0);
 
     await page.goto(`/fluxo/devolucoes/${d.codigo}`);
     await expect(page.getByRole('region', { name: 'Histórico' })).toContainText(`Chegada registrada (voltou do armazém do ML) (pela Retirada do Full ${rf})`);

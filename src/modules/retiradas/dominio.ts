@@ -51,9 +51,14 @@ export function validarDescricao(bruta: string): string | null {
   return texto.length >= 1 && texto.length <= TAMANHO_DESCRICAO ? texto : null;
 }
 
-export function pendenciasParaConcluir(p: { fotoEtiqueta: boolean; itens: number }): string[] {
+/**
+ * "Concluir retirada": a foto da etiqueta e pelo menos 1 item bipado. (extra, emenda E27; decisão do usuário de 24/11)
+ * Uma retirada só com devoluções dadas pela etiqueta amarela (`chegadasEtiquetaAmarela`), sem item bipado, também
+ * conclui; a entrada de estoque continua só com os itens bipados.
+ */
+export function pendenciasParaConcluir(p: { fotoEtiqueta: boolean; itens: number; chegadasEtiquetaAmarela?: number }): string[] {
   const faltas: string[] = [];
   if (!p.fotoEtiqueta) faltas.push('Tire a foto da etiqueta.');
-  if (p.itens < 1) faltas.push('Bipe pelo menos 1 produto.');
+  if (p.itens < 1 && (p.chegadasEtiquetaAmarela ?? 0) < 1) faltas.push('Bipe pelo menos 1 produto.');
   return faltas;
 }
