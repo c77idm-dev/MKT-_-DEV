@@ -40,7 +40,7 @@ export const IMAGEM_REDUZIDA: OpcoesImagem = { ladoMaior: 1024, qualidade: 60 };
 
 /**
  * Teto de fotos no corpo do PDF: cabe nos 8 MB a 1024 px/60 e limita a memória do pdf-lib (o web tem 512 MB). As de
- * cima viram um aviso ("veja no sistema").
+ * cima viram um aviso: "toque aqui para abrir" quando a foto tem o link público (E28); sem ele, "veja no sistema".
  */
 export const MAX_FOTOS_DOSSIE = 120;
 

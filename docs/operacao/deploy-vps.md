@@ -128,7 +128,22 @@ Se `nginx -t` acusar erro, não recarregue e confira o arquivo. Sem o bloco, o d
 ## Dossiê de provas: links das fotos e do vídeo (E28)
 Cada foto e o vídeo do dossiê viram link público (sem login), que vale 90 dias: `https://<domínio>/api/provas/arquivo?...` (a foto) e `https://<domínio>/api/provas/video?...` (a página que toca o vídeo). Nada a mudar no nginx: o endereço vem do `Host` e do `X-Forwarded-Proto` que os blocos de `docker/nginx/devolucoes.conf` já mandam.
 - O sistema só usa esse endereço quando ele é um nome de host válido, igual ao `X-Forwarded-Host`, e com `https`. Se um `location` perder o `proxy_set_header Host $host;` ou o `proxy_set_header X-Forwarded-Proto $scheme;`, o dossiê sai **sem** os links (não quebra).
-- Conferir depois do deploy: gere um dossiê, toque numa foto do PDF e abra o link numa janela anônima. A foto deve abrir sem pedir login; o "Assistir ao vídeo" deve tocar o vídeo.
+- Em produção, o `localhost` nunca vira link: o dossiê gerado pelo acesso direto ao app (por exemplo, um túnel SSH até `127.0.0.1:3020`) sai sem links. Gere o dossiê sempre pelo domínio.
+- Quando o dossiê sai sem links e havia provas prontas no disco, o `web` escreve uma linha `"evento":"dossie_sem_links"` com o código da devolução, o motivo e o número de provas. Motivos: `sem_https`, `host_invalido`, `host_diferente_do_encaminhado` ou `localhost_em_producao`. Para procurar:
+  ```sh
+  docker compose --env-file .env.producao -f docker-compose.prod.yml logs web | grep dossie_sem_links
+  ```
+- **Conferir depois do deploy.** O e2e só testa no Chromium, no computador e com a tela de celular do Pixel 7. O Safari do iPhone só é conferido aqui.
+  1. Pelo domínio (https), gere o dossiê de uma devolução que tenha fotos e vídeo prontos.
+  2. Abra o PDF e toque nos links numa **janela anônima**, sem login, em três aparelhos: um **iPhone (Safari)**, um **Android (Chrome)** e um **computador** (Chrome ou Edge, e o Firefox).
+  3. Em cada aparelho, confira:
+     - a foto abre sem pedir login, em tamanho original;
+     - o "Assistir ao vídeo" abre a página "Vídeo de Prova · DEV-…";
+     - o vídeo toca com os controles do navegador (tocar, pausar, barra de tempo e tela cheia);
+     - nada é baixado.
+  4. Se o vídeo não tocar ou ficar sem controles **só no Safari**, não mexa no CSP na VPS. Anote o modelo do iPhone e a versão do iOS e avise o desenvolvimento.
+     - A página do player usa o CSP `sandbox` sem `allow-scripts`. O WebKit já teve um defeito em que o CSP bloqueava os controles do player: os bugs 223422 e 225865 do bugs.webkit.org. Foi corrigido em 2021, e o relato com `sandbox` era do Safari 14.
+     - A hipótese a testar é `sandbox allow-scripts` em `src/app/api/provas/video/route.ts`, mantendo `default-src 'none'` sem `script-src`: o CSP continua bloqueando todo script da página.
 - Trocar o `SEGREDO_LINKS` invalida todos os links já entregues (os de sessão e os do dossiê). Os PDFs antigos passam a dizer que o link não é válido; basta gerar o dossiê de novo.
 - Só funciona com as mídias no disco (`ARMAZENAMENTO=disco`). Prova guardada no S3 fica sem link no PDF.
 
