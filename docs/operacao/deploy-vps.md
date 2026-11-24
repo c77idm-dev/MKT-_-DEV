@@ -125,6 +125,13 @@ nginx -t && systemctl reload nginx
 ```
 Se `nginx -t` acusar erro, não recarregue e confira o arquivo. Sem o bloco, o dossiê de uma devolução grande dá 504 no celular.
 
+## Dossiê de provas: links das fotos e do vídeo (E28)
+Cada foto e o vídeo do dossiê viram link público (sem login), que vale 90 dias: `https://<domínio>/api/provas/arquivo?...` (a foto) e `https://<domínio>/api/provas/video?...` (a página que toca o vídeo). Nada a mudar no nginx: o endereço vem do `Host` e do `X-Forwarded-Proto` que os blocos de `docker/nginx/devolucoes.conf` já mandam.
+- O sistema só usa esse endereço quando ele é um nome de host válido, igual ao `X-Forwarded-Host`, e com `https`. Se um `location` perder o `proxy_set_header Host $host;` ou o `proxy_set_header X-Forwarded-Proto $scheme;`, o dossiê sai **sem** os links (não quebra).
+- Conferir depois do deploy: gere um dossiê, toque numa foto do PDF e abra o link numa janela anônima. A foto deve abrir sem pedir login; o "Assistir ao vídeo" deve tocar o vídeo.
+- Trocar o `SEGREDO_LINKS` invalida todos os links já entregues (os de sessão e os do dossiê). Os PDFs antigos passam a dizer que o link não é válido; basta gerar o dossiê de novo.
+- Só funciona com as mídias no disco (`ARMAZENAMENTO=disco`). Prova guardada no S3 fica sem link no PDF.
+
 ## Ligar o modo Bitbrain (devoluções do ML pelo Bitbrain)
 
 Pré-requisito: a sessão do Bitbrain publicou a rota (`docs/integracao/bitbrain-rota-devolucoes.md`), e o Nathan gerou o `DEVOLUCOES_TOKEN` (`openssl rand -hex 32`) e o pôs no `.env` do Bitbrain.
