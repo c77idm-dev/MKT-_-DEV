@@ -102,6 +102,28 @@ describe('FichaVenda (E27, extra)', () => {
     );
     expect(screen.getByText('DEV-000071')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Dar chegada' })).toBeTruthy();
+    // Com os itens da venda, o produto esperado não se repete.
+    expect(screen.queryByRole('list', { name: 'Produto esperado' })).toBeNull();
+  });
+
+  it('(extra) a ficha de uma devolução sem os itens da venda mostra o produto esperado, com a foto, para comparar com o pacote', () => {
+    const vazia: VendaDaFicha = { ...VENDA, temDados: false, vendidaEm: null, situacao: null, situacaoEnvio: null, itens: [], total: null };
+    const cabo = { sku: 'CABO-02', descricao: null, fotoUrl: null, quantidade: 3 };
+    render(<FichaVenda ficha={{ ...FICHA, vendas: [vazia], produtos: [...FICHA.produtos, cabo] }} mostrarCodigo />);
+    expect(screen.getByText('Os dados da venda ainda não chegaram do ML.')).toBeTruthy();
+    const [fone, semNome] = within(screen.getByRole('list', { name: 'Produto esperado' })).getAllByRole('listitem');
+    expect(fone.textContent).toContain('Fone de Ouvido (cadastro)');
+    expect(fone.textContent).toContain('SKU FONE-01 · 2 unidades');
+    expect(within(fone).getByRole('img', { name: 'Fone de Ouvido (cadastro)' }).getAttribute('src')).toBe('https://http2.mlstatic.com/fone.jpg');
+    expect(semNome.textContent).toContain('CABO-02');
+    expect(semNome.textContent).toContain('3 unidades');
+    // Sem nenhuma venda gravada também; no detalhe (sem o código DEV) não aparece: lá os itens têm a seção própria.
+    cleanup();
+    render(<FichaVenda ficha={{ ...FICHA, vendas: [] }} mostrarCodigo />);
+    expect(screen.getByRole('list', { name: 'Produto esperado' })).toBeTruthy();
+    cleanup();
+    render(<FichaVenda ficha={{ ...FICHA, vendas: [vazia] }} />);
+    expect(screen.queryByRole('list', { name: 'Produto esperado' })).toBeNull();
   });
 });
 

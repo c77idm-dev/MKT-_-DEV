@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { FotoProduto } from '@/components/FotoProduto';
 import { BOTAO_SECUNDARIO, ROTULO } from '@/components/estilos';
 import { formatarDataHora, formatarMoeda } from '@/lib/formatar';
-import type { FichaVenda as DadosFicha, VendaDaFicha } from '@/modules/mercado-livre/ficha-venda';
+import type { FichaVenda as DadosFicha, ProdutoDaDevolucao, VendaDaFicha } from '@/modules/mercado-livre/ficha-venda';
 import { rotuloSituacaoReclamacao, rotuloSituacaoVenda } from '@/modules/mercado-livre/venda';
 
 /**
@@ -51,6 +51,38 @@ function ItensVendidos({ venda }: { venda: VendaDaFicha }) {
   );
 }
 
+const unidades = (n: number) => `${n} ${n === 1 ? 'unidade' : 'unidades'}`;
+
+/**
+ * (extra) Sem os itens da venda, a ficha de uma devolução nas telas do Fluxo mostra o que ela espera receber (os itens
+ * da devolução, com a foto do cadastro), para a pessoa comparar com o pacote na mão antes de tocar.
+ */
+function ProdutosEsperados({ produtos }: { produtos: ProdutoDaDevolucao[] }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2 border-t border-borda pt-3">
+      <p className={ROTULO}>
+        {produtos.length === 1 ? 'Produto esperado' : 'Produtos esperados'}
+      </p>
+      <ul aria-label="Produto esperado" className="flex flex-col gap-2">
+        {produtos.map((p) => {
+          const nome = p.descricao ?? p.sku;
+          return (
+            <li key={p.sku} className="flex min-w-0 gap-3">
+              <FotoProduto url={p.fotoUrl} descricao={nome} />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-sm font-semibold [overflow-wrap:anywhere]">{nome}</span>
+                <span className="break-all font-mono text-xs text-texto-2">
+                  SKU {p.sku} · {unidades(p.quantidade)}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function BlocoVenda({ venda, conta }: { venda: VendaDaFicha; conta: string | null }) {
   const situacao = rotuloSituacaoVenda(venda.situacao, venda.situacaoEnvio);
   return (
@@ -76,6 +108,8 @@ function BlocoVenda({ venda, conta }: { venda: VendaDaFicha; conta: string | nul
 
 export function FichaVenda({ ficha, mostrarCodigo = false, children }: { ficha: DadosFicha; mostrarCodigo?: boolean; children?: ReactNode }) {
   const situacaoReclamacao = rotuloSituacaoReclamacao(ficha.situacaoReclamacao);
+  // (extra) Nas telas do Fluxo (com o código DEV), sem os itens da venda: o produto esperado, para comparar com o pacote.
+  const semItensDaVenda = !ficha.vendas.some((v) => v.itens.length > 0);
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {mostrarCodigo && <p className="font-mono text-lg font-bold">{ficha.codigo}</p>}
@@ -88,6 +122,7 @@ export function FichaVenda({ ficha, mostrarCodigo = false, children }: { ficha: 
           </div>
         ))
       )}
+      {mostrarCodigo && semItensDaVenda && ficha.produtos.length > 0 && <ProdutosEsperados produtos={ficha.produtos} />}
       {(ficha.motivo || situacaoReclamacao) && (
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-borda pt-3">
           {ficha.motivo && <Dado rotulo="Motivo da reclamação">{ficha.motivo}</Dado>}

@@ -99,6 +99,8 @@ test.describe('Receber pacote pelo número do pedido do ML', () => {
     await campo.press('Enter');
     await expect(escolha).toContainText(a.codigo);
     await expect(escolha).toContainText('Os dados da venda ainda não chegaram do ML.');
+    // (extra) Sem os itens da venda, a ficha mostra o produto esperado, para comparar com o pacote na mão.
+    await expect(escolha.getByRole('list', { name: 'Produto esperado' })).toContainText(a.produto);
     await expect(escolha.getByRole('list', { name: 'Devoluções do pedido' })).toHaveCount(0);
     expect(await statusDas([a.codigo])).toEqual(['PENDENTE_CHEGADA']);
     await semRolagemLateral(page);
