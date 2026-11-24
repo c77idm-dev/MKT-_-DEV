@@ -724,6 +724,12 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
        - Se achar, mostra a ficha com "Dar chegada nesta devolução". O botão registra a chegada como no Receber pacote, pela transição da E25 (No CD ou Pendente → Aguardando conferência).
        - O produto não entra na contagem do estoque da retirada.
        - Produto sem etiqueta amarela continua pelo EAN, como estoque.
+    - **Como ficou (24/11, telas):**
+      - A busca pelo pedido é uma só, a da E25: `devolucoesDoPedidoML` (`recebimento.ts`), usada pelo Receber pacote, pelo Conferir pacote (`localizar.ts`) e pela Retirada do Full (`procurarPeloPedidoML`).
+      - Pelo pedido, `receberPorRastreio` devolve `escolher`, com as devoluções que esperam o pacote. A chegada é registrada por `darChegadaPeloPedido`, numa devolução só. O servidor confere de novo que ela é do ML e tem o pedido lido, e um id de outra devolução nunca registra. A Retirada usa `darChegadaPelaEtiquetaAmarela`, com a retirada Aberta e travada.
+      - Os botões da ficha ("Dar chegada", "Iniciar conferência", "Dar chegada nesta devolução") só valem 0,7 s depois de a ficha aparecer. É o mesmo tempo da E24, porque a ficha empurra o botão de antes para baixo e o 2º toque de um toque duplo cairia nela. Durante o envio, os botões ficam travados.
+      - Câmera do Receber pacote: ler de novo o mesmo pedido não fecha a ficha. Depois de "Dar chegada", o cartão verde também fica, para a outra devolução do mesmo pedido não tomar o lugar dele e receber um 2º toque por engano. Pelo campo (digitação ou leitor USB), a resposta nova aparece.
+      - "Concluir retirada" continua exigindo pelo menos 1 item bipado (spec da retirada do Full, `2026-11-16-retirada-full-design.md`). Uma retirada só com etiquetas amarelas fica Aberta. Pendente de decisão do usuário.
   - **Histórico:** a ação continua `recebida`. Em `dados`:
     - `achadaPor: 'PEDIDO_ML'` e `codigoLido`;
     - `voltouDoArmazemML` quando a devolução estava No CD;
