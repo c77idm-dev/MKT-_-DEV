@@ -1,8 +1,14 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 24/11/2026 (ficha da venda, E27, em construção; a VPS segue na imagem `3f01630`). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 24/11/2026 (ficha da venda, E27, e dossiê mais enxuto, E28, em construção; a VPS segue na imagem `3f01630`). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
+- **Dossiê mais enxuto (E28; pedido do administrador, aprovado pelo usuário em 24/11): em construção.** Branch `dossie-enxuto`, worktree `reputacao` (porta 3108, banco `devolucoes_test_f8`), run `wf_dc62a57b-7a5`. Muda só o PDF:
+  - saem o Histórico, a Integridade (SHA-256), a foto do anúncio com os avisos de "referência" e os nomes das pessoas;
+  - as fotos novas ganham o carimbo só com a data e o DEV; as antigas ficam como estão;
+  - cada foto e o quadro do vídeo viram link, e há um link "Assistir ao vídeo" que toca no navegador;
+  - os links abrem **sem login** (escolha do usuário) e valem 90 dias; gerar o PDF de novo cria links novos.
+  - Texto completo: emenda E28.
 - **Ficha da venda (E27, extra; o usuário aprovou em 24/11): em construção.** Branch `ficha-venda`, worktree `dossie` (porta 3109, banco `devolucoes_test_f9`), run `wf_9d1d29c4-05d` (dois construtores, revisão em três olhares, verificação e correção).
   - **O pedido do admin:** digitar ou ler o número do pedido do ML e ver os detalhes **básicos** da venda, ligados à reclamação. Só pedidos que já estão no sistema.
   - **A ficha mostra:**
