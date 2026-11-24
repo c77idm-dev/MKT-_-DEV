@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { verificarLinkPublico } from '@/modules/midia/links-publicos';
 import { dadosDossieTeste } from '../../../tests/helpers/fabricas-dossie';
 import type { EvidenciaDossie } from './dominio';
-import { linksDasProvas } from './links';
+import { avisoSemLinks, linksDasProvas } from './links';
 
 const SEGREDO = 's'.repeat(32);
 const AGORA = new Date('2026-11-24T12:00:00Z');
@@ -49,5 +49,36 @@ describe('linksDasProvas (E28)', () => {
     lista[5] = { ...lista[5], id: 'nao-e-uuid' };
     const links = linksDasProvas(lista, { origem: ORIGEM, segredo: SEGREDO, agora: AGORA });
     expect([...links.keys()]).toEqual(lista.slice(6).map((e) => e.id));
+  });
+});
+
+describe('avisoSemLinks (E28: o PDF que sai sem links fica visível no log da VPS)', () => {
+  it('há provas que ganhariam link e o pedido não deu o endereço público: uma linha JSON com o código, o motivo e o número de provas', () => {
+    const lista = evidencias();
+    const linha = avisoSemLinks('DEV-000123', lista, { url: null, motivo: 'sem_https' }, AGORA);
+    expect(JSON.parse(linha!)).toEqual({
+      em: AGORA.toISOString(),
+      nivel: 'aviso',
+      origem: 'web',
+      evento: 'dossie_sem_links',
+      codigo: 'DEV-000123',
+      motivo: 'sem_https',
+      provas: lista.length,
+    });
+  });
+
+  it('conta só as provas que ganhariam link (prontas no disco local)', () => {
+    const lista = evidencias();
+    lista[0] = { ...lista[0], situacao: 'PROCESSANDO', caminho: null };
+    lista[1] = { ...lista[1], provedor: 's3' };
+    const linha = avisoSemLinks('DEV-000123', lista, { url: null, motivo: 'host_invalido' }, AGORA);
+    expect(JSON.parse(linha!)).toMatchObject({ motivo: 'host_invalido', provas: lista.length - 2 });
+  });
+
+  it('com o endereço público, ou sem prova que ganharia link: nada a avisar', () => {
+    expect(avisoSemLinks('DEV-000123', evidencias(), { url: ORIGEM }, AGORA)).toBeNull();
+    const noS3 = evidencias().map((e) => ({ ...e, provedor: 's3' as const }));
+    expect(avisoSemLinks('DEV-000123', noS3, { url: null, motivo: 'sem_https' }, AGORA)).toBeNull();
+    expect(avisoSemLinks('DEV-000123', [], { url: null, motivo: 'sem_https' }, AGORA)).toBeNull();
   });
 });

@@ -90,6 +90,14 @@ function esperarCabecalhosDeSeguranca(r: Response): void {
 /** O que o nginx da VPS manda (docker/nginx/devolucoes.conf), já com o https do certbot. */
 const NGINX = { host: 'devolucoes.exemplo.com.br', 'x-forwarded-host': 'devolucoes.exemplo.com.br', 'x-forwarded-proto': 'https' };
 
+/** As linhas "dossie_sem_links" (JSON) que a geração escreveu no console.warn. */
+function avisosSemLinks(espiao: { mock: { calls: unknown[][] } }): Record<string, unknown>[] {
+  return espiao.mock.calls
+    .map((c) => String(c[0]))
+    .filter((l) => l.includes('dossie_sem_links'))
+    .map((l) => JSON.parse(l) as Record<string, unknown>);
+}
+
 /** Nada de chave de mídia, link assinado ou id interno no texto e nos metadados (os links ficam nas anotações, E28). */
 const PROIBIDO_NO_PDF = /evidencias\/|\/api\/arquivos|X-Amz-|sig=|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
@@ -171,6 +179,7 @@ describe('GET /api/devolucoes/[codigo]/dossie (extra)', () => {
   it('atrás do nginx (Host e X-Forwarded-Proto https): cada foto e o vídeo viram link público https, por 90 dias (E28)', async () => {
     const p = await devolucaoComProvasTeste(db);
     const antes = Math.floor(Date.now() / 1000);
+    const aviso = vi.spyOn(console, 'warn');
     const r = await chamar(p.codigo, { headers: NGINX });
     expect(r.status).toBe(200);
     const bytes = new Uint8Array(await r.arrayBuffer());
@@ -191,22 +200,30 @@ describe('GET /api/devolucoes/[codigo]/dossie (extra)', () => {
       if (v.ok) expect(v.expiraEm - antes).toBeGreaterThanOrEqual(DURACAO_LINK_PUBLICO_SEGUNDOS - 5);
     }
     expect(await textoDoPdf(bytes)).toContain('Assistir ao vídeo');
+    expect(avisosSemLinks(aviso)).toEqual([]);
   });
 
   it('sem um endereço público confiável (http fora do localhost, Host estranho ou diferente do encaminhado): o PDF sai sem links', async () => {
     const p = await devolucaoComProvasTeste(db);
-    const casos: Record<string, string>[] = [
-      {},
-      { host: 'devolucoes.exemplo.com.br' },
-      { host: 'evil.com/x', 'x-forwarded-proto': 'https' },
-      { host: 'devolucoes.exemplo.com.br', 'x-forwarded-host': 'evil.com', 'x-forwarded-proto': 'https' },
+    const casos: [Record<string, string>, string][] = [
+      [{}, 'host_invalido'],
+      [{ host: 'devolucoes.exemplo.com.br' }, 'sem_https'],
+      [{ host: 'evil.com/x', 'x-forwarded-proto': 'https' }, 'host_invalido'],
+      [{ host: 'devolucoes.exemplo.com.br', 'x-forwarded-host': 'evil.com', 'x-forwarded-proto': 'https' }, 'host_diferente_do_encaminhado'],
     ];
-    for (const headers of casos) {
+    for (const [headers, motivo] of casos) {
+      const aviso = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const r = await chamar(p.codigo, { headers });
       expect(r.status, JSON.stringify(headers)).toBe(200);
       const bytes = new Uint8Array(await r.arrayBuffer());
       expect(await linksDoPdf(bytes)).toEqual([]);
       expect(await textoDoPdf(bytes)).not.toContain('Assistir ao vídeo');
+      // A falta dos links fica no log da VPS: o código, o motivo e quantas provas ficaram sem link (5 fotos e o vídeo).
+      const linhas = avisosSemLinks(aviso);
+      expect(linhas, JSON.stringify(headers)).toEqual([expect.objectContaining({ codigo: p.codigo, motivo, provas: 6 })]);
+      // Nada do cabeçalho bruto no log.
+      expect(JSON.stringify(linhas)).not.toMatch(/evil|exemplo/);
+      aviso.mockRestore();
     }
   });
 

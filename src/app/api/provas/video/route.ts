@@ -20,8 +20,9 @@ const ESTILO =
  * página em sandbox como o próprio sistema.
  */
 export async function GET(req: Request): Promise<Response> {
+  const env = lerEnv();
   const p = new URL(req.url).searchParams;
-  const link = verificarLinkPublico(lerEnv().SEGREDO_LINKS, { e: p.get('e'), exp: p.get('exp'), sig: p.get('sig') }, new Date());
+  const link = verificarLinkPublico(env.SEGREDO_LINKS, { e: p.get('e'), exp: p.get('exp'), sig: p.get('sig') }, new Date());
   if (!link.ok) return link.motivo === 'expirado' ? avisoPublico(410, AVISOS.expirado) : avisoPublico(403, AVISOS.invalido);
   const prova = await buscarProvaPublica(obterDb(), link.evidenciaId);
   if (!prova || prova.tipo !== 'VIDEO_PROVA') return avisoPublico(404, AVISOS.video);
@@ -35,7 +36,7 @@ export async function GET(req: Request): Promise<Response> {
       `<main><h1>${escaparHtml(titulo)}</h1>` +
       `<video controls playsinline preload="metadata" src="${escaparHtml(arquivo)}">Este navegador não consegue tocar o vídeo.</video></main>`,
   });
-  const origem = origemPublica(req.headers);
+  const origem = origemPublica(req.headers, env);
   return new Response(html, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
