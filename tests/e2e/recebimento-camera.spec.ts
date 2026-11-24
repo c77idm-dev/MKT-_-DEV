@@ -224,3 +224,42 @@ test('(extra, E27) pela câmera, o cartão verde da chegada pelo rastreio fica d
   await expect(escolha).toContainText(b.codigo);
   await expect(escolha).not.toContainText(a.codigo);
 });
+
+test('(extra, E27; 24/11) pela câmera, o amarelo "Este pacote já chegou" fica diante do número do pedido da mesma etiqueta', async ({ page }) => {
+  // A já tinha chegado (rastreio RA); B, do mesmo pedido, voltou do armazém com outro rastreio e não está aqui.
+  const pedido = pedidoML();
+  const ra = `MM${String(Date.now() % 1e9).padStart(9, '0')}${digitos(2)}BRSP02`;
+  const rb = `MM${String((Date.now() + 7) % 1e9).padStart(9, '0')}${digitos(2)}BRSP03`;
+  const [a, b] = await devolucoesDoPedido(pedido, ['AGUARDANDO_CONFERENCIA', 'NO_CD_MARKETPLACE'], [ra, rb]);
+  await instalarDetectorFalso(page);
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto('/fluxo/recebimento');
+  await page.getByRole('button', { name: 'Ler com a câmera' }).click();
+  await expect(page.getByRole('button', { name: 'Fechar câmera' })).toBeVisible();
+  await expect(page.getByText('Abrindo a câmera…')).toHaveCount(0);
+
+  const resultado = page.getByRole('status');
+  const escolha = page.getByRole('region', { name: 'Confira antes de dar a chegada' });
+  await lerPelaCamera(page, ra);
+  await expect(resultado).toContainText('Este pacote já chegou');
+  await expect(resultado).toContainText(`${a.codigo} já tinha chegado`);
+
+  // A câmera pega o número do pedido na mesma etiqueta: o amarelo de A fica, sem a ficha de B (nem "Dar chegada"), e
+  // avisa que B ainda espera o pacote, em destaque e no anúncio.
+  await lerPelaCamera(page, pedido.slice(1));
+  await expect(resultado).toContainText('Este pacote já chegou');
+  await expect(resultado).toContainText(`${a.codigo} já tinha chegado`);
+  await expect(resultado).toContainText(`${b.codigo} ainda espera o pacote`);
+  await expect(page.getByTestId('aviso-ainda-esperam')).toContainText(`Do mesmo pedido, a ${b.codigo} ainda espera o pacote.`);
+  await expect(escolha).toHaveCount(0);
+  await expect(page.getByRole('button', { name: `Dar chegada na ${b.codigo}` })).toHaveCount(0);
+  expect(await statusDas([a.codigo, b.codigo])).toEqual(['AGUARDANDO_CONFERENCIA', 'NO_CD_MARKETPLACE']);
+  await semRolagemLateral(page);
+
+  // Pelo campo (o que o aviso pede), o número do pedido mostra a ficha de B.
+  const campo = page.getByLabel('Código de Rastreamento');
+  await campo.fill(pedido);
+  await campo.press('Enter');
+  await expect(escolha).toContainText(b.codigo);
+  await expect(escolha).not.toContainText(a.codigo);
+});
