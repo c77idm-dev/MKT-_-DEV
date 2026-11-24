@@ -13,8 +13,8 @@ const ESTILO =
 
 /**
  * O Vídeo de Prova pelo link público do dossiê (E28): uma página curta com o player do navegador, que toca no celular
- * e no computador sem baixar (o arquivo vem do /api/provas/arquivo, com Range). Aberto direto, o mp4 com o CSP sandbox
- * do /api/arquivos não toca (o player do navegador fica sem permissão de mídia) ou vira download no celular.
+ * e no computador sem baixar (o arquivo vem do /api/provas/arquivo, com Range). Aberto direto, o mp4 não toca: com o
+ * CSP do /api/arquivos ("sandbox; default-src 'none'"), o Chrome bloqueia o próprio player do arquivo (visto no e2e).
  * O sandbox continua (sem script, sem formulário); o player só ganha o vídeo do próprio sistema (media-src) e o estilo
  * da página. A origem explícita, quando o pedido a traz (como no PDF), cobre o navegador que não trata o 'self' de uma
  * página em sandbox como o próprio sistema.
