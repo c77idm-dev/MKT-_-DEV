@@ -115,13 +115,18 @@ test('(extra, E25) pacote que voltou do armazém do ML (No CD do marketplace) va
   await semRolagemLateral(page);
 });
 
-test('(extra, E25) recebe pelo número do pedido do ML, mesmo sem o "2" do começo que a etiqueta corta', async ({ page }) => {
+test('(extra, E25 e E27) recebe pelo número do pedido do ML, mesmo sem o "2" do começo que a etiqueta corta, pelo toque em "Dar chegada"', async ({ page }) => {
   const pedido = pedidoML();
   const codigo = await criarDoML({ pedido, rastreio: `MM${envioML()}BRSP06`, status: 'NO_CD_MARKETPLACE' });
   await entrarComo(page, USUARIOS_E2E.operador);
   await page.goto('/fluxo/recebimento');
   await page.getByLabel('Código de Rastreamento').fill(pedido.slice(1));
   await page.getByRole('button', { name: 'Registrar chegada' }).click();
+  // E27: pelo pedido a chegada não é registrada sozinha; a ficha da venda espera o toque (depois da trava de 0,7 s).
+  const dar = page.getByRole('region', { name: 'Confira antes de dar a chegada' }).getByRole('button', { name: `Dar chegada na ${codigo}` });
+  await expect(dar).toBeEnabled();
+  await page.waitForTimeout(800);
+  await dar.click();
   const resultado = page.getByRole('status');
   await expect(resultado).toContainText('Chegada registrada');
   await expect(resultado).toContainText(`${codigo} · voltou do armazém do ML (extra)`);
