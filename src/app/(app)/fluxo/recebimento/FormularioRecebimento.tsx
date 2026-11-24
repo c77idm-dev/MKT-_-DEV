@@ -8,6 +8,7 @@ import { useManterFilaAtiva } from '@/components/midia/useFilaEnvios';
 import { useLeitorCamera } from '@/components/leitor/useLeitorCamera';
 import { criarRetiradaAcao, type EstadoNovaRetirada } from '../retiradas-full/acoes';
 import { registrarChegadaAcao, type EstadoRecebimento } from './acoes';
+import { EscolhaDoPedido, instrucaoDaEscolha, TITULO_ESCOLHA } from './EscolhaDoPedido';
 import { podeAceitarLeitura } from './guarda';
 import { mensagemComNota } from './mensagens';
 
@@ -110,6 +111,8 @@ function textoAnunciado(estado: EstadoRecebimento): string {
     case 'sucesso':
     case 'aviso':
       return `${estado.titulo}. ${mensagemComNota(estado.mensagem, estado.nota)}`;
+    case 'escolher':
+      return `${TITULO_ESCOLHA}. ${estado.nota} ${instrucaoDaEscolha(estado.fichas.length)}`;
     case 'nao_encontrada':
       return `Rastreio não encontrado. Nenhuma devolução com o rastreio ${estado.rastreio}.`;
     case 'erro':
@@ -134,6 +137,8 @@ function Resultado({ estado, acao, pendente }: { estado: EstadoRecebimento; acao
           <LinksDevolucoes codigos={estado.codigos} />
         </Cartao>
       )}
+      {/* (extra, E27) Pelo número do pedido: a ficha (ou a lista) e "Dar chegada". Remonta a cada leitura (trava do toque duplo). */}
+      {estado.tipo === 'escolher' && <EscolhaDoPedido key={estado.lidaEm} estado={estado} acao={acao} pendente={pendente} />}
       {estado.tipo === 'nao_encontrada' && (
         <Cartao
           tom="aviso"
