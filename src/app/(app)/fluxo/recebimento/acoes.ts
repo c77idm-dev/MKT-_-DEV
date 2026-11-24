@@ -8,15 +8,15 @@ import { rotuloStatus } from '@/modules/devolucoes/dominio';
 import { ErroDevolucao } from '@/modules/devolucoes/erros';
 import { criarNaoIdentificada, darChegadaPeloPedido, receberPorRastreio, type ResultadoRecebimento } from '@/modules/devolucoes/recebimento';
 import { fichasDasDevolucoes, type FichaVenda } from '@/modules/mercado-livre/ficha-venda';
-import { mesmaLeituraDaCamera, mesmoPedidoDaCamera } from './guarda';
+import { comAvisoDoPedido, mesmaLeituraDaCamera, mesmoPedidoDaCamera } from './guarda';
 import { mensagemChegada, notaAchada } from './mensagens';
 
 /**
  * `nota` (extra, E25): por qual número da etiqueta do ML a devolução foi achada, quando não foi pelo rastreio.
  * `escolher` (extra, E27): achadas pelo número do pedido do ML, nada registrado; a tela mostra a ficha da venda (uma) ou a
  * lista (mais de uma), e a pessoa toca em "Dar chegada" na que chegou. `lidaEm` muda a cada leitura (a tela remonta a
- * ficha e a trava do toque duplo recomeça). `idsDoPedido` (E27): no cartão verde da chegada dada pela ficha, as
- * devoluções que estavam nela (ver mesmoPedidoDaCamera).
+ * ficha e a trava do toque duplo recomeça). `aindaEsperam` (extra, E27): no cartão verde que ficou diante de outro
+ * código do mesmo pedido lido pela câmera, as devoluções desse pedido que ainda esperam o pacote (ver comAvisoDoPedido).
  */
 export type EstadoRecebimento =
   | { tipo: 'inicial' }
@@ -27,7 +27,7 @@ export type EstadoRecebimento =
       codigos: string[];
       nota?: string;
       naoIdentificada?: { id: string; codigo: string };
-      idsDoPedido?: string[];
+      aindaEsperam?: string[];
     }
   | { tipo: 'aviso'; titulo: string; mensagem: string; codigos: string[]; nota?: string }
   | { tipo: 'escolher'; codigoLido: string; lidaEm: number; fichas: FichaVenda[]; nota: string }
@@ -41,13 +41,23 @@ function comNota(nota: string | undefined): { nota?: string } {
   return nota ? { nota } : {};
 }
 
-/** O cartão de cada resposta do Recebimento (menos a escolha pelo pedido, que monta a ficha). */
-function estadoDaResposta(
-  r: Exclude<ResultadoRecebimento, { tipo: 'escolher' }>,
+/**
+ * Pela câmera, o "já chegou" de outro código da mesma etiqueta: o cartão verde fica (E25). (extra, E27) Achada pelo
+ * número do pedido, o "já chegou" ou o "Fale com o Gestor" fala da mais recente do pedido, que pode ser outra: se o
+ * cartão é de uma devolução desse pedido, ele fica; nenhuma devolução do pedido espera mais o pacote, e o aviso das que
+ * esperavam sai. Pelo rastreio ou pelo envio, o "Fale com o Gestor" aparece como na E25.
+ */
+function mesmaEtiqueta(
+  r: { tipo: 'ja_recebida' | 'bloqueada'; codigo: string; codigosDoPedido?: string[] },
   anterior: EstadoRecebimento,
   daCamera: boolean,
-  idsDoPedido?: string[],
-): EstadoRecebimento {
+): EstadoRecebimento | null {
+  if (r.codigosDoPedido) return mesmaLeituraDaCamera(anterior, daCamera, r.codigosDoPedido) ? comAvisoDoPedido(anterior, []) : null;
+  return r.tipo === 'ja_recebida' && mesmaLeituraDaCamera(anterior, daCamera, [r.codigo]) ? anterior : null;
+}
+
+/** O cartão de cada resposta do Recebimento (menos a escolha pelo pedido, que monta a ficha). */
+function estadoDaResposta(r: Exclude<ResultadoRecebimento, { tipo: 'escolher' }>, anterior: EstadoRecebimento, daCamera: boolean): EstadoRecebimento {
   switch (r.tipo) {
     case 'recebidas':
       revalidatePath('/fluxo');
@@ -57,25 +67,27 @@ function estadoDaResposta(
         mensagem: mensagemChegada(r.codigos, r.doArmazemML ?? [], formatarDataHora(r.em)),
         codigos: r.codigos,
         ...comNota(notaAchada(r.achadaPor, r.codigos.length)),
-        ...(idsDoPedido ? { idsDoPedido } : {}),
       };
     case 'ja_recebida':
-      if (mesmaLeituraDaCamera(anterior, daCamera, r.codigo)) return anterior;
-      return {
-        tipo: 'aviso',
-        titulo: 'Este pacote já chegou',
-        mensagem: `${r.codigo} já tinha chegado${r.recebidaEm ? ` em ${formatarDataHora(r.recebidaEm)}` : ''}. Status: ${rotuloStatus(r.status)}.`,
-        codigos: [r.codigo],
-        ...comNota(notaAchada(r.achadaPor, 1)),
-      };
+      return (
+        mesmaEtiqueta(r, anterior, daCamera) ?? {
+          tipo: 'aviso',
+          titulo: 'Este pacote já chegou',
+          mensagem: `${r.codigo} já tinha chegado${r.recebidaEm ? ` em ${formatarDataHora(r.recebidaEm)}` : ''}. Status: ${rotuloStatus(r.status)}.`,
+          codigos: [r.codigo],
+          ...comNota(notaAchada(r.achadaPor, 1)),
+        }
+      );
     case 'bloqueada':
-      return {
-        tipo: 'aviso',
-        titulo: 'Fale com o Gestor',
-        mensagem: `${r.codigo} está ${rotuloStatus(r.status).toLowerCase()}. Separe o pacote e avise o Gestor.`,
-        codigos: [r.codigo],
-        ...comNota(notaAchada(r.achadaPor, 1)),
-      };
+      return (
+        mesmaEtiqueta(r, anterior, daCamera) ?? {
+          tipo: 'aviso',
+          titulo: 'Fale com o Gestor',
+          mensagem: `${r.codigo} está ${rotuloStatus(r.status).toLowerCase()}. Separe o pacote e avise o Gestor.`,
+          codigos: [r.codigo],
+          ...comNota(notaAchada(r.achadaPor, 1)),
+        }
+      );
     case 'nao_encontrada':
       return { tipo: 'nao_encontrada', rastreio: r.rastreio };
   }
@@ -108,13 +120,13 @@ export async function registrarChegadaAcao(anterior: EstadoRecebimento, dados: F
       const codigoLido = String(dados.get('codigoLido') ?? '');
       const r = await darChegadaPeloPedido(db, { devolucaoId, codigoLido }, usuario);
       if (r.tipo === 'escolher') return { tipo: 'erro', mensagem: MENSAGEM_MUDOU }; // não acontece: a chegada não procura
-      const idsDoPedido = anterior.tipo === 'escolher' ? anterior.fichas.map((f) => f.devolucaoId) : [devolucaoId];
-      return estadoDaResposta(r, anterior, false, idsDoPedido);
+      return estadoDaResposta(r, anterior, false);
     }
     const r = await receberPorRastreio(db, rastreio, usuario);
     if (r.tipo !== 'escolher') return estadoDaResposta(r, anterior, daCamera);
-    // (E27) A câmera continua lendo a mesma etiqueta: o mesmo pedido não fecha a ficha (nem o cartão verde dado por ela).
-    if (mesmoPedidoDaCamera(anterior, daCamera, r.ids)) return anterior;
+    // (E27) A câmera continua lendo a mesma etiqueta: outro código do mesmo pedido não troca a ficha aberta nem o cartão
+    // verde de uma chegada desse pedido, que ganha o aviso das devoluções que ainda esperam o pacote.
+    if (mesmoPedidoDaCamera(anterior, daCamera, r.codigosDoPedido)) return comAvisoDoPedido(anterior, r.codigos);
     const fichas = await fichasDasDevolucoes(db, r.ids);
     if (fichas.length === 0) return { tipo: 'erro', mensagem: MENSAGEM_MUDOU };
     return { tipo: 'escolher', codigoLido: r.codigoLido, lidaEm: Date.now(), fichas, nota: notaAchada(r.achadaPor, fichas.length) ?? '' };

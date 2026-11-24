@@ -273,6 +273,8 @@ describe('etiqueta amarela: devolução do ML no meio da retirada (extra, emenda
       tipo: 'escolher',
       codigoLido: '000044440000001',
       ids: [d.id],
+      codigos: [d.codigo],
+      codigosDoPedido: [d.codigo],
       achadaPor: 'PEDIDO_ML',
     });
     expect(await statusDe(d.id)).toBe('PENDENTE_CHEGADA');

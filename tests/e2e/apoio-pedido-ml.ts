@@ -23,9 +23,9 @@ export type DevolucaoDoPedido = { id: string; codigo: string; produto: string };
 /**
  * Devoluções do ML com o mesmo pedido, uma por status, cada uma com um produto cadastrado próprio (descrição única).
  * A criação manual recusa um 2º pedido em andamento no mesmo canal; pela API cada devolução externa do pedido vira uma.
- * Aqui o pedido é trocado direto no banco.
+ * Aqui o pedido é trocado direto no banco. `rastreios` (opcional): o rastreio de cada uma, na mesma ordem.
  */
-export async function devolucoesDoPedido(pedido: string, status: StatusDevolucao[]): Promise<DevolucaoDoPedido[]> {
+export async function devolucoesDoPedido(pedido: string, status: StatusDevolucao[], rastreios: (string | undefined)[] = []): Promise<DevolucaoDoPedido[]> {
   return comBanco(async (db) => {
     const operador = await usuarioPorEmail(db, USUARIOS_E2E.operador.email);
     const criadas: DevolucaoDoPedido[] = [];
@@ -33,7 +33,12 @@ export async function devolucoesDoPedido(pedido: string, status: StatusDevolucao
       const sku = codigoUnico(`FV${i}`);
       const produto = `Produto ${i + 1} do pedido ${pedido.slice(-4)}`;
       await criarProdutoTeste(db, { sku, descricao: produto });
-      const d = await criarDevolucaoTeste(db, operador, { canal: 'MERCADO_LIVRE', pedido: `${pedido}-${i}`, itens: [{ sku, quantidade: 1 }] });
+      const d = await criarDevolucaoTeste(db, operador, {
+        canal: 'MERCADO_LIVRE',
+        pedido: `${pedido}-${i}`,
+        itens: [{ sku, quantidade: 1 }],
+        ...(rastreios[i] ? { rastreio: rastreios[i] } : {}),
+      });
       await db.update(devolucoes).set({ pedidosExternos: [pedido], status: s }).where(eq(devolucoes.id, d.id));
       criadas.push({ id: d.id, codigo: d.codigo, produto });
     }

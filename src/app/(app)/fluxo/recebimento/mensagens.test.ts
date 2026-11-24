@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mensagemChegada, mensagemComNota, notaAchada } from './mensagens';
+import { avisoAindaEsperam, mensagemChegada, mensagemComNota, notaAchada } from './mensagens';
 
 const QUANDO = '23/11/2026 17:30';
 
@@ -50,5 +50,20 @@ describe('mensagemComNota (anúncio do leitor de tela, extra E25)', () => {
     expect(mensagemComNota('DEV-000071 já tinha chegado. Status: Aguardando conferência.', 'Achada pelo número do envio do ML (extra).')).toBe(
       'DEV-000071 já tinha chegado. Status: Aguardando conferência. Achada pelo número do envio do ML (extra).',
     );
+  });
+});
+
+describe('avisoAindaEsperam (extra, E27)', () => {
+  it('uma devolução do pedido ainda espera o pacote', () => {
+    expect(avisoAindaEsperam(['DEV-000002'])).toBe(
+      'Do mesmo pedido, a DEV-000002 ainda espera o pacote. Se ele está com você, digite o número do pedido no campo abaixo (extra).',
+    );
+  });
+
+  it('mais de uma: no plural, com "e" antes da última', () => {
+    expect(avisoAindaEsperam(['DEV-000002', 'DEV-000003'])).toBe(
+      'Do mesmo pedido, as DEV-000002 e DEV-000003 ainda esperam o pacote. Se algum deles está com você, digite o número do pedido no campo abaixo (extra).',
+    );
+    expect(avisoAindaEsperam(['DEV-000002', 'DEV-000003', 'DEV-000004'])).toContain('as DEV-000002, DEV-000003 e DEV-000004 ainda esperam');
   });
 });

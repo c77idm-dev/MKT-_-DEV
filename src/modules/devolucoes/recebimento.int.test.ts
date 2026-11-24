@@ -271,6 +271,8 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
       tipo: 'escolher',
       codigoLido: '2000018992531744',
       ids: [d.id],
+      codigos: [d.codigo],
+      codigosDoPedido: [d.codigo],
       achadaPor: 'PEDIDO_ML',
     });
     expect(await statusDe(d.id)).toEqual({ status: 'PENDENTE_CHEGADA', rastreio: 'MM48351759365BRSP06' });
@@ -284,6 +286,8 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
       tipo: 'escolher',
       codigoLido: '000018992531744',
       ids: [d.id],
+      codigos: [d.codigo],
+      codigosDoPedido: [d.codigo],
       achadaPor: 'PEDIDO_ML',
     });
     expect((await statusDe(d.id)).status).toBe('NO_CD_MARKETPLACE');
@@ -333,6 +337,8 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
       tipo: 'escolher',
       codigoLido: '2000044443333222',
       ids: [ml.id],
+      codigos: [ml.codigo],
+      codigosDoPedido: [ml.codigo],
       achadaPor: 'PEDIDO_ML',
     });
     expect((await statusDe(tiktok.id)).status).toBe('PENDENTE_CHEGADA');
@@ -358,7 +364,15 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
     await mudarStatus(b.id, 'NO_CD_MARKETPLACE');
     await mudarStatus(c.id, 'CONCLUIDA');
     await mudarStatus(e.id, 'CANCELADA');
-    expect(await receberPorRastreio(db, PEDIDO, operador)).toEqual({ tipo: 'escolher', codigoLido: PEDIDO, ids: [a.id, b.id], achadaPor: 'PEDIDO_ML' });
+    expect(await receberPorRastreio(db, PEDIDO, operador)).toEqual({
+      tipo: 'escolher',
+      codigoLido: PEDIDO,
+      ids: [a.id, b.id],
+      codigos: [a.codigo, b.codigo],
+      // Todas as do pedido, em qualquer status: a câmera compara com o cartão verde na tela.
+      codigosDoPedido: [a.codigo, b.codigo, c.codigo, e.codigo],
+      achadaPor: 'PEDIDO_ML',
+    });
     expect((await statusDe(a.id)).status).toBe('PENDENTE_CHEGADA');
     expect((await statusDe(b.id)).status).toBe('NO_CD_MARKETPLACE');
     expect((await statusDe(c.id)).status).toBe('CONCLUIDA');
@@ -374,6 +388,25 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
       status: 'AGUARDANDO_CONFERENCIA',
       recebidaEm: agora,
       achadaPor: 'PEDIDO_ML',
+      codigosDoPedido: [d.codigo],
+    });
+  });
+
+  it('(E27) achada pelo pedido, nenhuma esperando: o "já chegou" é da mais recente do pedido e traz todas as do pedido', async () => {
+    // A ficha deu a chegada da A agora; a B, mais recente, já tinha chegado antes. A câmera do Recebimento relê o pedido
+    // e precisa saber que a A (do cartão verde) é desse pedido.
+    const PEDIDO = '2000077776666556';
+    const [a, b] = await devolucoesDoMesmoPedido(PEDIDO, 2);
+    const antes = new Date('2026-11-20T10:00:00Z');
+    await darChegadaPeloPedido(db, { devolucaoId: b.id, codigoLido: PEDIDO }, operador, antes);
+    await darChegadaPeloPedido(db, { devolucaoId: a.id, codigoLido: PEDIDO }, operador);
+    expect(await receberPorRastreio(db, PEDIDO, operador)).toEqual({
+      tipo: 'ja_recebida',
+      codigo: b.codigo,
+      status: 'AGUARDANDO_CONFERENCIA',
+      recebidaEm: antes,
+      achadaPor: 'PEDIDO_ML',
+      codigosDoPedido: [a.codigo, b.codigo],
     });
   });
 
@@ -387,6 +420,7 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
       codigo: c.codigo,
       status: 'CANCELADA',
       achadaPor: 'PEDIDO_ML',
+      codigosDoPedido: [c.codigo],
     });
     expect(await receberPorRastreio(db, '40000000001', operador)).toEqual({ tipo: 'bloqueada', codigo: e.codigo, status: 'EXTRAVIADA', achadaPor: 'ENVIO_ML' });
   });
@@ -395,7 +429,14 @@ describe('receberPorRastreio: outros números da etiqueta do ML (extra, emenda E
     const PEDIDO = '2000012121212121';
     const [cancelada, pendente] = await devolucoesDoMesmoPedido(PEDIDO, 2);
     await mudarStatus(cancelada.id, 'CANCELADA');
-    expect(await receberPorRastreio(db, PEDIDO, operador)).toEqual({ tipo: 'escolher', codigoLido: PEDIDO, ids: [pendente.id], achadaPor: 'PEDIDO_ML' });
+    expect(await receberPorRastreio(db, PEDIDO, operador)).toEqual({
+      tipo: 'escolher',
+      codigoLido: PEDIDO,
+      ids: [pendente.id],
+      codigos: [pendente.codigo],
+      codigosDoPedido: [cancelada.codigo, pendente.codigo],
+      achadaPor: 'PEDIDO_ML',
+    });
   });
 });
 
@@ -549,6 +590,8 @@ describe('procurarPeloPedidoML: só o número do pedido (Retirada do Full, extra
       tipo: 'escolher',
       codigoLido: '2000077770000001',
       ids: [a.id, b.id],
+      codigos: [a.codigo, b.codigo],
+      codigosDoPedido: [a.codigo, b.codigo],
       achadaPor: 'PEDIDO_ML',
     });
     await mudarStatus(a.id, 'CANCELADA');

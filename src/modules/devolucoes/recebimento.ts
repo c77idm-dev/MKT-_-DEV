@@ -25,17 +25,21 @@ const MENSAGEM_PERFIL = 'Seu perfil não pode registrar o recebimento de pacotes
  */
 export type AchadaPor = 'PEDIDO_ML' | 'ENVIO_ML';
 
+/**
+ * `codigosDoPedido` (extra, E27): achadas pelo número do pedido, os códigos de todas as devoluções do pedido, em qualquer
+ * status. A câmera do Recebimento os compara com o cartão verde na tela (outro código da mesma etiqueta não o troca).
+ */
 export type ResultadoRecebimento =
   /** `doArmazemML` (extra, E25): os códigos que estavam "No CD do marketplace"; só aparece quando há algum. */
   | { tipo: 'recebidas'; codigos: string[]; em: Date; achadaPor?: AchadaPor; doArmazemML?: string[] }
-  | { tipo: 'ja_recebida'; codigo: string; status: StatusDevolucao; recebidaEm: Date | null; achadaPor?: AchadaPor }
-  | { tipo: 'bloqueada'; codigo: string; status: StatusDevolucao; achadaPor?: AchadaPor }
+  | { tipo: 'ja_recebida'; codigo: string; status: StatusDevolucao; recebidaEm: Date | null; achadaPor?: AchadaPor; codigosDoPedido?: string[] }
+  | { tipo: 'bloqueada'; codigo: string; status: StatusDevolucao; achadaPor?: AchadaPor; codigosDoPedido?: string[] }
   /**
-   * (extra, E27) Achadas pelo número do pedido do ML: nada é registrado. `ids` são as devoluções do pedido que esperam o
-   * pacote (Pendente de chegada ou No CD), na ordem do número; a tela mostra a ficha (ou a lista) e a pessoa toca na que
-   * chegou ("Dar chegada", `darChegadaPeloPedido`).
+   * (extra, E27) Achadas pelo número do pedido do ML: nada é registrado. `ids` (e `codigos`, na mesma ordem) são as
+   * devoluções do pedido que esperam o pacote (Pendente de chegada ou No CD), na ordem do número; a tela mostra a ficha
+   * (ou a lista) e a pessoa toca na que chegou ("Dar chegada", `darChegadaPeloPedido`).
    */
-  | { tipo: 'escolher'; codigoLido: string; ids: string[]; achadaPor: 'PEDIDO_ML' }
+  | { tipo: 'escolher'; codigoLido: string; ids: string[]; codigos: string[]; codigosDoPedido: string[]; achadaPor: 'PEDIDO_ML' }
   | { tipo: 'nao_encontrada'; rastreio: string };
 
 /** Uma devolução achada por uma regra, em qualquer status. */
@@ -86,13 +90,6 @@ function doML(condicao: SQL): SQL {
 }
 
 /**
- * Onde o código lido aparece. A primeira regra que achar alguma devolução, em qualquer status, decide:
- * 1. o rastreio exato (como sempre), em qualquer canal;
- * 2. (extra, E25) só para código feito só de dígitos: o número do pedido do ML, inteiro, em `pedidos_externos` das
- *    devoluções do ML;
- * 3. (extra, E25) idem: o número do envio do ML dentro do rastreio do Mercado Envios das devoluções do ML.
- */
-/**
  * Regra 2 da E25: as devoluções do ML com este número de pedido, em qualquer status, na ordem do número. Vale o elemento
  * de `pedidos_externos` igual ao código ou, com 15 dígitos, igual a "2" + código; só código feito só de dígitos (senão,
  * nenhuma). (extra, E27) O Conferir pacote e a Retirada do Full usam a mesma busca.
@@ -113,6 +110,13 @@ export function devolucoesDoPedidoML(db: DbOuTx, codigo: string): Promise<Devolu
   );
 }
 
+/**
+ * Onde o código lido aparece. A primeira regra que achar alguma devolução, em qualquer status, decide:
+ * 1. o rastreio exato (como sempre), em qualquer canal;
+ * 2. (extra, E25) só para código feito só de dígitos: o número do pedido do ML, inteiro, em `pedidos_externos` das
+ *    devoluções do ML (`devolucoesDoPedidoML`);
+ * 3. (extra, E25) idem: o número do envio do ML dentro do rastreio do Mercado Envios das devoluções do ML.
+ */
 async function procurar(db: DbOuTx, codigo: string): Promise<{ achadas: Candidata[]; achadaPor?: AchadaPor }> {
   const porRastreio = await candidatas(db, eq(devolucoes.rastreio, codigo));
   if (porRastreio.length > 0) return { achadas: porRastreio };
@@ -134,14 +138,17 @@ async function procurar(db: DbOuTx, codigo: string): Promise<{ achadas: Candidat
  * bloqueada (como na E25).
  */
 async function escolhaDoPedido(db: DbOuTx, achadas: Candidata[], codigoLido: string): Promise<ResultadoRecebimento> {
+  const codigosDoPedido = achadas.map((d) => d.codigo);
   const esperando = achadas.filter((d) => A_RECEBER.includes(d.status));
-  if (esperando.length > 0) return { tipo: 'escolher', codigoLido, ids: esperando.map((d) => d.id), achadaPor: 'PEDIDO_ML' };
+  if (esperando.length > 0) {
+    return { tipo: 'escolher', codigoLido, ids: esperando.map((d) => d.id), codigos: esperando.map((d) => d.codigo), codigosDoPedido, achadaPor: 'PEDIDO_ML' };
+  }
   const atual = await maisRecenteEntre(db, achadas.map((d) => d.id));
   if (!atual) return { tipo: 'nao_encontrada', rastreio: codigoLido };
   // Releitura: a devolução pode ter voltado a esperar o pacote entre a busca e agora; a pessoa lê de novo.
   if (A_RECEBER.includes(atual.status)) throw new ErroDevolucao('A situação desta devolução mudou agora. Leia o pacote de novo.');
-  if (BLOQUEADAS.includes(atual.status)) return { tipo: 'bloqueada', codigo: atual.codigo, status: atual.status, achadaPor: 'PEDIDO_ML' };
-  return { tipo: 'ja_recebida', codigo: atual.codigo, status: atual.status, recebidaEm: atual.recebidaEm, achadaPor: 'PEDIDO_ML' };
+  if (BLOQUEADAS.includes(atual.status)) return { tipo: 'bloqueada', codigo: atual.codigo, status: atual.status, achadaPor: 'PEDIDO_ML', codigosDoPedido };
+  return { tipo: 'ja_recebida', codigo: atual.codigo, status: atual.status, recebidaEm: atual.recebidaEm, achadaPor: 'PEDIDO_ML', codigosDoPedido };
 }
 
 /**

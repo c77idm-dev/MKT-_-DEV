@@ -10,7 +10,7 @@ import { criarRetiradaAcao, type EstadoNovaRetirada } from '../retiradas-full/ac
 import { registrarChegadaAcao, type EstadoRecebimento } from './acoes';
 import { EscolhaDoPedido, instrucaoDaEscolha, TITULO_ESCOLHA } from './EscolhaDoPedido';
 import { podeAceitarLeitura } from './guarda';
-import { mensagemComNota } from './mensagens';
+import { avisoAindaEsperam, mensagemComNota } from './mensagens';
 
 const INICIAL: EstadoRecebimento = { tipo: 'inicial' };
 const SEM_ERRO_RETIRADA: EstadoNovaRetirada = { erro: null };
@@ -49,12 +49,12 @@ const ICONES: Record<Tom, string> = {
 };
 
 /** Ícones do resultado: o sentido nunca depende só da cor (texto + ícone + cor). */
-function Icone({ tom }: { tom: Tom }) {
+function Icone({ tom, tamanho = 28 }: { tom: Tom; tamanho?: number }) {
   return (
     <svg
       aria-hidden="true"
-      width="28"
-      height="28"
+      width={tamanho}
+      height={tamanho}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -83,8 +83,23 @@ function LinksDevolucoes({ codigos }: { codigos: string[] }) {
 /**
  * Cartão grande do resultado. O texto visível fica escondido do leitor de tela porque a região aria-live (acima) já o anuncia.
  * `nota` (extra, E25): por qual número da etiqueta do ML a devolução foi achada.
+ * `aviso` (extra, E27): no cartão verde, as outras devoluções do mesmo pedido que ainda esperam o pacote, em destaque.
  */
-function Cartao({ tom, titulo, mensagem, nota, children }: { tom: Tom; titulo: string; mensagem: ReactNode; nota?: string; children?: ReactNode }) {
+function Cartao({
+  tom,
+  titulo,
+  mensagem,
+  nota,
+  aviso,
+  children,
+}: {
+  tom: Tom;
+  titulo: string;
+  mensagem: ReactNode;
+  nota?: string;
+  aviso?: string;
+  children?: ReactNode;
+}) {
   const cores =
     tom === 'sucesso' ? 'border-bom bg-bom-suave text-bom' : tom === 'aviso' ? 'border-atencao bg-atencao-suave text-atencao' : 'border-erro bg-erro-suave text-erro';
   return (
@@ -101,16 +116,35 @@ function Cartao({ tom, titulo, mensagem, nota, children }: { tom: Tom; titulo: s
           {nota}
         </p>
       )}
+      {aviso && (
+        <p
+          aria-hidden="true"
+          data-testid="aviso-ainda-esperam"
+          className="my-1 flex gap-2 rounded-xl border-2 border-atencao bg-atencao-suave p-3 text-[15px] font-semibold text-atencao"
+        >
+          <Icone tom="aviso" tamanho={22} />
+          <span className="min-w-0 [overflow-wrap:anywhere]">{aviso}</span>
+        </p>
+      )}
       {children}
     </div>
   );
 }
 
+/** (extra, E27) O aviso das devoluções do mesmo pedido que ainda esperam o pacote, só no cartão verde que o tem. */
+function avisoDoCartao(estado: EstadoRecebimento): string | undefined {
+  return estado.tipo === 'sucesso' && estado.aindaEsperam?.length ? avisoAindaEsperam(estado.aindaEsperam) : undefined;
+}
+
 function textoAnunciado(estado: EstadoRecebimento): string {
   switch (estado.tipo) {
     case 'sucesso':
-    case 'aviso':
-      return `${estado.titulo}. ${mensagemComNota(estado.mensagem, estado.nota)}`;
+    case 'aviso': {
+      // (E27) O aviso das que ainda esperam entra no anúncio: o texto muda e o leitor de tela anuncia de novo.
+      const texto = `${estado.titulo}. ${mensagemComNota(estado.mensagem, estado.nota)}`;
+      const aviso = avisoDoCartao(estado);
+      return aviso ? mensagemComNota(texto, aviso) : texto;
+    }
     case 'escolher':
       return `${TITULO_ESCOLHA}. ${estado.nota} ${instrucaoDaEscolha(estado.fichas.length)}`;
     case 'nao_encontrada':
@@ -133,7 +167,7 @@ function Resultado({ estado, acao, pendente }: { estado: EstadoRecebimento; acao
         {textoAnunciado(estado)}
       </div>
       {(estado.tipo === 'sucesso' || estado.tipo === 'aviso') && (
-        <Cartao tom={estado.tipo} titulo={estado.titulo} mensagem={estado.mensagem} nota={estado.nota}>
+        <Cartao tom={estado.tipo} titulo={estado.titulo} mensagem={estado.mensagem} nota={estado.nota} aviso={avisoDoCartao(estado)}>
           <LinksDevolucoes codigos={estado.codigos} />
         </Cartao>
       )}
