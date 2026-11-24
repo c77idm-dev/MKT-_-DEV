@@ -9,6 +9,7 @@ import envio from '../../../../tests/fixtures/ml/doc/envio.json';
 import pedido from '../../../../tests/fixtures/ml/doc/pedido.json';
 import motivoReclamacao from '../../../../tests/fixtures/ml/doc/motivo-reclamacao.json';
 import reclamacao from '../../../../tests/fixtures/ml/doc/reclamacao.json';
+import { semDadosPessoais } from '../bitbrain/falso';
 import { esquemaAnuncio, esquemaDevolucao, esquemaReclamacao } from './esquemas';
 import {
   ErroFormatoML,
@@ -54,6 +55,17 @@ describe('mapearReclamacao (spec §7.2 e §7.3)', () => {
           descricao: 'Fone de Ouvido Bluetooth — Preto',
           ean: '7891234567888',
           fotoUrl: 'https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg',
+        },
+      ],
+      vendas: [
+        {
+          pedidoId: '2000008003035430',
+          vendidaEm: new Date('2026-10-28T09:00:00.000-03:00'),
+          situacao: 'paid',
+          situacaoEnvio: null,
+          itens: [
+            { anuncioId: 'MLB3456789012', titulo: 'Fone de Ouvido Bluetooth', sku: 'fone-01', variacaoId: '178234567890', quantidade: 1, valorUnitario: 129.9 },
+          ],
         },
       ],
     });
@@ -380,5 +392,105 @@ describe('extrasDaReclamacao (integração Bitbrain §4.5)', () => {
       envioVenda: { id: 41800000001, logistic_type: 'fulfillment' },
     });
     expect(comTudo.extras).toMatchObject({ afetaReputacao: 'AFETA', ehFull: true, dinheiro: 'RETIDO' });
+  });
+});
+
+describe('vendas (ficha da venda, emenda E27, extra)', () => {
+  const linha = pedido.order_items[0];
+  /** O pedido com um campo trocado (no pedido ou na 1ª linha de order_items). */
+  const pedidoCom = (mudancas: Record<string, unknown>, naLinha: Record<string, unknown> = {}, noItem: Record<string, unknown> = {}) => ({
+    ...pedido,
+    ...mudancas,
+    order_items: [{ ...linha, ...naLinha, item: { ...linha.item, ...noItem } }],
+  });
+  const vendas = (pedidos: unknown[], envioVenda?: unknown) => mapearReclamacao({ ...COMPLETA, pedidos, envioVenda }).vendas;
+
+  it('situação do envio: a do envio da venda lido (pedido.shipping.id); envio de outro id não vale', () => {
+    expect(vendas([pedido], { id: 41800000001, status: 'delivered', logistic_type: 'drop_off' })[0].situacaoEnvio).toBe('delivered');
+    expect(vendas([pedido], { id: 99, status: 'delivered' })[0].situacaoEnvio).toBeNull();
+  });
+
+  it('envio da venda sem id (fora do formato): vale para o pedido de onde ele foi lido (o 1º com shipping.id)', () => {
+    const semEnvio = { ...pedido, id: 2000000000000001, shipping: null };
+    const r = vendas([semEnvio, pedido], { status: 'shipped' });
+    expect(r.map((v) => [v.pedidoId, v.situacaoEnvio])).toEqual([
+      ['2000000000000001', null],
+      ['2000008003035430', 'shipped'],
+    ]);
+  });
+
+  it('um por pedido lido; pedido recusado pelo ML (fora da lista) ou reclamação sem devolução: nenhum', () => {
+    expect(vendas([])).toEqual([]);
+    const semDevolucao = mapearReclamacao({ reclamacao: { ...reclamacao, related_entities: [] }, devolucao: null, pedidos: [], anuncios: [], envio: null });
+    expect(semDevolucao.vendas).toEqual([]);
+  });
+
+  it('sem dados pessoais: do pedido do modo api só saem os campos da ficha', () => {
+    const comComprador = {
+      ...pedidoCom({
+        buyer: { id: 987654321, nickname: 'COMPRADOR_TESTE', first_name: 'Maria', email: 'maria@exemplo.com.br' },
+        payments: [{ id: 1, payer_id: 987654321, total_paid_amount: 129.9 }],
+        shipping: { id: 41800000001, receiver_address: { address_line: 'Rua do Comprador 200', zip_code: '22010000' } },
+      }),
+    };
+    const [venda] = vendas([comComprador]);
+    expect(Object.keys(venda).sort()).toEqual(['itens', 'pedidoId', 'situacao', 'situacaoEnvio', 'vendidaEm']);
+    expect(Object.keys(venda.itens[0]).sort()).toEqual(['anuncioId', 'quantidade', 'sku', 'titulo', 'valorUnitario', 'variacaoId']);
+    const texto = JSON.stringify(venda);
+    for (const pessoal of ['987654321', 'COMPRADOR_TESTE', 'Maria', 'maria@', 'Rua do Comprador', '22010000']) expect(texto).not.toContain(pessoal);
+  });
+
+  it('modo bitbrain: o pedido como a rota manda (sem dados pessoais) dá a mesma venda', () => {
+    expect(vendas([semDadosPessoais(`/orders/${pedido.id}`, pedido)])).toEqual(vendas([pedido]));
+  });
+
+  it('quantidade e valor em texto; título com espaços juntados e no máximo 200 caracteres; SKU de reserva', () => {
+    const [venda] = vendas([pedidoCom({}, { quantity: '2', unit_price: '59.90' }, { title: `  Fone\n de   Ouvido ${'x'.repeat(300)}`, seller_sku: null, seller_custom_field: ' CUSTOM-1 ' })]);
+    expect(venda.itens[0]).toMatchObject({ quantidade: 2, valorUnitario: 59.9, sku: 'CUSTOM-1' });
+    expect(venda.itens[0].titulo?.startsWith('Fone de Ouvido x')).toBe(true);
+    expect(venda.itens[0].titulo).toHaveLength(200);
+  });
+
+  it('texto decimal com espaços e com sinal: "  59.90 " vale; "-3" é negativo e vira nulo', () => {
+    const [venda] = vendas([pedidoCom({}, { quantity: ' 3 ', unit_price: '  59.90 ' })]);
+    expect(venda.itens[0]).toMatchObject({ quantidade: 3, valorUnitario: 59.9 });
+    const [negativa] = vendas([pedidoCom({}, { quantity: '-3', unit_price: '-1.5' })]);
+    expect(negativa.itens[0]).toMatchObject({ quantidade: null, valorUnitario: null });
+  });
+
+  it('quantidade zero ou negativa e valor negativo viram nulos', () => {
+    const [venda] = vendas([pedidoCom({}, { quantity: 0, unit_price: -1 })]);
+    expect(venda.itens[0]).toMatchObject({ quantidade: null, valorUnitario: null });
+  });
+
+  // Um campo novo fora do formato nunca derruba a sincronização nem o SKU, que já funcionava (E27).
+  it.each([
+    ['status', pedidoCom({ status: { codigo: 'paid' } }), { situacao: null }],
+    ['date_created (número)', pedidoCom({ date_created: 1730000000 }), { vendidaEm: null }],
+    ['date_created (texto que não é data)', pedidoCom({ date_created: 'ontem' }), { vendidaEm: null }],
+    ['quantity', pedidoCom({}, { quantity: { n: 1 } }), { itens: [expect.objectContaining({ quantidade: null, sku: 'fone-01' })] }],
+    ['quantity (texto sem número)', pedidoCom({}, { quantity: 'um' }), { itens: [expect.objectContaining({ quantidade: null })] }],
+    ['unit_price', pedidoCom({}, { unit_price: [129.9] }), { itens: [expect.objectContaining({ valorUnitario: null, sku: 'fone-01' })] }],
+    ['unit_price (texto sem número)', pedidoCom({}, { unit_price: 'R$ 10' }), { itens: [expect.objectContaining({ valorUnitario: null })] }],
+    // Só número decimal: Number() leria "0x10" como 16, "0b101" como 5 e "1e3" como 1000.
+    ['quantity (hexadecimal)', pedidoCom({}, { quantity: '0x10' }), { itens: [expect.objectContaining({ quantidade: null })] }],
+    ['quantity (binário)', pedidoCom({}, { quantity: '0b101' }), { itens: [expect.objectContaining({ quantidade: null })] }],
+    ['unit_price (notação científica)', pedidoCom({}, { unit_price: '1e3' }), { itens: [expect.objectContaining({ valorUnitario: null })] }],
+    ['unit_price (Infinity)', pedidoCom({}, { unit_price: 'Infinity' }), { itens: [expect.objectContaining({ valorUnitario: null })] }],
+    // Finito, mas grande demais: em centavos estouraria (Infinity) e o JSON gravaria null.
+    ['unit_price (enorme)', pedidoCom({}, { unit_price: 1e308 }), { itens: [expect.objectContaining({ valorUnitario: null })] }],
+    ['quantity (enorme)', pedidoCom({}, { quantity: 1e308 }), { itens: [expect.objectContaining({ quantidade: null })] }],
+    ['item.title', pedidoCom({}, {}, { title: { pt: 'Fone' } }), { itens: [expect.objectContaining({ titulo: null, sku: 'fone-01' })] }],
+  ])('lixo em %s: a venda sai com o campo vazio e a devolução e o SKU continuam', (_campo, lixo, esperado) => {
+    const r = mapearReclamacao({ ...COMPLETA, pedidos: [lixo], envioVenda: { id: 41800000001, status: 'delivered' } });
+    expect(r.devolucao?.itens).toEqual([{ pedido: '2000008003035430', sku: 'fone-01', ean: '7891234567888', quantidade: 1 }]);
+    expect(r.vendas).toHaveLength(1);
+    expect(r.vendas[0]).toMatchObject({ pedidoId: '2000008003035430', ...esperado });
+  });
+
+  it('lixo no envio da venda (status e id): a venda sai sem a situação do envio e o Full continua sendo lido', () => {
+    const r = mapearReclamacao({ ...COMPLETA, envioVenda: { id: { x: 1 }, status: 42, logistic_type: 'fulfillment' } });
+    expect(r.vendas[0].situacaoEnvio).toBeNull();
+    expect(r.extras.ehFull).toBe(true);
   });
 });

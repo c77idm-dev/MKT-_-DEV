@@ -50,6 +50,12 @@ describe('retirada do Full: regras puras', () => {
     expect(pendenciasParaConcluir({ fotoEtiqueta: true, itens: 2 })).toEqual([]);
   });
 
+  it('(extra, E27; decisão do usuário de 24/11) só com chegadas pela etiqueta amarela, sem item bipado, também conclui', () => {
+    expect(pendenciasParaConcluir({ fotoEtiqueta: true, itens: 0, chegadasEtiquetaAmarela: 1 })).toEqual([]);
+    expect(pendenciasParaConcluir({ fotoEtiqueta: false, itens: 0, chegadasEtiquetaAmarela: 2 })).toEqual(['Tire a foto da etiqueta.']);
+    expect(pendenciasParaConcluir({ fotoEtiqueta: true, itens: 0, chegadasEtiquetaAmarela: 0 })).toEqual(['Bipe pelo menos 1 produto.']);
+  });
+
   it('código RF e EAN normalizado', () => {
     expect(ehCodigoRetirada('RF-000001')).toBe(true);
     expect(ehCodigoRetirada('RF-1234567')).toBe(true);

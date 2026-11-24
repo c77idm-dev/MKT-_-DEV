@@ -84,12 +84,35 @@ export const esquemaDevolucao = z.looseObject({
 });
 export type DevolucaoJson = z.output<typeof esquemaDevolucao>;
 
+/** Campo de enriquecimento (extras): fora do formato vira vazio, sem derrubar a devolução. */
+const textoTolerante = textoOuNulo.catch(null);
+/** Texto com um número decimal ("59.90", "-1"): sem hexadecimal, binário, notação científica ou "Infinity". */
+const NUMERO_DECIMAL = /^-?\d+(\.\d+)?$/;
+/**
+ * Ficha da venda (extra, E27): número, ou texto com um número decimal, finito; qualquer outra coisa vira null. A faixa
+ * que a ficha aceita fica no mapeamento (quantidadeDaLinha e valorDaLinha).
+ */
+const numeroTolerante = z
+  .union([z.number(), z.string()])
+  .nullish()
+  .transform((v) => {
+    const n = typeof v === 'number' ? v : typeof v === 'string' && NUMERO_DECIMAL.test(v.trim()) ? Number(v.trim()) : Number.NaN;
+    return Number.isFinite(n) ? n : null;
+  })
+  .catch(null);
+
 export const esquemaPedido = z.looseObject({
   id,
   shipping: z.looseObject({ id: idOuNulo }).nullish().catch(null),
+  // Ficha da venda (extra, E27): os campos novos são todos tolerantes. Um deles fora do formato vira vazio e nunca
+  // derruba a sincronização nem o SKU (seller_sku), que já funcionava.
+  status: textoTolerante,
+  date_created: dataOuNula.catch(null),
   order_items: lista(
     z.looseObject({
-      item: z.looseObject({ id: idOuNulo, seller_sku: textoOuNulo, seller_custom_field: textoOuNulo, variation_id: idOuNulo }),
+      item: z.looseObject({ id: idOuNulo, seller_sku: textoOuNulo, seller_custom_field: textoOuNulo, variation_id: idOuNulo, title: textoTolerante }),
+      quantity: numeroTolerante,
+      unit_price: numeroTolerante,
     }),
   ),
 });
@@ -97,7 +120,6 @@ export type PedidoJson = z.output<typeof esquemaPedido>;
 
 const atributos = lista(z.looseObject({ id: z.string(), value_name: textoOuNulo }));
 /** Produtos do ML (extra): título, fotos e miniatura. Campo fora do formato vira vazio, sem derrubar a devolução. */
-const textoTolerante = textoOuNulo.catch(null);
 export const esquemaAnuncio = z.looseObject({
   id,
   title: textoTolerante,
@@ -155,3 +177,9 @@ export const esquemaEnvioVenda = z.looseObject({
   logistic_type: textoOuNulo,
   logistic: z.looseObject({ type: textoOuNulo }).nullish().catch(null),
 });
+
+/**
+ * Ficha da venda (extra, E27): o id e o status do mesmo envio da venda, num esquema à parte e tolerante. Um campo fora
+ * do formato vira null sem mexer no Full (esquemaEnvioVenda), e o Full fora do formato não apaga a situação do envio.
+ */
+export const esquemaSituacaoEnvioVenda = z.looseObject({ id: idOuNulo.catch(null), status: textoTolerante });

@@ -29,6 +29,35 @@ export type ProdutoDoAnuncioML = {
   fotoUrl: string | null;
 };
 
+/**
+ * Ficha da venda (extra, emenda E27): um item do pedido do ML. Nulo = o ML não informou ou mandou fora do formato.
+ * Só estes campos são gravados (vendas_ml.itens): nada do comprador.
+ */
+export type ItemVendaML = {
+  /** Id do anúncio (MLB...). */
+  anuncioId: string | null;
+  /** Título do anúncio na venda. */
+  titulo: string | null;
+  /** seller_sku (ou seller_custom_field), como veio do ML. */
+  sku: string | null;
+  variacaoId: string | null;
+  quantidade: number | null;
+  /** Valor unitário em reais (unit_price). */
+  valorUnitario: number | null;
+};
+
+/**
+ * Ficha da venda (extra, emenda E27): o básico de um pedido do ML, tirado do GET /orders/{id} e do envio da venda que a
+ * sincronização já lia (nenhuma chamada nova). Situações em código do ML (ex.: "paid", "delivered").
+ */
+export type VendaML = {
+  pedidoId: string;
+  vendidaEm: Date | null;
+  situacao: string | null;
+  situacaoEnvio: string | null;
+  itens: ItemVendaML[];
+};
+
 /** O que o sistema sabe de uma reclamação do ML. `devolucao` é null quando a reclamação não tem devolução. */
 export type DadosDevolucaoML = {
   reclamacaoId: string;
@@ -42,6 +71,8 @@ export type DadosDevolucaoML = {
   extras: ExtrasML;
   /** Um por item da devolução cujo anúncio foi lido (extra); vazio sem devolução. */
   produtos: ProdutoDoAnuncioML[];
+  /** Ficha da venda (extra, E27): um por pedido lido; vazio sem devolução ou quando o ML recusou o pedido. */
+  vendas: VendaML[];
 };
 
 export type ReclamacaoAtualizada = { reclamacaoId: string; atualizadaEm: Date | null };

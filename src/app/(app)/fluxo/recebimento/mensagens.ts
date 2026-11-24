@@ -30,3 +30,18 @@ export function mensagemComNota(mensagem: string, nota: string | undefined): str
   if (!nota) return mensagem;
   return `${mensagem}${/[.!?]$/.test(mensagem) ? ' ' : '. '}${nota}`;
 }
+
+/** "A", "A e B", "A, B e C". */
+function listaComE(itens: readonly string[]): string {
+  return itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}` : (itens[0] ?? '');
+}
+
+/**
+ * (extra, E27) O cartão verde ficou diante de outro código do mesmo pedido lido pela câmera (ver comAvisoDoPedido): as
+ * outras devoluções do pedido que ainda esperam o pacote. Pelo campo, o número do pedido mostra a ficha delas.
+ */
+export function avisoAindaEsperam(codigos: readonly string[]): string {
+  return codigos.length > 1
+    ? `Do mesmo pedido, as ${listaComE(codigos)} ainda esperam o pacote. Se algum deles está com você, digite o número do pedido no campo abaixo (extra).`
+    : `Do mesmo pedido, a ${listaComE(codigos)} ainda espera o pacote. Se ele está com você, digite o número do pedido no campo abaixo (extra).`;
+}

@@ -120,6 +120,13 @@
       "when": 1795459494178,
       "tag": "0016_religar_reclamacoes",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795538780583,
+      "tag": "0017_ficha_venda",
+      "breakpoints": true
     }
   ]
 }

@@ -23,7 +23,7 @@ test('"Conferir pacote" na etapa 2: lê (ou digita) o rastreio e abre a bancada'
   await expect(page.getByRole('heading', { level: 1, name: 'Conferir pacote' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ler com a câmera' })).toBeVisible();
   await semRolagemLateral(page);
-  await page.getByLabel('Código de Rastreamento ou código DEV').fill(d.rastreio.toLowerCase());
+  await page.getByLabel('Código de Rastreamento, código DEV ou número do pedido do ML (extra)').fill(d.rastreio.toLowerCase());
   await page.getByRole('button', { name: 'Abrir conferência' }).click();
   await expect(page).toHaveURL(new RegExp(`/fluxo/devolucoes/${d.codigo}/conferencia$`));
 });

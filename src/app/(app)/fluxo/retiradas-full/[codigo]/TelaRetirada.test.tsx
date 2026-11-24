@@ -26,6 +26,7 @@ function acoesDe(parcial: Partial<AcoesRetirada> = {}): AcoesRetirada {
     quantidade: vi.fn(async () => ({ ok: true as const, itens: [item()] })),
     remover: vi.fn(async () => ({ ok: true as const, itens: [] })),
     concluir: vi.fn(async () => ({ ok: true as const, itens: [] })),
+    etiquetaAmarela: { procurar: vi.fn(), darChegada: vi.fn() },
     ...parcial,
   };
 }
@@ -94,6 +95,16 @@ describe('TelaRetirada (melhoria 3)', () => {
     expect(alerta.textContent).toContain('Bipe pelo menos 1 produto.');
     expect(document.activeElement).toBe(alerta);
     expect(acoes.concluir).not.toHaveBeenCalled();
+  });
+
+  it('(extra, E27; decisão do usuário de 24/11) só com a chegada de uma devolução pela etiqueta amarela, Concluir chama o servidor', async () => {
+    const acoes = acoesDe();
+    const evidencias = [{ id: 'e1', tipo: 'FOTO_1_ETIQUETA' as const, itemId: null, situacao: 'PRONTA' as const, url: null, erro: null }];
+    render(<TelaRetirada retirada={RETIRADA} itensIniciais={[]} chegadasEtiquetaAmarelaIniciais={1} evidencias={evidencias} acoes={acoes} />);
+    expect(screen.getByText('0 itens · 1 devolução pela etiqueta amarela (extra) · RF-000001')).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Concluir retirada' })));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(acoes.concluir).toHaveBeenCalledWith('r1');
   });
 
   it('EAN sem cadastro pede a descrição curta e inclui o item com o selo "sem cadastro"', async () => {

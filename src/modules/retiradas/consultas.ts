@@ -1,6 +1,6 @@
 import { asc, count, desc, eq, sql } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
-import { evidencias, itensRetiradaFull, produtos, retiradasFull, usuarios } from '@/db/schema';
+import { eventosHistorico, evidencias, itensRetiradaFull, produtos, retiradasFull, usuarios } from '@/db/schema';
 import type { SituacaoProcessamento, TipoEvidencia } from '@/modules/midia/dominio';
 import type { SituacaoRetirada } from './dominio';
 
@@ -71,7 +71,23 @@ export type EvidenciaRetirada = {
   erro: string | null;
 };
 
-export type RetiradaDetalhe = RetiradaLista & { itens: ItemRetiradaVista[]; evidencias: EvidenciaRetirada[] };
+/** `chegadasEtiquetaAmarela` (extra, E27): as chegadas de devoluções do ML dadas pela etiqueta amarela nesta retirada. */
+export type RetiradaDetalhe = RetiradaLista & { itens: ItemRetiradaVista[]; evidencias: EvidenciaRetirada[]; chegadasEtiquetaAmarela: number };
+
+/**
+ * (extra, emenda E27) Quantas chegadas de devolução do ML foram dadas pela etiqueta amarela nesta retirada: o evento
+ * `recebida` da devolução guarda o código da retirada (`dados.retiradaFull`). Só conta a chegada registrada (o "já
+ * chegou" não grava evento).
+ */
+export async function contarChegadasEtiquetaAmarela(db: DbOuTx, codigoRetirada: string): Promise<number> {
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(eventosHistorico)
+    .where(
+      sql`${eventosHistorico.entidade} = 'devolucao' and ${eventosHistorico.acao} = 'recebida' and ${eventosHistorico.dados}->>'retiradaFull' = ${codigoRetirada}`,
+    );
+  return total;
+}
 
 export async function listarItensRetirada(db: DbOuTx, retiradaId: string): Promise<ItemRetiradaVista[]> {
   const linhas = await db
@@ -106,7 +122,7 @@ export async function obterRetirada(db: DbOuTx, codigo: string): Promise<Retirad
     .leftJoin(usuarios, eq(usuarios.id, retiradasFull.recebidaPor))
     .where(eq(retiradasFull.codigo, codigo));
   if (!r) return null;
-  const [itens, fotos] = await Promise.all([
+  const [itens, fotos, chegadasEtiquetaAmarela] = await Promise.all([
     listarItensRetirada(db, r.id),
     db
       .select({
@@ -121,6 +137,7 @@ export async function obterRetirada(db: DbOuTx, codigo: string): Promise<Retirad
       .from(evidencias)
       .where(eq(evidencias.retiradaId, r.id))
       .orderBy(asc(evidencias.enviadoEm)),
+    contarChegadasEtiquetaAmarela(db, r.codigo),
   ]);
-  return { ...r, itens, evidencias: fotos };
+  return { ...r, itens, evidencias: fotos, chegadasEtiquetaAmarela };
 }

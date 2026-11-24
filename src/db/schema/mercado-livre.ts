@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import type { ItemVendaML } from '../../conectores/marketplace/mercadolivre/tipos';
 import { SITUACOES_CONTA, STATUS_CONTESTACAO } from '../../modules/mercado-livre/dominio';
 import type { AfetaReputacao, CondicaoTriagem, RespostaPendente, SituacaoDinheiro } from '../../modules/mercado-livre/dominio';
 import { usuarios } from './auth';
@@ -117,4 +118,23 @@ export const contasBitbrain = pgTable('contas_bitbrain', {
   /** Quando e por quem a marcação mudou. */
   atualizadaEm: timestamp('atualizada_em', { withTimezone: true }).notNull().defaultNow(),
   atualizadaPor: uuid('atualizada_por').references(() => usuarios.id, { onDelete: 'set null' }),
+});
+
+/**
+ * Ficha da venda (extra, emenda E27): o básico de cada pedido do ML que está numa devolução, gravado pela sincronização
+ * (mesma transação da reclamação). Uma linha por pedido: o mesmo pedido pode estar em mais de uma devolução. Sem dados
+ * pessoais: no modo bitbrain a rota já os tira, e no modo api só estes campos são gravados. Regra da D8 no conflito:
+ * o que veio vazio não apaga o que já havia (itens só trocam por uma lista com algum item).
+ */
+export const vendasMl = pgTable('vendas_ml', {
+  pedidoId: text('pedido_id').primaryKey(),
+  /** Empresa do Bitbrain (contas_bitbrain.empresa); nula no modo api. */
+  conta: text('conta'),
+  vendidaEm: timestamp('vendida_em', { withTimezone: true }),
+  /** Código do ML (ex.: "paid"); o rótulo em pt-BR vem de modules/mercado-livre/venda.ts. */
+  situacao: text('situacao'),
+  /** Status do envio da venda (ex.: "delivered"). */
+  situacaoEnvio: text('situacao_envio'),
+  itens: jsonb('itens').$type<ItemVendaML[]>().notNull().default(sql`'[]'::jsonb`),
+  atualizadaEm: timestamp('atualizada_em', { withTimezone: true }).notNull(),
 });
