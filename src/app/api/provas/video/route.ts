@@ -15,9 +15,14 @@ const ESTILO =
  * O Vídeo de Prova pelo link público do dossiê (E28): uma página curta com o player do navegador, que toca no celular
  * e no computador sem baixar (o arquivo vem do /api/provas/arquivo, com Range). Aberto direto, o mp4 não toca: com o
  * CSP do /api/arquivos ("sandbox; default-src 'none'"), o Chrome bloqueia o próprio player do arquivo (visto no e2e).
- * O sandbox continua (sem script, sem formulário); o player só ganha o vídeo do próprio sistema (media-src) e o estilo
- * da página. A origem explícita, quando o pedido a traz (como no PDF), cobre o navegador que não trata o 'self' de uma
- * página em sandbox como o próprio sistema.
+ * O sandbox continua, numa origem opaca (sem allow-same-origin, sem formulário). O player ganha só o vídeo do próprio
+ * sistema (media-src) e o estilo da página. A origem explícita, quando o pedido a traz (como no PDF), cobre o navegador
+ * que não trata o 'self' de uma página em sandbox como o próprio sistema.
+ *
+ * "allow-scripts" é para o Safari: no WebKit, os controles do <video> são um script do próprio navegador, e o sandbox
+ * sem allow-scripts os bloqueia. Visto no WebKit do Playwright com a cara do iPhone 13: "Blocked script execution …
+ * the 'allow-scripts' permission is not set", e o vídeo sem a barra de controles. Nenhum script da página roda assim
+ * mesmo: default-src 'none' sem script-src bloqueia script embutido, externo e eval (e a página não tem nenhum).
  */
 export async function GET(req: Request): Promise<Response> {
   const env = lerEnv();
@@ -42,7 +47,7 @@ export async function GET(req: Request): Promise<Response> {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff',
-      'content-security-policy': `sandbox; default-src 'none'; media-src 'self'${origem ? ` ${origem}` : ''}; style-src 'unsafe-inline'`,
+      'content-security-policy': `sandbox allow-scripts; default-src 'none'; media-src 'self'${origem ? ` ${origem}` : ''}; style-src 'unsafe-inline'`,
       ...CABECALHOS_PUBLICOS,
     },
   });

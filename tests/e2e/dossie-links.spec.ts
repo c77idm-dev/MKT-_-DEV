@@ -64,7 +64,9 @@ test('dossiê (E28): a foto e o vídeo abrem pelos links do PDF, sem login; o v�
   const pagina = await page.goto(videos[0]);
   expect(pagina!.status()).toBe(200);
   expect(pagina!.headers()['content-type']).toBe('text/html; charset=utf-8');
-  expect(pagina!.headers()['content-security-policy']).toMatch(/^sandbox; default-src 'none'; media-src 'self'/);
+  // allow-scripts só para os controles do player do Safari/WebKit; nenhum script da página (sem script-src).
+  expect(pagina!.headers()['content-security-policy']).toMatch(/^sandbox allow-scripts; default-src 'none'; media-src 'self'/);
+  expect(pagina!.headers()['content-security-policy']).not.toMatch(/script-src|allow-same-origin/);
   await expect(page.getByRole('heading', { name: `Vídeo de Prova · ${d.codigo}` })).toBeVisible();
   const video = page.locator('video');
   await expect(video).toBeVisible();

@@ -274,10 +274,15 @@ describe('GET /api/provas/video (E28: o vídeo toca no navegador, sem login)', (
     expect(r.headers.get('x-content-type-options')).toBe('nosniff');
     expect(r.headers.get('referrer-policy')).toBe('no-referrer');
     expect(r.headers.get('x-robots-tag')).toBe('noindex');
-    // O sandbox fica; o player só ganha o vídeo do próprio sistema e o estilo da página (nada de script).
+    // O sandbox fica, numa origem opaca (sem allow-same-origin). O "allow-scripts" é só para os controles do player do
+    // Safari/WebKit, que são feitos em script pelo próprio navegador (sem ele, o WebKit mostra o vídeo sem controles).
+    // Nenhum script da página roda: default-src 'none' e nenhum script-src. O player ganha só o vídeo do próprio
+    // sistema e o estilo da página.
     const csp = r.headers.get('content-security-policy')!;
-    expect(csp).toMatch(/^sandbox; default-src 'none'; media-src 'self'( https:\/\/devolucoes\.exemplo\.com\.br)?; style-src 'unsafe-inline'$/);
-    expect(csp).not.toContain('script');
+    expect(csp).toMatch(
+      /^sandbox allow-scripts; default-src 'none'; media-src 'self'( https:\/\/devolucoes\.exemplo\.com\.br)?; style-src 'unsafe-inline'$/,
+    );
+    expect(csp).not.toMatch(/script-src|allow-same-origin|unsafe-eval/);
     const html = await r.text();
     expect(html).toContain('<html lang="pt-BR">');
     expect(html).toContain('name="viewport"');

@@ -133,17 +133,19 @@ Cada foto e o vídeo do dossiê viram link público (sem login), que vale 90 dia
   ```sh
   docker compose --env-file .env.producao -f docker-compose.prod.yml logs web | grep dossie_sem_links
   ```
-- **Conferir depois do deploy.** O e2e só testa no Chromium, no computador e com a tela de celular do Pixel 7. O Safari do iPhone só é conferido aqui.
+- **A página do player** usa o CSP `sandbox allow-scripts; default-src 'none'; media-src …; style-src 'unsafe-inline'`.
+  - No Safari, os controles do vídeo são um script do próprio navegador. Com o `sandbox` sem `allow-scripts`, o WebKit mostrava o vídeo sem a barra de controles, e o toque não tocava. Foi visto no WebKit do Playwright, com a cara do iPhone 13, em 24/11.
+  - Nenhum script da página roda: `default-src 'none'` sem `script-src` bloqueia todos. A página continua numa origem opaca (sem `allow-same-origin`).
+  - Não tire o `allow-scripts` nem acrescente `script-src` ou `allow-same-origin`.
+- **Conferir depois do deploy.** O e2e testa só no Chromium, no computador e com a tela de celular do Pixel 7. O WebKit e o Firefox foram conferidos uma vez, à mão, com o Playwright. O Safari de um iPhone de verdade só é conferido aqui.
   1. Pelo domínio (https), gere o dossiê de uma devolução que tenha fotos e vídeo prontos.
   2. Abra o PDF e toque nos links numa **janela anônima**, sem login, em três aparelhos: um **iPhone (Safari)**, um **Android (Chrome)** e um **computador** (Chrome ou Edge, e o Firefox).
   3. Em cada aparelho, confira:
      - a foto abre sem pedir login, em tamanho original;
      - o "Assistir ao vídeo" abre a página "Vídeo de Prova · DEV-…";
-     - o vídeo toca com os controles do navegador (tocar, pausar, barra de tempo e tela cheia);
+     - o vídeo toca com os controles do navegador (tocar, pausar e barra de tempo);
      - nada é baixado.
-  4. Se o vídeo não tocar ou ficar sem controles **só no Safari**, não mexa no CSP na VPS. Anote o modelo do iPhone e a versão do iOS e avise o desenvolvimento.
-     - A página do player usa o CSP `sandbox` sem `allow-scripts`. O WebKit já teve um defeito em que o CSP bloqueava os controles do player: os bugs 223422 e 225865 do bugs.webkit.org. Foi corrigido em 2021, e o relato com `sandbox` era do Safari 14.
-     - A hipótese a testar é `sandbox allow-scripts` em `src/app/api/provas/video/route.ts`, mantendo `default-src 'none'` sem `script-src`: o CSP continua bloqueando todo script da página.
+  4. Se algum aparelho falhar, não mexa no CSP na VPS. Anote o aparelho e a versão do sistema e do navegador e avise o desenvolvimento.
 - Trocar o `SEGREDO_LINKS` invalida todos os links já entregues (os de sessão e os do dossiê). Os PDFs antigos passam a dizer que o link não é válido; basta gerar o dossiê de novo.
 - Só funciona com as mídias no disco (`ARMAZENAMENTO=disco`). Prova guardada no S3 fica sem link no PDF.
 
