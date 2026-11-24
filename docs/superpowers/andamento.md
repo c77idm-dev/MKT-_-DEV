@@ -1,8 +1,26 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 23/11/2026, à tarde (cancelamento explícito pronto; defeito das 87 reclamações desligadas corrigido na branch `religar-reclamacoes`; deploy único das 4 frentes a preparar). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 24/11/2026 (ficha da venda, E27, em construção; a VPS segue na imagem `3f01630`). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
+- **Ficha da venda (E27, extra; o usuário aprovou em 24/11): em construção.** Branch `ficha-venda`, worktree `dossie` (porta 3109, banco `devolucoes_test_f9`), run `wf_9d1d29c4-05d` (dois construtores, revisão em três olhares, verificação e correção).
+  - **O pedido do admin:** digitar ou ler o número do pedido do ML e ver os detalhes **básicos** da venda, ligados à reclamação. Só pedidos que já estão no sistema.
+  - **A ficha mostra:**
+    - pedido, data, conta e situação;
+    - os itens com foto, SKU, quantidade e valor, e o total;
+    - o motivo e a situação da reclamação;
+    - o link "Abrir a venda no ML".
+    - O valor aparece para todos que veem a devolução.
+  - **Onde aparece:**
+    - no detalhe;
+    - no Receber pacote: pelo pedido, a chegada deixa de ser registrada sozinha; a tela mostra a ficha com "Dar chegada" ou a lista das devoluções do pedido;
+    - no Conferir pacote, que passa a aceitar o pedido;
+    - na Retirada do Full: a etiqueta amarela é lida pelo número do pedido impresso, com "Dar chegada nesta devolução".
+  - **Dados:**
+    - tabela `vendas_ml` (migração `0017`);
+    - a sincronização grava o que já lê, sem chamada nova ao ML;
+    - as 463 devoluções que já existem são preenchidas aos poucos, em segundo plano.
+  - Texto completo: emenda E27 do contrato.
 - **Integração de 23/11, à tarde: quatro frentes juntas no `main` em `c668ec7` e ✅ publicadas na VPS (imagem `3f01630`, 23/11, 19h57 UTC).** Branch `integracao-23-11`.
   - **Deploy:**
     - backup antes em `~/backups-devolucoes/banco-antes-integracao-23-11_20261123-1957.dump` (chmod 600);
