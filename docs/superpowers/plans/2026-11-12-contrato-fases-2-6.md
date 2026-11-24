@@ -672,3 +672,61 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
     - Religa pela `devolucoes.reclamacao_id`, só quando exatamente uma devolução do ML tem aquela reclamação.
     - Completa o `return_id` vazio com o `devolucao_externa_id`.
   - **Motivo:** o upsert de `reclamacoes_ml` faz parte do §5.5.
+- **E27. Ficha da venda (24/11, extra; o usuário aprovou o desenho com "sim"):** branch `ficha-venda`.
+  - **Pedido do admin:** ao digitar ou ler o número do pedido do ML, ver os detalhes **básicos** da venda, ligados à reclamação. Só pedidos que já estão no sistema (opção 2 do usuário). Nada muito específico.
+  - **O que a ficha mostra.** É um cartão pequeno, mobile-first, num componente novo:
+    - número do pedido, data da venda e conta (empresa do Bitbrain);
+    - situação do pedido e da entrega em pt-BR (ex.: "Paga · Entregue"); um código que o sistema não conhece aparece como veio;
+    - cada item com foto, nome, SKU, quantidade e valor unitário:
+      - a foto vem do cadastro de produtos pelo SKU (E22); sem foto, a ficha fica sem imagem;
+      - o nome é o título do anúncio;
+    - o total, que é a soma de quantidade × valor. A rota do Bitbrain não manda `total_amount`;
+    - o motivo e a situação da reclamação, que já estão gravados;
+    - o link "Abrir a venda no ML", o mesmo do "Responda no ML" se já existir.
+    - **O valor aparece para todos que veem a devolução** (decisão do usuário).
+    - Sem os dados da venda ainda, a ficha diz "Os dados da venda ainda não chegaram do ML." e mostra o resto.
+  - **Banco:** migração `0017` com a tabela `vendas_ml`, em `src/db/schema/mercado-livre.ts`.
+    - Colunas:
+      - `pedido_id text` (chave primária);
+      - `conta text`;
+      - `vendida_em timestamptz`;
+      - `situacao text`;
+      - `situacao_envio text`;
+      - `itens jsonb not null default '[]'`;
+      - `atualizada_em timestamptz not null`.
+    - Uma linha por pedido, porque o mesmo pedido pode estar em mais de uma devolução.
+    - Sem dados pessoais: no modo Bitbrain a rota já os tira, e no modo api só estes campos são gravados.
+  - **Sincronização:** nenhuma chamada nova ao ML.
+    - `obterReclamacao` já lê o `/orders/{id}` e o envio da venda. `mapearReclamacao` passa a devolver `vendas` em `DadosDevolucaoML`.
+    - `gravarReclamacao` grava em `vendas_ml` na mesma transação.
+    - O esquema do pedido ganha os campos novos de forma tolerante (`.catch(null)`). Um campo fora do formato vira vazio: nunca derruba a sincronização nem o SKU, que já funciona.
+    - No conflito vale a regra da D8: o que veio vazio não apaga o que já havia.
+  - **As devoluções que já existem:** um passo em segundo plano pede de novo, aos poucos, a leitura das reclamações ligadas a devoluções cujo pedido ainda não tem linha em `vendas_ml`.
+    - Usa a mesma fila da sincronização, poucas reclamações por vez, respeitando o limite (`DEVOLUCOES_RPM`, 120/min por empresa).
+    - Para sozinho quando não sobra nenhuma.
+  - **Onde a ficha aparece:**
+    1. **Detalhe da devolução** (`[codigo]/page.tsx`, congelado): seção "Venda (extra)" nas devoluções do ML.
+    2. **Receber pacote:** quando a regra 2 da E25 acha a devolução pelo número do pedido, a chegada **deixa de ser registrada sozinha**.
+       - Com uma devolução do pedido esperando o pacote (Pendente de chegada ou No CD), a tela mostra a ficha com o botão "Dar chegada".
+       - Com mais de uma, a tela lista as devoluções (código DEV, foto e produto), cada uma com "Dar chegada", e a pessoa toca na que chegou. Isso resolve o "risco aceito" da E25.
+       - Pelo rastreio e pelo número do envio, nada muda.
+       - "Este pacote já chegou" e "Fale com o Gestor" continuam como na E25.
+       - A chegada mantém as garantias da E25: ela relê o status com trava, e de dois toques só um registra.
+       - Na câmera, ler de novo o mesmo pedido com a ficha aberta não a fecha.
+    3. **Conferir pacote:** aceita também o número do pedido, pela mesma regra da E25 (só no canal ML, o número inteiro, e com 15 dígitos vale "2" + código).
+       - Mostra a ficha com "Iniciar conferência". Com mais de uma devolução aberta, lista as devoluções.
+       - A mensagem de "não encontrada" passa a citar o pedido.
+    4. **Retirada do Full:** o botão "Etiqueta amarela (devolução do ML)" abre o campo "Número do pedido (impresso na etiqueta)".
+       - Se achar, mostra a ficha com "Dar chegada nesta devolução". O botão registra a chegada como no Receber pacote, pela transição da E25 (No CD ou Pendente → Aguardando conferência).
+       - O produto não entra na contagem do estoque da retirada.
+       - Produto sem etiqueta amarela continua pelo EAN, como estoque.
+  - **Histórico:** a ação continua `recebida`. Em `dados`:
+    - `achadaPor: 'PEDIDO_ML'` e `codigoLido`;
+    - `voltouDoArmazemML` quando a devolução estava No CD;
+    - `retiradaFull: 'RF-…'` quando a chegada veio da Retirada do Full. O complemento mostra "(pela Retirada do Full RF-…)".
+  - **Fora desta emenda:**
+    - as mensagens com o comprador (o Bitbrain não libera);
+    - os pedidos que não estão no sistema;
+    - o QR da etiqueta amarela (traz um ID que o ML não informa);
+    - a linha do tempo dos envios, o dinheiro, os detalhes da triagem e o botão "Atualizar do ML".
+  - **Motivo:** o detalhe da devolução e o upsert do ML (§5.5) são congelados. Além disso, a E25 registrava sozinha a chegada achada pelo pedido.
