@@ -29,7 +29,8 @@ function IniciarDaFicha({ ficha, aoEnviar, pendente }: { ficha: FichaVenda; aoEn
       <input type="hidden" name="codigo" value={ficha.codigo} />
       <input type="hidden" name="origem" value="ficha" />
       <button type="submit" disabled={pendente} className={`${BOTAO_PRIMARIO} min-h-14 w-full text-lg`}>
-        Iniciar conferência<span className="sr-only"> da {ficha.codigo}</span>
+        Iniciar conferência{' '}
+        <span className="sr-only">da {ficha.codigo}</span>
       </button>
     </form>
   );
