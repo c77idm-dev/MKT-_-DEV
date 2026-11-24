@@ -244,6 +244,20 @@ describe('registrarChegadaAcao: o amarelo "Este pacote já chegou" diante do nú
     expect(await registrarChegadaAcao(estado, form({ intencao: 'receber', rastreio: PEDIDO, origem: 'camera' }))).toBe(estado);
   });
 
+  it('com o aviso, a câmera relê o rastreio (ou o número do envio) de A: o amarelo fica como está, com o aviso', async () => {
+    const amarelo = await amareloDeA();
+    const comAviso = { ...amarelo, aindaEsperam: ['DEV-000002'] } as EstadoRecebimento;
+    mocks.receber.mockResolvedValueOnce(JA_A);
+    expect(await registrarChegadaAcao(comAviso, form({ intencao: 'receber', rastreio: RASTREIO_A, origem: 'camera' }))).toBe(comAviso);
+    mocks.receber.mockResolvedValueOnce({ ...JA_A, achadaPor: 'ENVIO_ML' });
+    expect(await registrarChegadaAcao(comAviso, form({ intencao: 'receber', rastreio: '48503476449', origem: 'camera' }))).toBe(comAviso);
+    // Pelo campo, o "já chegou" aparece de novo, sem o aviso (como antes).
+    mocks.receber.mockResolvedValueOnce(JA_A);
+    const peloCampo = await registrarChegadaAcao(comAviso, form({ intencao: 'receber', rastreio: RASTREIO_A }));
+    expect(peloCampo).toMatchObject({ tipo: 'aviso', titulo: 'Este pacote já chegou', codigos: ['DEV-000001'] });
+    expect(peloCampo).not.toHaveProperty('aindaEsperam');
+  });
+
   it('pelo campo (digitação ou leitor USB), o mesmo pedido mostra a ficha da que espera o pacote, como antes', async () => {
     const amarelo = await amareloDeA();
     mocks.receber.mockResolvedValue(escolher(PEDIDO, [['b', 'DEV-000002']], ['DEV-000001', 'DEV-000002']));

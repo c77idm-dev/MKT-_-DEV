@@ -15,6 +15,15 @@ export function podeAceitarLeitura(pendente: boolean, estado: EstadoRecebimento)
 }
 
 /**
+ * (extra, E27) O cartão que fica diante de outro código da mesma etiqueta lido pela câmera: o verde de qualquer chegada
+ * e (24/11, aprovado pelo usuário) o amarelo "Este pacote já chegou". Os códigos DEV dele; em outra tela (o "Fale com o
+ * Gestor" inclusive), nenhum.
+ */
+function codigosDoCartaoQueFica(estado: EstadoRecebimento): readonly string[] {
+  return estado.tipo === 'sucesso' || (estado.tipo === 'aviso' && estado.jaChegou) ? estado.codigos : [];
+}
+
+/**
  * (extra, E25) A etiqueta do ML tem vários códigos (rastreio, pedido, envio) e a câmera continua lendo depois do cartão
  * verde. Outro código da mesma etiqueta acha a mesma devolução e o "Este pacote já chegou" cobriria o cartão verde (e o
  * aviso do armazém do ML) em menos de 1 s. Pela câmera, esse "já chegou" de uma devolução que já está no cartão verde é a
@@ -23,27 +32,13 @@ export function podeAceitarLeitura(pendente: boolean, estado: EstadoRecebimento)
  * `codigos`: a devolução do aviso ou, (extra, E27) achada pelo número do pedido, todas as do pedido. O aviso fala da
  * mais recente do pedido, que pode ser outra, já recebida antes (ou cancelada): se o cartão verde é de uma devolução
  * desse pedido, continua sendo a mesma etiqueta.
+ *
+ * (24/11) Vale também para o amarelo "Este pacote já chegou" (codigosDoCartaoQueFica): ele fica diante do número do
+ * pedido e de outro código da mesma devolução. Sem a 2ª parte, a câmera que alterna entre o rastreio e o pedido da
+ * etiqueta tiraria e poria o aviso das que ainda esperam a cada leitura.
  */
 export function mesmaLeituraDaCamera(anterior: EstadoRecebimento, daCamera: boolean, codigos: readonly string[]): boolean {
-  return daCamera && anterior.tipo === 'sucesso' && anterior.codigos.some((c) => codigos.includes(c));
-}
-
-/**
- * (extra, E27) O cartão que fica diante de outro código do mesmo pedido lido pela câmera: o verde de qualquer chegada e
- * (24/11, aprovado pelo usuário) o amarelo "Este pacote já chegou". Os códigos DEV dele; em outra tela (o "Fale com o
- * Gestor" inclusive), nenhum.
- */
-function codigosDoCartaoQueFica(estado: EstadoRecebimento): readonly string[] {
-  return estado.tipo === 'sucesso' || (estado.tipo === 'aviso' && estado.jaChegou) ? estado.codigos : [];
-}
-
-/**
- * (extra, E27) Pela câmera, o cartão verde (ou, 24/11, o amarelo "Este pacote já chegou") de uma devolução do pedido
- * lido: a leitura é da mesma etiqueta e o cartão fica. `codigosDoPedido`: todas as devoluções do pedido, em qualquer
- * status. Pelo campo (digitação ou leitor USB), não.
- */
-export function cartaoDoMesmoPedidoDaCamera(anterior: EstadoRecebimento, daCamera: boolean, codigosDoPedido: readonly string[]): boolean {
-  return daCamera && codigosDoCartaoQueFica(anterior).some((c) => codigosDoPedido.includes(c));
+  return daCamera && codigosDoCartaoQueFica(anterior).some((c) => codigos.includes(c));
 }
 
 /**
@@ -61,7 +56,7 @@ export function cartaoDoMesmoPedidoDaCamera(anterior: EstadoRecebimento, daCamer
  */
 export function mesmoPedidoDaCamera(anterior: EstadoRecebimento, daCamera: boolean, codigosDoPedido: readonly string[]): boolean {
   if (anterior.tipo === 'escolher') return daCamera && anterior.fichas.some((f) => codigosDoPedido.includes(f.codigo));
-  return cartaoDoMesmoPedidoDaCamera(anterior, daCamera, codigosDoPedido);
+  return mesmaLeituraDaCamera(anterior, daCamera, codigosDoPedido);
 }
 
 /**

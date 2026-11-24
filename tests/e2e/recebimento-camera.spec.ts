@@ -256,6 +256,12 @@ test('(extra, E27; 24/11) pela câmera, o amarelo "Este pacote já chegou" fica 
   expect(await statusDas([a.codigo, b.codigo])).toEqual(['AGUARDANDO_CONFERENCIA', 'NO_CD_MARKETPLACE']);
   await semRolagemLateral(page);
 
+  // A câmera volta ao rastreio de A (outro código que o último lido): o amarelo fica, com o aviso.
+  await lerPelaCamera(page, ra);
+  await expect(resultado).toContainText(`${a.codigo} já tinha chegado`);
+  await expect(page.getByTestId('aviso-ainda-esperam')).toContainText(`${b.codigo} ainda espera o pacote`);
+  await expect(escolha).toHaveCount(0);
+
   // Pelo campo (o que o aviso pede), o número do pedido mostra a ficha de B.
   const campo = page.getByLabel('Código de Rastreamento');
   await campo.fill(pedido);

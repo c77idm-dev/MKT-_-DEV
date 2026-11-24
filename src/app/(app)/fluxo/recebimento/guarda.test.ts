@@ -80,6 +80,14 @@ describe('mesmaLeituraDaCamera (extra, E25)', () => {
     expect(mesmaLeituraDaCamera({ tipo: 'aviso', titulo: 'Este pacote já chegou', mensagem: 'x', codigos: ['DEV-000071'] }, true, ['DEV-000071'])).toBe(false);
   });
 
+  it('(24/11) o amarelo "Este pacote já chegou" também fica diante de outro código da mesma devolução; o "Fale com o Gestor", não', () => {
+    // Sem isso, a câmera que alterna entre o rastreio e o pedido da etiqueta tiraria e poria o aviso das que esperam.
+    expect(mesmaLeituraDaCamera(AMARELO_A, true, ['DEV-000001'])).toBe(true);
+    expect(mesmaLeituraDaCamera(AMARELO_A, false, ['DEV-000001'])).toBe(false);
+    expect(mesmaLeituraDaCamera(AMARELO_A, true, ['DEV-000002'])).toBe(false);
+    expect(mesmaLeituraDaCamera(GESTOR_A, true, ['DEV-000001'])).toBe(false);
+  });
+
   it('(E27) achada pelo pedido: o "já chegou" da mais recente do pedido, que é outra, é a mesma etiqueta se o cartão é de uma devolução do pedido', () => {
     // O pedido tem a DEV-000050 (mais recente, já recebida antes) e a DEV-000071 (a do cartão verde).
     expect(mesmaLeituraDaCamera(SUCESSO, true, ['DEV-000071', 'DEV-000050'])).toBe(true);

@@ -8,7 +8,7 @@ import { rotuloStatus } from '@/modules/devolucoes/dominio';
 import { ErroDevolucao } from '@/modules/devolucoes/erros';
 import { criarNaoIdentificada, darChegadaPeloPedido, receberPorRastreio, type ResultadoRecebimento } from '@/modules/devolucoes/recebimento';
 import { fichasDasDevolucoes, type FichaVenda } from '@/modules/mercado-livre/ficha-venda';
-import { cartaoDoMesmoPedidoDaCamera, comAvisoDoPedido, mesmaLeituraDaCamera, mesmoPedidoDaCamera } from './guarda';
+import { comAvisoDoPedido, mesmaLeituraDaCamera, mesmoPedidoDaCamera } from './guarda';
 import { mensagemChegada, notaAchada } from './mensagens';
 
 /**
@@ -47,15 +47,16 @@ function comNota(nota: string | undefined): { nota?: string } {
  * Pela câmera, o "já chegou" de outro código da mesma etiqueta: o cartão verde fica (E25). (extra, E27) Achada pelo
  * número do pedido, o "já chegou" ou o "Fale com o Gestor" fala da mais recente do pedido, que pode ser outra: se o
  * cartão (o verde ou, 24/11, o amarelo "Este pacote já chegou") é de uma devolução desse pedido, ele fica; nenhuma
- * devolução do pedido espera mais o pacote, e o aviso das que esperavam sai. Pelo rastreio ou pelo envio, o "Fale com o
- * Gestor" aparece como na E25.
+ * devolução do pedido espera mais o pacote, e o aviso das que esperavam sai. Pelo rastreio ou pelo envio, o "já chegou"
+ * da devolução do cartão (o verde ou, 24/11, o amarelo "já chegou") também deixa o cartão como está, com o aviso; o
+ * "Fale com o Gestor" aparece como na E25.
  */
 function mesmaEtiqueta(
   r: { tipo: 'ja_recebida' | 'bloqueada'; codigo: string; codigosDoPedido?: string[] },
   anterior: EstadoRecebimento,
   daCamera: boolean,
 ): EstadoRecebimento | null {
-  if (r.codigosDoPedido) return cartaoDoMesmoPedidoDaCamera(anterior, daCamera, r.codigosDoPedido) ? comAvisoDoPedido(anterior, []) : null;
+  if (r.codigosDoPedido) return mesmaLeituraDaCamera(anterior, daCamera, r.codigosDoPedido) ? comAvisoDoPedido(anterior, []) : null;
   return r.tipo === 'ja_recebida' && mesmaLeituraDaCamera(anterior, daCamera, [r.codigo]) ? anterior : null;
 }
 
