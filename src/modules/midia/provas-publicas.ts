@@ -9,9 +9,6 @@ import { DURACAO_LINK_SEGUNDOS, type TipoEvidencia } from './dominio';
  * (a página que toca o vídeo). Sem login: quem tem o PDF abre. O link assinado (links-publicos.ts) leva só o id da
  * evidência; o arquivo vem do banco, e só abre o que já iria no dossiê.
  */
-export const CAMINHO_PROVA_ARQUIVO = '/api/provas/arquivo';
-export const CAMINHO_PROVA_VIDEO = '/api/provas/video';
-
 export type ProvaPublica = { tipo: TipoEvidencia; caminho: string; codigo: string };
 
 /**

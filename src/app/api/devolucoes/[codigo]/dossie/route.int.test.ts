@@ -3,14 +3,16 @@ import { and, eq } from 'drizzle-orm';
 import { PDFDocument } from 'pdf-lib';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eventosHistorico } from '@/db/schema';
+import { lerEnv } from '@/lib/env';
 import { criarSessao } from '@/modules/auth/sessoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { ErroPrazoEsgotado } from '@/modules/dossie/serie';
 import { obterArmazenamento } from '@/modules/midia/armazenamento';
+import { DURACAO_LINK_PUBLICO_SEGUNDOS, verificarLinkPublico } from '@/modules/midia/links-publicos';
 import { criarDbTeste, limparTabelas } from '../../../../../../tests/helpers/db';
 import { criarUsuarioTeste } from '../../../../../../tests/helpers/fabricas';
 import { devolucaoComProvasTeste } from '../../../../../../tests/helpers/fabricas-dossie-banco';
-import { imagensDoPdf, textoDoPdf } from '../../../../../../tests/helpers/pdf';
+import { imagensDoPdf, linksDoPdf, textoDoPdf } from '../../../../../../tests/helpers/pdf';
 
 const estado = vi.hoisted(() => ({ token: null as string | null, negar: false, db: null as unknown, falhaGerar: null as unknown }));
 // O servidor.ts começa com `import 'server-only'`, que quebra fora do Next.
@@ -85,7 +87,10 @@ function esperarCabecalhosDeSeguranca(r: Response): void {
   expect(r.headers.get('cache-control')).toBe('no-store');
 }
 
-/** Nada de chave de mídia, link assinado ou id interno no que vai para fora. */
+/** O que o nginx da VPS manda (docker/nginx/devolucoes.conf), já com o https do certbot. */
+const NGINX = { host: 'devolucoes.exemplo.com.br', 'x-forwarded-host': 'devolucoes.exemplo.com.br', 'x-forwarded-proto': 'https' };
+
+/** Nada de chave de mídia, link assinado ou id interno no texto e nos metadados (os links ficam nas anotações, E28). */
 const PROIBIDO_NO_PDF = /evidencias\/|\/api\/arquivos|X-Amz-|sig=|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 describe('GET /api/devolucoes/[codigo]/dossie (extra)', () => {
@@ -161,6 +166,48 @@ describe('GET /api/devolucoes/[codigo]/dossie (extra)', () => {
     expect(eventos[0].em.getTime()).toBeGreaterThanOrEqual(antes - 1000);
     expect(eventos[0].dados).toMatchObject({ tamanho: bytes.length, ladoMaior: 1280, qualidade: 70 });
     expect(JSON.stringify(eventos[0].dados)).not.toContain('evidencias/');
+  });
+
+  it('atrás do nginx (Host e X-Forwarded-Proto https): cada foto e o vídeo viram link público https, por 90 dias (E28)', async () => {
+    const p = await devolucaoComProvasTeste(db);
+    const antes = Math.floor(Date.now() / 1000);
+    const r = await chamar(p.codigo, { headers: NGINX });
+    expect(r.status).toBe(200);
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    const links = await linksDoPdf(bytes);
+    // 5 fotos + o quadro do vídeo + o "Assistir ao vídeo".
+    expect(links).toHaveLength(7);
+    const ev = p.evidencias;
+    for (const foto of [ev.f1, ev.f2, ev.f3, ev.f4, ev.avaria]) {
+      expect(links.filter((l) => l.uri.startsWith(`https://devolucoes.exemplo.com.br/api/provas/arquivo?e=${foto.id}&`))).toHaveLength(1);
+    }
+    expect(links.filter((l) => l.uri.startsWith(`https://devolucoes.exemplo.com.br/api/provas/video?e=${ev.video.id}&`))).toHaveLength(2);
+    for (const l of links) {
+      // Nada da chave do armazenamento nem do link de sessão; a assinatura é a pública, de 90 dias.
+      expect(l.uri).not.toMatch(/evidencias\/|\/api\/arquivos|X-Amz-/);
+      const q = new URL(l.uri).searchParams;
+      const v = verificarLinkPublico(lerEnv().SEGREDO_LINKS, { e: q.get('e'), exp: q.get('exp'), sig: q.get('sig') }, new Date());
+      expect(v.ok).toBe(true);
+      if (v.ok) expect(v.expiraEm - antes).toBeGreaterThanOrEqual(DURACAO_LINK_PUBLICO_SEGUNDOS - 5);
+    }
+    expect(await textoDoPdf(bytes)).toContain('Assistir ao vídeo');
+  });
+
+  it('sem um endereço público confiável (http fora do localhost, Host estranho ou diferente do encaminhado): o PDF sai sem links', async () => {
+    const p = await devolucaoComProvasTeste(db);
+    const casos: Record<string, string>[] = [
+      {},
+      { host: 'devolucoes.exemplo.com.br' },
+      { host: 'evil.com/x', 'x-forwarded-proto': 'https' },
+      { host: 'devolucoes.exemplo.com.br', 'x-forwarded-host': 'evil.com', 'x-forwarded-proto': 'https' },
+    ];
+    for (const headers of casos) {
+      const r = await chamar(p.codigo, { headers });
+      expect(r.status, JSON.stringify(headers)).toBe(200);
+      const bytes = new Uint8Array(await r.arrayBuffer());
+      expect(await linksDoPdf(bytes)).toEqual([]);
+      expect(await textoDoPdf(bytes)).not.toContain('Assistir ao vídeo');
+    }
   });
 
   it('vídeo que quebra no meio da leitura: o PDF sai assim mesmo, com o aviso no Vídeo de Prova', async () => {

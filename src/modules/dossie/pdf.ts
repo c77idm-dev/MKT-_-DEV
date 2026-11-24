@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
+import { PDFDocument, PDFString, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 import { formatarDataHora } from '@/lib/formatar';
 import { ROTULO_CANAL, ROTULO_DESTINO, ROTULO_MOTIVO } from '@/modules/devolucoes/dominio';
 import { paraWinAnsi } from '@/modules/lotes/pdf';
@@ -54,6 +54,10 @@ const CINZA = rgb(0.33, 0.33, 0.33);
 const LINHA = rgb(0.8, 0.8, 0.8);
 const FUNDO_AVISO = rgb(0.95, 0.95, 0.95);
 const VERDE = rgb(0.07, 0.35, 0.25);
+const AZUL_LINK = rgb(0.04, 0.32, 0.72);
+/** Só ASCII visível, sem parêntese nem barra invertida: a URI vai como string literal do PDF, sem escape. */
+const URI_SEGURA = /^https?:\/\/[\x21-\x7e]+$/;
+const TEXTO_ASSISTIR = 'Assistir ao vídeo';
 
 type Fontes = { normal: PDFFont; negrito: PDFFont };
 
@@ -121,8 +125,11 @@ function fotosDoCorpo(d: DadosDossie): EvidenciaDossie[] {
   return fotos.filter((x): x is EvidenciaDossie => x !== null && ehPronta(x));
 }
 
-/** O que entra no corpo: as fotos dentro do teto e o cancelamento do dossiê. */
-type Plano = { noPdf: Set<string>; fora: number; maxFotos: number; sinal?: AbortSignal };
+/**
+ * O que entra no corpo: as fotos dentro do teto, o cancelamento do dossiê e os links públicos das provas (E28: id da
+ * evidência → URL; vazio quando o link público não é possível, e o PDF sai sem links).
+ */
+type Plano = { noPdf: Set<string>; fora: number; maxFotos: number; sinal?: AbortSignal; links: ReadonlyMap<string, string> };
 
 /** Legenda (2 linhas) + caixa da foto + carimbo. */
 const alturaDaLinha = (alturaCaixa: number) => 30 + alturaCaixa + 16;
@@ -207,6 +214,25 @@ class Escritor {
     this.pagina.drawRectangle({ x: MARGEM, y: this.y - altura, width: LARGURA, height: altura, color: FUNDO_AVISO, borderColor: LINHA, borderWidth: 0.75 });
     linhas.forEach((l, i) => this.desenhar(l, MARGEM + 12, this.y - 8 - 10.5 - i * 15, 10.5, fonte));
     this.y -= altura + 10;
+  }
+
+  /**
+   * Área clicável (anotação Link com ação URI) que abre `url` no navegador (E28). Uma URI com caractere fora do ASCII
+   * visível, parêntese ou barra invertida não entra: o PDF nunca sai quebrado por causa de um link.
+   */
+  link(x: number, y: number, largura: number, altura: number, url: string): void {
+    if (!URI_SEGURA.test(url) || /[()\\]/.test(url)) return;
+    const contexto = this.doc.context;
+    const anotacao = contexto.register(
+      contexto.obj({
+        Type: 'Annot',
+        Subtype: 'Link',
+        Rect: [x, y, x + largura, y + altura],
+        Border: [0, 0, 0],
+        A: { Type: 'Action', S: 'URI', URI: PDFString.of(url) },
+      }),
+    );
+    this.pagina.node.addAnnot(anotacao);
   }
 
   /** A imagem cabendo na caixa (sem distorcer), ou o aviso no lugar. A imagem entra no PDF já reduzida. */
@@ -299,6 +325,9 @@ async function montar(
         e.desenhar(cortar(c.legenda, f.negrito, 10.5, largura), x, topo - 10.5, 10.5, f.negrito);
         if (c.descricao) e.desenhar(cortar(c.descricao, f.normal, 8.5, largura), x, topo - 23, 8.5, f.normal, CINZA);
         await e.caixa(x, topo - 28, largura, alturaCaixa, await conteudoDaCelula(c));
+        // A caixa inteira abre a foto guardada, em tamanho original (E28); também a que ficou fora do teto.
+        const url = c.evidencia && pronta(c.evidencia) ? plano.links.get(c.evidencia.id) : undefined;
+        if (url) e.link(x, topo - 28 - alturaCaixa, largura, alturaCaixa, url);
         if (c.evidencia) {
           const legenda = pronta(c.evidencia)
             ? `Carimbo: ${carimboDe(c.evidencia)}`
@@ -443,10 +472,23 @@ async function montar(
       duracao = q.duracaoSegundos;
       conteudo = q.imagem ? { imagem: q.imagem } : { aviso: q.problema ?? 'Quadro do vídeo indisponível.' };
     }
+    // O quadro e o "Assistir ao vídeo" abrem a página que toca o vídeo no navegador (E28), mesmo sem o quadro.
+    const url = pronta(video) ? plano.links.get(video.id) : undefined;
     e.escrever('Um quadro do vídeo:', { tamanho: 9, cor: CINZA });
-    e.caber(300);
+    e.caber(url ? 330 : 300);
     await e.caixa(MARGEM, e.y, LARGURA, 290, conteudo);
+    if (url) e.link(MARGEM, e.y - 290, LARGURA, 290, url);
     e.y -= 302;
+    if (url) {
+      const tamanho = 12;
+      const largura = f.negrito.widthOfTextAtSize(paraWinAnsi(TEXTO_ASSISTIR), tamanho);
+      const base = e.y - tamanho;
+      e.desenhar(TEXTO_ASSISTIR, MARGEM, base, tamanho, f.negrito, AZUL_LINK);
+      e.pagina.drawLine({ start: { x: MARGEM, y: base - 2 }, end: { x: MARGEM + largura, y: base - 2 }, thickness: 0.75, color: AZUL_LINK });
+      // Área de toque um pouco maior que o texto (o dedo no celular).
+      e.link(MARGEM - 4, base - 8, largura + 8, tamanho + 14, url);
+      e.y -= tamanho + 16;
+    }
     e.campo('Data da gravação', `${formatarDataHora(video.enviadoEm)} (hora em que o servidor recebeu)`);
     e.campo('Duração', duracao !== null ? formatarDuracao(duracao) : '—');
     e.campo('Situação', ROTULO_SITUACAO_PROCESSAMENTO[video.situacao]);
@@ -482,7 +524,8 @@ async function montar(
 
 /**
  * O dossiê em PDF (extra; enxuto pela E28: sem histórico, sem integridade dos arquivos, sem a foto do anúncio e sem
- * nomes de pessoas). Imagens a 1280 px e qualidade 70; se o PDF passar de 8 MB, refaz uma vez a 1024 px e 60 (o ML
+ * nomes de pessoas). Cada foto da conferência e o quadro do vídeo viram link para o arquivo guardado (`links`, E28),
+ * e o vídeo ganha o link visível "Assistir ao vídeo". Imagens a 1280 px e qualidade 70; se o PDF passar de 8 MB, refaz uma vez a 1024 px e 60 (o ML
  * recusa anexos grandes). Quando a estimativa (fotos × ~170 KB) já passa do limite, começa direto em 1024/60.
  * Até MAX_FOTOS_DOSSIE fotos no corpo; as de cima viram aviso. Mídia que falta ou não ficou pronta vira um aviso,
  * nunca um erro; o cancelamento (`sinal`: o pedido foi embora ou o dossiê passou do prazo) para entre uma foto e outra.
@@ -490,13 +533,13 @@ async function montar(
 export async function gerarPdfDossie(
   d: DadosDossie,
   midias: MidiasDossie,
-  config: { limiteBytes?: number; maxFotos?: number; sinal?: AbortSignal } = {},
+  config: { limiteBytes?: number; maxFotos?: number; sinal?: AbortSignal; links?: ReadonlyMap<string, string> } = {},
 ): Promise<ResultadoPdf> {
   const limite = config.limiteBytes ?? LIMITE_BYTES_DOSSIE;
   const maxFotos = config.maxFotos ?? MAX_FOTOS_DOSSIE;
   const prontas = fotosDoCorpo(d);
   const noPdf = new Set(prontas.slice(0, maxFotos).map((x) => x.id));
-  const plano: Plano = { noPdf, fora: prontas.length - noPdf.size, maxFotos, sinal: config.sinal };
+  const plano: Plano = { noPdf, fora: prontas.length - noPdf.size, maxFotos, sinal: config.sinal, links: config.links ?? new Map() };
   const comQuadro = d.evidencias.some((x) => x.tipo === 'VIDEO_PROVA' && ehPronta(x));
   const inicial = opcoesIniciais(noPdf.size + (comQuadro ? 1 : 0), limite);
 

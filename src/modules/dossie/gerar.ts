@@ -1,8 +1,10 @@
 import type { DbOuTx } from '@/db/client';
+import { lerEnv } from '@/lib/env';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { carregarDossie } from './carregar';
 import { ACAO_DOSSIE_GERADO, nomeArquivoDossie } from './dominio';
+import { linksDasProvas } from './links';
 import { midiasDoArmazenamento } from './midias';
 import { gerarPdfDossie, type MidiasDossie, type ResultadoPdf } from './pdf';
 import { criarJuncao, criarSerie } from './serie';
@@ -25,12 +27,14 @@ const juntar = criarJuncao();
  * com quem e quando. O evento guarda só números (páginas, tamanho, imagens): nada de chave de mídia.
  * `sinal`: o pedido (request.signal). Se todos os que esperam por esta geração forem embora, ela para entre uma foto
  * e outra e nada é registrado. Fila cheia: ErroFilaCheia; prazo estourado: ErroPrazoEsgotado (serie.ts).
+ * `origem`: o endereço público do sistema (origemPublica do pedido); com ele, as fotos e o vídeo viram links públicos de
+ * 90 dias no PDF (E28). Sem ele (null), o PDF sai sem links.
  */
 export async function gerarDossie(
   db: DbOuTx,
   codigo: string,
   usuario: UsuarioSessao,
-  o: { agora?: Date; midias?: MidiasDossie; limiteBytes?: number; sinal?: AbortSignal } = {},
+  o: { agora?: Date; midias?: MidiasDossie; limiteBytes?: number; sinal?: AbortSignal; origem?: string | null } = {},
 ): Promise<ResultadoDossie> {
   o.sinal?.throwIfAborted();
   const agora = o.agora ?? new Date();
@@ -40,7 +44,8 @@ export async function gerarDossie(
   const pdf = await juntar(`${dados.codigo}:${usuario.id}`, o.sinal, (sinalDosPedidos) =>
     emSerie(
       async (sinal) => {
-        const pdf = await gerarPdfDossie(dados, o.midias ?? midiasDoArmazenamento(), { limiteBytes: o.limiteBytes, sinal });
+        const links = linksDasProvas(dados.evidencias, { origem: o.origem ?? null, segredo: lerEnv().SEGREDO_LINKS, agora });
+        const pdf = await gerarPdfDossie(dados, o.midias ?? midiasDoArmazenamento(), { limiteBytes: o.limiteBytes, sinal, links });
         // Quem pediu foi embora (ou passou do prazo) enquanto o PDF ficava pronto: nada de "dossiê gerado".
         sinal.throwIfAborted();
         await registrarEvento(db, {

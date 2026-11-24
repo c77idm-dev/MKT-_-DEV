@@ -9,6 +9,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  * abre a rota pública, e uma pública não abre a de sessão, mesmo sobre o mesmo texto.
  */
 
+/** As rotas públicas (sem login): a foto ou o vídeo em si (com Range) e a página que toca o vídeo. */
+export const CAMINHO_PROVA_ARQUIVO = '/api/provas/arquivo';
+export const CAMINHO_PROVA_VIDEO = '/api/provas/video';
+
 /** Prazo dos links públicos (E28): 90 dias. Depois disso, o PDF precisa ser gerado de novo (links novos). */
 export const DURACAO_LINK_PUBLICO_SEGUNDOS = 90 * 24 * 60 * 60;
 

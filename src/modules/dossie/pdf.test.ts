@@ -2,9 +2,9 @@ import { randomBytes } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { imagensDoPdf, paginasDoPdf, textoDoPdf } from '../../../tests/helpers/pdf';
+import { imagensDoPdf, linksDoPdf, paginasDoPdf, textoDoPdf } from '../../../tests/helpers/pdf';
 import { dadosDossieTeste as dadosTeste } from '../../../tests/helpers/fabricas-dossie';
-import { MAX_FOTOS_DOSSIE, type OpcoesImagem } from './dominio';
+import { MAX_FOTOS_DOSSIE, type DadosDossie, type OpcoesImagem } from './dominio';
 import { reduzirImagem, type ImagemPdf } from './imagens';
 import { gerarPdfDossie, type MidiasDossie } from './pdf';
 
@@ -338,5 +338,101 @@ describe('gerarPdfDossie (extra)', () => {
     const dados = dadosTeste();
     dados.unidades[0] = { ...dados.unidades[0], observacao: 'Caixa amassada 📦' };
     await expect(gerarPdfDossie(dados, midiasTeste())).resolves.toMatchObject({ tentativas: 1 });
+  });
+});
+
+describe('links das provas no PDF (E28: a foto e o vídeo abrem pelo PDF, sem login)', () => {
+  const ORIGEM = 'https://devolucoes.exemplo.com.br';
+  /** O que o gerar.ts monta: a foto abre o arquivo; o vídeo, a página que toca. */
+  function linksDe(d: DadosDossie): Map<string, string> {
+    return new Map(
+      d.evidencias.map((x) => [x.id, `${ORIGEM}/api/provas/${x.tipo === 'VIDEO_PROVA' ? 'video' : 'arquivo'}?e=${x.id}&exp=1&sig=abc_-`]),
+    );
+  }
+  const paginaDe = (r: Awaited<ReturnType<typeof gerarPdfDossie>>, titulo: string) => r.secoes.find((s) => s.titulo === titulo)!.pagina;
+
+  it('cada foto da conferência e o quadro do vídeo viram link; o vídeo ganha o link visível "Assistir ao vídeo"', async () => {
+    const dados = dadosTeste();
+    const links = linksDe(dados);
+    const r = await gerarPdfDossie(dados, midiasTeste(), { links });
+    const anotacoes = await linksDoPdf(r.bytes);
+    // 8 fotos + o quadro do vídeo + o "Assistir ao vídeo".
+    expect(anotacoes).toHaveLength(10);
+    for (const x of dados.evidencias.filter((e) => e.tipo !== 'VIDEO_PROVA')) {
+      const daFoto = anotacoes.filter((a) => a.uri === links.get(x.id));
+      expect(daFoto, x.id).toHaveLength(1);
+      // A caixa da foto inteira (o toque em qualquer ponto da foto abre).
+      expect(daFoto[0].altura).toBeGreaterThanOrEqual(200);
+    }
+    expect(anotacoes.filter((a) => a.uri === links.get('f1'))[0].pagina).toBe(paginaDe(r, 'Pacote'));
+    expect(anotacoes.filter((a) => a.uri === links.get('f3u2'))[0].pagina).toBe(paginaDe(r, 'Unidade 2 de 3'));
+
+    const doVideo = anotacoes.filter((a) => a.uri === links.get('video'));
+    expect(doVideo).toHaveLength(2);
+    const paginaVideo = paginaDe(r, 'Vídeo de Prova');
+    for (const a of doVideo) expect(a.pagina).toBe(paginaVideo);
+    const [quadro, texto] = [...doVideo].sort((a, b) => b.altura - a.altura);
+    expect(quadro.altura).toBeGreaterThanOrEqual(280); // a caixa do quadro
+    expect(texto.altura).toBeLessThan(40); // a linha do "Assistir ao vídeo", logo abaixo do quadro
+    expect(texto.y).toBeLessThan(quadro.y);
+    const paginas = await paginasDoPdf(r.bytes);
+    expect(paginas[paginaVideo - 1]).toContain('Assistir ao vídeo');
+    // Só os links das provas: nada do /api/arquivos (sessão) nem chave do armazenamento.
+    for (const a of anotacoes) expect(a.uri).toMatch(new RegExp(`^${ORIGEM}/api/provas/(arquivo|video)[?]e=`));
+  });
+
+  it('o quadro do vídeo que não saiu continua com o link (o vídeo pode tocar)', async () => {
+    const dados = dadosTeste();
+    const r = await gerarPdfDossie(dados, midiasTeste({ semQuadro: true }), { links: linksDe(dados) });
+    expect((await linksDoPdf(r.bytes)).filter((a) => a.uri.includes('/api/provas/video'))).toHaveLength(2);
+    expect(await textoDoPdf(r.bytes)).toContain('Assistir ao vídeo');
+  });
+
+  it('sem links (sem o endereço público ou fora do disco): nenhum link e nada de "Assistir ao vídeo"; o PDF sai igual', async () => {
+    for (const config of [{}, { links: new Map<string, string>() }]) {
+      const r = await gerarPdfDossie(dadosTeste(), midiasTeste(), config);
+      expect(await linksDoPdf(r.bytes)).toEqual([]);
+      expect(await textoDoPdf(r.bytes)).not.toContain('Assistir ao vídeo');
+      expect(await imagensDoPdf(r.bytes)).toHaveLength(9);
+    }
+  });
+
+  it('só a prova pronta vira link (a que não ficou pronta, não, mesmo que venha no mapa)', async () => {
+    const dados = dadosTeste();
+    dados.evidencias = dados.evidencias.map((e) =>
+      e.id === 'f2' || e.id === 'video' ? { ...e, situacao: 'PROCESSANDO' as const, caminho: null } : e,
+    );
+    const links = linksDe(dados);
+    const r = await gerarPdfDossie(dados, midiasTeste(), { links });
+    const uris = (await linksDoPdf(r.bytes)).map((a) => a.uri);
+    expect(uris).toHaveLength(7);
+    expect(uris).not.toContain(links.get('f2'));
+    expect(uris).not.toContain(links.get('video'));
+    expect(await textoDoPdf(r.bytes)).not.toContain('Assistir ao vídeo');
+  });
+
+  it('a foto acima do teto (aviso no lugar) continua abrindo pelo link', async () => {
+    const dados = dadosTeste();
+    const links = linksDe(dados);
+    const r = await gerarPdfDossie(dados, midiasTeste(), { links, maxFotos: 6 });
+    expect(await linksDoPdf(r.bytes)).toHaveLength(10);
+  });
+
+  it('os links continuam quando o PDF é refeito com imagens menores', async () => {
+    const dados = dadosTeste();
+    const r = await gerarPdfDossie(dados, midiasTeste({ pesadas: true }), { links: linksDe(dados), limiteBytes: 2 * 1024 * 1024 });
+    expect(r.tentativas).toBe(2);
+    expect(await linksDoPdf(r.bytes)).toHaveLength(10);
+  });
+
+  it('um link com caractere que quebraria o PDF (parêntese, barra invertida, espaço, acento) não entra', async () => {
+    const dados = dadosTeste();
+    const links = linksDe(dados);
+    links.set('f1', `${ORIGEM}/api/provas/arquivo?e=(x)`);
+    links.set('f2', `${ORIGEM}/api/provas/arquivo?e=a${String.fromCharCode(92)}b`);
+    links.set('f3u1', `${ORIGEM}/api/provas/arquivo?e=a b`);
+    links.set('f4u1', `${ORIGEM}/api/provas/arquivo?e=ação`);
+    const r = await gerarPdfDossie(dados, midiasTeste(), { links });
+    expect(await linksDoPdf(r.bytes)).toHaveLength(6);
   });
 });

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { obterDb } from '@/db';
+import { origemPublica } from '@/lib/origem-publica';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { cookieDossiePronto, ehMarcaDossie, MENSAGEM_CONFERENCIA_PENDENTE, normalizarCodigoDossie } from '@/modules/dossie/dominio';
 import { gerarDossie, type ResultadoDossie } from '@/modules/dossie/gerar';
@@ -40,6 +41,8 @@ function aviso(status: number, mensagem: string, codigo: string, extras: Record<
  * Pedido de outro site (Sec-Fetch-Site: cross-site), 403: a rota grava no histórico e gasta a única vCPU.
  * Antes do fim da conferência, 409. Fila cheia ou prazo estourado, 503 com Retry-After. O pedido que foi embora
  * (request.signal) cancela a geração e nada é registrado. O tamanho final vai no cabeçalho X-Dossie-Tamanho (bytes).
+ * Os links públicos das fotos e do vídeo (E28) usam o endereço público tirado deste pedido (origemPublica: o Host e o
+ * X-Forwarded-Proto do nginx, conferidos); sem ele, o PDF sai sem links.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ codigo: string }> }) {
   const usuario = await exigirPermissao('ver_listas');
@@ -50,7 +53,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ codi
   if (!codigo) notFound();
   let r: ResultadoDossie;
   try {
-    r = await gerarDossie(obterDb(), codigo, usuario, { sinal: request.signal });
+    r = await gerarDossie(obterDb(), codigo, usuario, { sinal: request.signal, origem: origemPublica(request.headers) });
   } catch (erro) {
     // 499: quem pediu fechou a conexão; ninguém lê esta resposta.
     if (request.signal.aborted) return new Response(null, { status: 499, headers: SEGURANCA });

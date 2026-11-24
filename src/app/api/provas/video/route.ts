@@ -1,16 +1,8 @@
 import { obterDb } from '@/db';
 import { lerEnv } from '@/lib/env';
 import { origemPublica } from '@/lib/origem-publica';
-import { verificarLinkPublico } from '@/modules/midia/links-publicos';
-import {
-  AVISOS,
-  avisoPublico,
-  buscarProvaPublica,
-  CABECALHOS_PUBLICOS,
-  CAMINHO_PROVA_ARQUIVO,
-  escaparHtml,
-  paginaPublica,
-} from '@/modules/midia/provas-publicas';
+import { CAMINHO_PROVA_ARQUIVO, verificarLinkPublico } from '@/modules/midia/links-publicos';
+import { AVISOS, avisoPublico, buscarProvaPublica, CABECALHOS_PUBLICOS, escaparHtml, paginaPublica } from '@/modules/midia/provas-publicas';
 
 export const dynamic = 'force-dynamic';
 
