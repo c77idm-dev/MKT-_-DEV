@@ -26,6 +26,7 @@ function acoesDe(parcial: Partial<AcoesRetirada> = {}): AcoesRetirada {
     quantidade: vi.fn(async () => ({ ok: true as const, itens: [item()] })),
     remover: vi.fn(async () => ({ ok: true as const, itens: [] })),
     concluir: vi.fn(async () => ({ ok: true as const, itens: [] })),
+    etiquetaAmarela: { procurar: vi.fn(), darChegada: vi.fn() },
     ...parcial,
   };
 }

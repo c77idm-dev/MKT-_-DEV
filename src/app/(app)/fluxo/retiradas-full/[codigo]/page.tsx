@@ -14,7 +14,7 @@ import { listarEventos, rotuloDaAcao } from '@/modules/historico/eventos';
 import { linksDasEvidencias } from '@/modules/midia/links-evidencias';
 import { obterRetirada } from '@/modules/retiradas/consultas';
 import { ehCodigoRetirada, ROTULO_SITUACAO_RETIRADA } from '@/modules/retiradas/dominio';
-import { biparAcao, concluirAcao, quantidadeAcao, removerAcao } from './acoes';
+import { biparAcao, concluirAcao, darChegadaEtiquetaAmarelaAcao, procurarEtiquetaAmarelaAcao, quantidadeAcao, removerAcao } from './acoes';
 import { TelaRetirada } from './TelaRetirada';
 
 type Props = { params: Promise<{ codigo: string }> };
@@ -95,7 +95,13 @@ export default async function PaginaRetirada({ params }: Props) {
           retirada={{ id: r.id, codigo: r.codigo, codigoEtiqueta: r.codigoEtiqueta }}
           itensIniciais={r.itens}
           evidencias={evidencias}
-          acoes={{ bipar: biparAcao, quantidade: quantidadeAcao, remover: removerAcao, concluir: concluirAcao }}
+          acoes={{
+            bipar: biparAcao,
+            quantidade: quantidadeAcao,
+            remover: removerAcao,
+            concluir: concluirAcao,
+            etiquetaAmarela: { procurar: procurarEtiquetaAmarelaAcao, darChegada: darChegadaEtiquetaAmarelaAcao },
+          }}
         />
       </div>
     );

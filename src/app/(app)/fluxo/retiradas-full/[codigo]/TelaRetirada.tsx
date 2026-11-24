@@ -13,6 +13,7 @@ import type { TipoEvidencia } from '@/modules/midia/dominio';
 import type { ItemRetiradaVista } from '@/modules/retiradas/consultas';
 import { pendenciasParaConcluir, TAMANHO_DESCRICAO } from '@/modules/retiradas/dominio';
 import type { ResultadoAcaoRetirada } from './acoes';
+import { EtiquetaAmarela, type AcoesEtiquetaAmarela } from './EtiquetaAmarela';
 import { ItemRetirada } from './ItemRetirada';
 
 export type AcoesRetirada = {
@@ -20,6 +21,8 @@ export type AcoesRetirada = {
   quantidade: (retiradaId: string, itemId: string, delta: 1 | -1) => Promise<ResultadoAcaoRetirada>;
   remover: (retiradaId: string, itemId: string) => Promise<ResultadoAcaoRetirada>;
   concluir: (retiradaId: string) => Promise<ResultadoAcaoRetirada>;
+  /** (extra, E27) A devolução do ML com etiqueta amarela no meio da retirada: não entra nos itens. */
+  etiquetaAmarela: AcoesEtiquetaAmarela;
 };
 
 type Props = {
@@ -243,6 +246,8 @@ export function TelaRetirada({ retirada, itensIniciais, evidencias, acoes }: Pro
           {aviso}
         </p>
       </section>
+
+      <EtiquetaAmarela retiradaId={retirada.id} acoes={acoes.etiquetaAmarela} />
 
       <section aria-labelledby="titulo-itens" className="flex flex-col gap-3">
         <h2 id="titulo-itens" className="text-base font-bold">
