@@ -704,6 +704,10 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
   - **As devoluções que já existem:** um passo em segundo plano pede de novo, aos poucos, a leitura das reclamações ligadas a devoluções cujo pedido ainda não tem linha em `vendas_ml`.
     - Usa a mesma fila da sincronização, poucas reclamações por vez, respeitando o limite (`DEVOLUCOES_RPM`, 120/min por empresa).
     - Para sozinho quando não sobra nenhuma.
+    - **Como ficou (24/11):** `pedirVendasQueFaltam` (`src/modules/mercado-livre/vendas-pendentes.ts`) roda no fim de cada `ml.varredura` (15 min) e enfileira `ml.sincronizar-reclamacao`.
+      - 20 reclamações por conta (empresa do Bitbrain; no modo api, todas juntas) por rodada, uma a cada 30 s (`iniciarEm`). Uma leitura faz de 6 a 9 chamadas ao ML: no máximo ~18 por minuto por conta, cerca de 15% do `DEVOLUCOES_RPM`. As que esperam o pacote (Pendente de chegada e No CD) vêm primeiro.
+      - Só as contas que a varredura lê (marcadas e disponíveis); no modo api, só com a conta do ML ativa. Só pedidos feitos só de dígitos.
+      - Ao pedir, grava para cada pedido da devolução uma linha vazia em `vendas_ml`, que a leitura preenche pela regra da D8. Assim o passo não pede o mesmo pedido de novo, mesmo quando o ML recusa o pedido ou a reclamação. A ficha mostra essa linha vazia como "Os dados da venda ainda não chegaram do ML.".
   - **Onde a ficha aparece:**
     1. **Detalhe da devolução** (`[codigo]/page.tsx`, congelado): seção "Venda (extra)" nas devoluções do ML.
     2. **Receber pacote:** quando a regra 2 da E25 acha a devolução pelo número do pedido, a chegada **deixa de ser registrada sozinha**.
