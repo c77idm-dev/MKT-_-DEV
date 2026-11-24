@@ -202,7 +202,8 @@ function pedidoFalso(ids: IdsFalsos, i: number) {
     shipping: { id: Number(ids.enviosVenda[i]) },
     order_items: [
       {
-        item: { id: ids.itens[i], title: nota.descricao, variation_id: null, seller_sku: item.sku, seller_custom_field: null },
+        // Ficha da venda (extra, E27): como no ML, o título do item vendido é o do anúncio.
+        item: { id: ids.itens[i], title: arquivo().anuncios[item.sku]?.titulo ?? nota.descricao, variation_id: null, seller_sku: item.sku, seller_custom_field: null },
         quantity: Math.round(Number(item.quantidade)),
         unit_price: Number(nota.valorUnitario),
         currency_id: 'BRL',

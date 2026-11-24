@@ -42,6 +42,19 @@ describe('Bitbrain falso (D3)', () => {
     ]);
   });
 
+  it('ficha da venda (extra, E27): o pedido sem dados pessoais ainda traz situação, data, itens e valores', async () => {
+    const ids = idsFalsos(2, '00000001');
+    expect((await conector(loja1).obterReclamacao('5200000001')).vendas).toEqual([
+      {
+        pedidoId: ids.pedidos[0],
+        vendidaEm: new Date('2026-10-28T09:00:00.000-03:00'),
+        situacao: 'paid',
+        situacaoEnvio: 'delivered',
+        itens: [{ anuncioId: ids.itens[0], titulo: 'Fone de Ouvido Bluetooth MLF', sku: 'MLF-FONE-01', variacaoId: null, quantidade: 1, valorUnitario: 129.9 }],
+      },
+    ]);
+  });
+
   it('cenário 5 pela loja 2: triagem do ML', async () => {
     expect((await conector(loja2).obterReclamacao('5500000002')).extras).toMatchObject({ triagemCondicao: 'NAO_VENDAVEL' });
   });

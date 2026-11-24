@@ -11,6 +11,7 @@ import {
   esquemaReclamacao,
   esquemaReputacao,
   esquemaRevisoes,
+  esquemaSituacaoEnvioVenda,
   type AnuncioJson,
   type DevolucaoJson,
   type EnvioDevolucaoJson,
@@ -18,7 +19,7 @@ import {
   type ReclamacaoJson,
 } from './esquemas';
 import { normalizarEan } from '@/modules/catalogo/documentos';
-import type { DadosDevolucaoML, ExtrasML, ProdutoDoAnuncioML } from './tipos';
+import type { DadosDevolucaoML, ExtrasML, ItemVendaML, ProdutoDoAnuncioML, VendaML } from './tipos';
 
 export class ErroFormatoML extends Error {
   constructor(oQue: string, detalhes: string) {
@@ -126,10 +127,16 @@ function linhaDoPedido(p: PedidoJson | undefined, itemId: string | null, variaca
   return doItem.find((l) => variacao === null || l.item.variation_id === null || l.item.variation_id === variacao) ?? doItem[0];
 }
 
-export function skuDoPedido(p: PedidoJson | undefined, itemId: string | null, variacao: string | null): string | null {
-  const linha = linhaDoPedido(p, itemId, variacao);
+type LinhaPedido = PedidoJson['order_items'][number];
+
+/** seller_sku, senão seller_custom_field; vazio → null. */
+function skuDaLinha(linha: LinhaPedido | undefined): string | null {
   const sku = (linha?.item.seller_sku || linha?.item.seller_custom_field || '').trim();
   return sku || null;
+}
+
+export function skuDoPedido(p: PedidoJson | undefined, itemId: string | null, variacao: string | null): string | null {
+  return skuDaLinha(linhaDoPedido(p, itemId, variacao));
 }
 
 /** Spec §7.6, ponto 5: as quantidades vêm em texto ("1.0"). */
@@ -229,6 +236,45 @@ export function idEnvioDaVenda(pedidos: unknown[]): string | null {
   return null;
 }
 
+/** O limite do título na ficha da venda (o mesmo da descrição do cadastro). */
+const MAX_TITULO_VENDA = MAX_DESCRICAO;
+
+function quantidadeDaLinha(n: number | null): number | null {
+  return n !== null && n > 0 ? Math.round(n) : null;
+}
+
+/** Em reais, com 2 casas; negativo vira null. */
+function valorDaLinha(n: number | null): number | null {
+  return n !== null && n >= 0 ? Math.round(n * 100) / 100 : null;
+}
+
+/**
+ * Ficha da venda (extra, emenda E27), função pura: o básico de cada pedido lido, com os campos da lista e nada mais
+ * (nada do comprador, também no modo api). A situação do envio vem do envio da venda que a sincronização já lia: vale
+ * para o pedido cujo shipping.id é o desse envio (sem id no envio, o pedido de onde ele foi lido, `idEnvioDaVenda`).
+ */
+export function vendasDosPedidos(pedidos: PedidoJson[], envioVenda: unknown): VendaML[] {
+  const lido = esquemaSituacaoEnvioVenda.safeParse(envioVenda);
+  const envio = lido.success ? lido.data : null;
+  const idDoEnvio = envio?.id ?? pedidos.find((p) => p.shipping?.id)?.shipping?.id ?? null;
+  return pedidos.map((p) => ({
+    pedidoId: p.id,
+    vendidaEm: p.date_created,
+    situacao: p.status,
+    situacaoEnvio: envio?.status && idDoEnvio !== null && p.shipping?.id === idDoEnvio ? envio.status : null,
+    itens: p.order_items.map(
+      (l): ItemVendaML => ({
+        anuncioId: l.item.id,
+        titulo: juntarEspacos(l.item.title).slice(0, MAX_TITULO_VENDA).trimEnd() || null,
+        sku: skuDaLinha(l),
+        variacaoId: l.item.variation_id,
+        quantidade: quantidadeDaLinha(l.quantity),
+        valorUnitario: valorDaLinha(l.unit_price),
+      }),
+    ),
+  }));
+}
+
 export type EntradaMapeamento = {
   reclamacao: unknown;
   devolucao: unknown | null;
@@ -257,6 +303,7 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
       devolucao: null,
       extras: extrasDaReclamacao({ reclamacao: r, devolucao: null, reputacao: e.reputacao ?? null, revisoes: null, envioVenda: null }),
       produtos: [],
+      vendas: [],
     };
   }
   const d = analisar(esquemaDevolucao, e.devolucao, 'devolução');
@@ -325,5 +372,6 @@ export function mapearReclamacao(e: EntradaMapeamento): DadosDevolucaoML {
     devolucao,
     extras,
     produtos,
+    vendas: vendasDosPedidos(pedidosJson, e.envioVenda ?? null),
   };
 }

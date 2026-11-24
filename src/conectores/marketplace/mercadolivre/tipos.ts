@@ -71,6 +71,8 @@ export type DadosDevolucaoML = {
   extras: ExtrasML;
   /** Um por item da devolução cujo anúncio foi lido (extra); vazio sem devolução. */
   produtos: ProdutoDoAnuncioML[];
+  /** Ficha da venda (extra, E27): um por pedido lido; vazio sem devolução ou quando o ML recusou o pedido. */
+  vendas: VendaML[];
 };
 
 export type ReclamacaoAtualizada = { reclamacaoId: string; atualizadaEm: Date | null };

@@ -100,6 +100,7 @@ export function dadosDevolucaoMLTeste(
     devolucao,
     extras: EXTRAS_VAZIOS,
     produtos: [],
+    vendas: [],
     ...extra,
   };
 }

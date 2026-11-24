@@ -79,6 +79,27 @@ describe('ML falso: o ConectorML real sobre as respostas da documentação', () 
     ]);
   });
 
+  it('ficha da venda (extra, E27): cada pedido lido vira uma venda; o envio da venda (lido só do 1º) dá "delivered"', async () => {
+    const { id, ids } = novo(7);
+    const { vendas } = await conector().obterReclamacao(id);
+    expect(vendas).toEqual([
+      {
+        pedidoId: ids.pedidos[0],
+        vendidaEm: new Date('2026-10-28T09:00:00.000-03:00'),
+        situacao: 'paid',
+        situacaoEnvio: 'delivered',
+        itens: [{ anuncioId: ids.itens[0], titulo: 'Fone de Ouvido Bluetooth MLF', sku: 'MLF-FONE-01', variacaoId: null, quantidade: 2, valorUnitario: 129.9 }],
+      },
+      {
+        pedidoId: ids.pedidos[1],
+        vendidaEm: new Date('2026-10-28T09:00:00.000-03:00'),
+        situacao: 'paid',
+        situacaoEnvio: null,
+        itens: [{ anuncioId: ids.itens[1], titulo: 'Cabo USB-C 1 m MLF', sku: 'MLF-CABO-02', variacaoId: null, quantidade: 1, valorUnitario: 129.9 }],
+      },
+    ]);
+  });
+
   it('produtos do ML (extra): cada anúncio do cenário traz título, GTIN e foto https própria (sem variação)', async () => {
     const { id, ids } = novo(7);
     expect((await conector().obterReclamacao(id)).produtos).toEqual([
