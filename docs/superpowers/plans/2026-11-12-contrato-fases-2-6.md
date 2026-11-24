@@ -672,3 +672,23 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
     - Religa pela `devolucoes.reclamacao_id`, só quando exatamente uma devolução do ML tem aquela reclamação.
     - Completa o `return_id` vazio com o `devolucao_externa_id`.
   - **Motivo:** o upsert de `reclamacoes_ml` faz parte do §5.5.
+- **E28. Dossiê mais enxuto e fotos e vídeo que abrem pelo PDF (24/11, pedido do administrador; o usuário aprovou):** branch `dossie-enxuto`. A E27 está na branch `ficha-venda`.
+  - **Vale só para o PDF do dossiê de provas (E23).** A tela do sistema continua com o histórico e os nomes. Nada muda no que é gravado no banco.
+  - **Sai do PDF:**
+    - a seção "Histórico" e a linha dela no índice;
+    - a seção "Integridade dos arquivos (SHA-256)", com os textos que falam de integridade ou SHA-256 (abertura, assunto e metadados do PDF);
+    - a foto do anúncio do ML em cada unidade, com os avisos "Referência do anúncio (não é prova)". O usuário entendeu "tirar a referência" assim e não vetou;
+    - o nome das pessoas: "Recebida por", "Conferente", "Enviado por", "Gerado … por" e o autor nos metadados.
+  - **Carimbo das fotos** (muda a decisão 6 da spec, a pedido do administrador): as fotos enviadas daqui em diante ganham o carimbo só com a data e a hora e o código DEV ("12/11/2026 14:03 · DEV-000123"), sem o nome. As fotos antigas já têm o nome gravado no arquivo e ficam como estão. O histórico da tela continua dizendo quem enviou.
+  - **Abrir pelo PDF:**
+    - cada foto da conferência e o quadro do vídeo viram link para o arquivo guardado;
+    - a seção do vídeo ganha também o link visível "Assistir ao vídeo";
+    - a foto abre em tamanho original. O vídeo toca no navegador, no celular e no computador, com controles e sem baixar; vale Range (206) e `playsinline`;
+    - **sem login** (decisão do usuário: quem tiver o PDF, por exemplo o analista do ML, consegue abrir).
+  - **Segurança dos links públicos:**
+    - assinatura HMAC com `SEGREDO_LINKS`, com um prefixo próprio, separado dos links de sessão do `/api/arquivos`: um link de sessão não abre a rota pública, e um link público não abre a de sessão;
+    - **prazo de 90 dias**. Depois disso o link diz que expirou e pede para gerar o PDF de novo, o que cria links novos;
+    - só abre arquivo de evidência; caminho fora da pasta das mídias é recusado;
+    - mantém os mesmos cabeçalhos de segurança do `/api/arquivos` (`nosniff`, CSP `sandbox`), exceto o que o player do vídeo precisar;
+    - os links usam o endereço público do sistema (https, atrás do nginx), tirado do pedido que gera o PDF.
+  - **Motivo:** o conteúdo do dossiê e o carimbo (spec §9, decisão 6) foram fixados antes. A rota pública de arquivos é nova.

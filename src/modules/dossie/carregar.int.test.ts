@@ -1,15 +1,13 @@
-import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { produtos } from '@/db/schema';
 import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
-import { criarProdutoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
+import { criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 import { criarDevolucaoChegada } from '../../../tests/helpers/fabricas-conferencia';
 import { devolucaoComProvasTeste, EAN_DOSSIE } from '../../../tests/helpers/fabricas-dossie-banco';
 import { carregarDossie } from './carregar';
 
 const { db, sql } = criarDbTeste();
 const AGORA = new Date('2026-11-19T18:30:00Z');
-const GERACAO = { em: AGORA, porNome: 'Gestora Teste' };
+const GERACAO = { em: AGORA };
 
 beforeEach(async () => {
   await limparTabelas(sql);
@@ -23,7 +21,7 @@ describe('carregarDossie (extra)', () => {
     expect(await carregarDossie(db, 'DEV-999999', GERACAO)).toBeNull();
   });
 
-  it('junta o detalhe, a conferência, o ML, as evidências com os hashes e o histórico, num carregamento só', async () => {
+  it('junta o detalhe, a conferência, o ML e as evidências, num carregamento só (sem hashes, histórico nem nomes: E28)', async () => {
     const p = await devolucaoComProvasTeste(db);
     const d = await carregarDossie(db, p.codigo.toLowerCase(), GERACAO);
     expect(d).not.toBeNull();
@@ -40,10 +38,7 @@ describe('carregarDossie (extra)', () => {
       rastreio: p.rastreio,
       transportadora: 'Correios',
       motivoCliente: 'Produto não funciona',
-      recebidaPorNome: p.operador.nome,
-      conferenteNome: p.operador.nome,
       geradoEm: AGORA,
-      geradoPorNome: 'Gestora Teste',
     });
     expect(d!.recebidaEm).toBeInstanceOf(Date);
     expect(d!.conferenciaIniciadaEm).toBeInstanceOf(Date);
@@ -64,58 +59,25 @@ describe('carregarDossie (extra)', () => {
         destino: 'PROBLEMA',
         motivo: 'AVARIADO',
         observacao: 'Caixa amassada e tela trincada.',
-        fotoUrl: null,
       }),
-      expect.objectContaining({ id: p.itens[1], unidade: 2, status: 'AUSENTE', destino: null, motivo: 'AUSENTE', fotoUrl: null }),
+      expect.objectContaining({ id: p.itens[1], unidade: 2, status: 'AUSENTE', destino: null, motivo: 'AUSENTE' }),
     ]);
+    // A foto do anúncio do ML saiu do dossiê (E28).
+    for (const u of d!.unidades) expect(u).not.toHaveProperty('fotoUrl');
     expect(d!.evidencias).toHaveLength(6);
     const f3 = d!.evidencias.find((e) => e.id === p.evidencias.f3.id)!;
-    expect(f3).toMatchObject({
+    expect(f3).toEqual({
+      id: p.evidencias.f3.id,
       tipo: 'FOTO_3_PRODUTO',
       itemId: p.itens[0],
       situacao: 'PRONTA',
+      tipoConteudo: 'image/jpeg',
       caminho: p.evidencias.f3.caminho,
       provedor: 'disco',
-      enviadoPorNome: p.operador.nome,
-      sha256Final: p.evidencias.f3.sha256Final,
+      enviadoEm: expect.any(Date),
     });
-    expect(f3.sha256Original).toMatch(/^[0-9a-f]{64}$/);
-    expect(f3.enviadoEm).toBeInstanceOf(Date);
-    const acoes = d!.eventos.map((e) => e.acao);
-    for (const acao of ['criada', 'recebida', 'conferencia_iniciada', 'conferencia_concluida']) expect(acoes).toContain(acao);
-    expect(d!.eventos.find((e) => e.acao === 'conferencia_concluida')!.usuarioNome).toBe(p.operador.nome);
-  });
-
-  it('foto do anúncio no ML (extra): a do produto esperado (produtos.foto_url) vai em cada unidade', async () => {
-    const p = await devolucaoComProvasTeste(db);
-    const foto = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
-    await db.update(produtos).set({ fotoUrl: foto }).where(eq(produtos.sku, p.sku));
-    const d = await carregarDossie(db, p.codigo, GERACAO);
-    expect(d!.unidades.map((u) => u.fotoUrl)).toEqual([foto, foto]);
-  });
-
-  it('foto do anúncio no ML (extra): na unidade divergente, a do produto esperado (o que foi vendido), nunca a do recebido', async () => {
-    // O operador lê na unidade 1 o EAN de outro produto do cadastro, que tem foto própria.
-    const fotoEsperado = 'https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg';
-    const fotoRecebido = 'https://http2.mlstatic.com/D_699999-MLB79999999999_072026-O.jpg';
-    const eanRecebido = '7891000000021';
-    const skuRecebido = `CAPA-DOSSIE-${Date.now().toString(36).toUpperCase()}`;
-    await criarProdutoTeste(db, { sku: skuRecebido, ean: eanRecebido, descricao: 'Capa de silicone' });
-    await db.update(produtos).set({ fotoUrl: fotoRecebido }).where(eq(produtos.sku, skuRecebido));
-    const p = await devolucaoComProvasTeste(db, { eanLido: eanRecebido });
-    await db.update(produtos).set({ fotoUrl: fotoEsperado }).where(eq(produtos.sku, p.sku));
-    const d = await carregarDossie(db, p.codigo, GERACAO);
-    expect(d!.unidades[0]).toMatchObject({
-      sku: p.sku,
-      eanLido: eanRecebido,
-      divergente: true,
-      produtoRecebido: { sku: skuRecebido, descricao: 'Capa de silicone' },
-      fotoUrl: fotoEsperado,
-    });
-    // Sem foto no produto esperado: fica sem foto (nunca a do recebido no lugar).
-    await db.update(produtos).set({ fotoUrl: null }).where(eq(produtos.sku, p.sku));
-    const semFoto = await carregarDossie(db, p.codigo, GERACAO);
-    expect(semFoto!.unidades.map((u) => u.fotoUrl)).toEqual([null, null]);
+    // Nenhum nome de pessoa nos dados do PDF (E28): o operador recebeu, conferiu e enviou as fotos.
+    expect(JSON.stringify(d)).not.toContain(p.operador.nome);
   });
 
   it('nenhum dado pessoal do comprador: só os campos previstos', async () => {
@@ -124,8 +86,8 @@ describe('carregarDossie (extra)', () => {
     expect(Object.keys(d!).sort()).toEqual(
       [
         'id', 'codigo', 'canal', 'empresa', 'pedidos', 'reclamacaoId', 'devolucaoExternaId', 'contaML', 'motivoReclamacaoML',
-        'rastreio', 'transportadora', 'motivoCliente', 'recebidaEm', 'recebidaPorNome', 'conferenciaIniciadaEm', 'conferidaEm',
-        'conferenteNome', 'unidades', 'evidencias', 'eventos', 'geradoEm', 'geradoPorNome',
+        'rastreio', 'transportadora', 'motivoCliente', 'recebidaEm', 'conferenciaIniciadaEm', 'conferidaEm', 'unidades',
+        'evidencias', 'geradoEm',
       ].sort(),
     );
   });

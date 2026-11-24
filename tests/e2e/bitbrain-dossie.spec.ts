@@ -71,9 +71,8 @@ test('"Responda no ML" (modo Bitbrain): dossiê de provas em PDF junto das fotos
   expect(download.suggestedFilename()).toBe(`dossie-${codigo}.pdf`);
   const pdf = await readFile(await download.path());
   expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-  // Foto do anúncio (extra): a do ML falso é de um domínio reservado (.example), fora da lista de hosts; o servidor
-  // nem tenta baixar (sem foto no cadastro, também não) e o PDF sai com o aviso no lugar.
+  // A foto do anúncio do ML saiu do dossiê (E28): nada dela no PDF.
   const texto = (await textoDoPdf(pdf)).replace(/\s+/g, ' ');
-  expect(texto).toContain('Foto do anúncio no ML (o que foi vendido)');
-  expect(texto).toContain('Foto do anúncio indisponível');
+  expect(texto).toContain(codigo);
+  expect(texto).not.toContain('Foto do anúncio');
 });

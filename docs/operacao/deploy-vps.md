@@ -125,6 +125,30 @@ nginx -t && systemctl reload nginx
 ```
 Se `nginx -t` acusar erro, não recarregue e confira o arquivo. Sem o bloco, o dossiê de uma devolução grande dá 504 no celular.
 
+## Dossiê de provas: links das fotos e do vídeo (E28)
+Cada foto e o vídeo do dossiê viram link público (sem login), que vale 90 dias: `https://<domínio>/api/provas/arquivo?...` (a foto) e `https://<domínio>/api/provas/video?...` (a página que toca o vídeo). Nada a mudar no nginx: o endereço vem do `Host` e do `X-Forwarded-Proto` que os blocos de `docker/nginx/devolucoes.conf` já mandam.
+- O sistema só usa esse endereço quando ele é um nome de host válido, igual ao `X-Forwarded-Host`, e com `https`. Se um `location` perder o `proxy_set_header Host $host;` ou o `proxy_set_header X-Forwarded-Proto $scheme;`, o dossiê sai **sem** os links (não quebra).
+- Em produção, o `localhost` nunca vira link: o dossiê gerado pelo acesso direto ao app (por exemplo, um túnel SSH até `127.0.0.1:3020`) sai sem links. Gere o dossiê sempre pelo domínio.
+- Quando o dossiê sai sem links e havia provas prontas no disco, o `web` escreve uma linha `"evento":"dossie_sem_links"` com o código da devolução, o motivo e o número de provas. Motivos: `sem_https`, `host_invalido`, `host_diferente_do_encaminhado` ou `localhost_em_producao`. Para procurar:
+  ```sh
+  docker compose --env-file .env.producao -f docker-compose.prod.yml logs web | grep dossie_sem_links
+  ```
+- **A página do player** usa o CSP `sandbox allow-scripts; default-src 'none'; media-src …; style-src 'unsafe-inline'`.
+  - No Safari, os controles do vídeo são um script do próprio navegador. Com o `sandbox` sem `allow-scripts`, o WebKit mostrava o vídeo sem a barra de controles, e o toque não tocava. Foi visto no WebKit do Playwright, com a cara do iPhone 13, em 24/11.
+  - Nenhum script da página roda: `default-src 'none'` sem `script-src` bloqueia todos. A página continua numa origem opaca (sem `allow-same-origin`).
+  - Não tire o `allow-scripts` nem acrescente `script-src` ou `allow-same-origin`.
+- **Conferir depois do deploy.** O e2e testa só no Chromium, no computador e com a tela de celular do Pixel 7. O WebKit e o Firefox foram conferidos uma vez, à mão, com o Playwright. O Safari de um iPhone de verdade só é conferido aqui.
+  1. Pelo domínio (https), gere o dossiê de uma devolução que tenha fotos e vídeo prontos.
+  2. Abra o PDF e toque nos links numa **janela anônima**, sem login, em três aparelhos: um **iPhone (Safari)**, um **Android (Chrome)** e um **computador** (Chrome ou Edge, e o Firefox).
+  3. Em cada aparelho, confira:
+     - a foto abre sem pedir login, em tamanho original;
+     - o "Assistir ao vídeo" abre a página "Vídeo de Prova · DEV-…";
+     - o vídeo toca com os controles do navegador (tocar, pausar e barra de tempo);
+     - nada é baixado.
+  4. Se algum aparelho falhar, não mexa no CSP na VPS. Anote o aparelho e a versão do sistema e do navegador e avise o desenvolvimento.
+- Trocar o `SEGREDO_LINKS` invalida todos os links já entregues (os de sessão e os do dossiê). Os PDFs antigos passam a dizer que o link não é válido; basta gerar o dossiê de novo.
+- Só funciona com as mídias no disco (`ARMAZENAMENTO=disco`). Prova guardada no S3 fica sem link no PDF.
+
 ## Ligar o modo Bitbrain (devoluções do ML pelo Bitbrain)
 
 Pré-requisito: a sessão do Bitbrain publicou a rota (`docs/integracao/bitbrain-rota-devolucoes.md`), e o Nathan gerou o `DEVOLUCOES_TOKEN` (`openssl rand -hex 32`) e o pôs no `.env` do Bitbrain.

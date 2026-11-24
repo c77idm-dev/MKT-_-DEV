@@ -3,7 +3,7 @@ import { readFile, rm, stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '@/db/client';
-import { devolucoes, evidencias, retiradasFull, usuarios } from '@/db/schema';
+import { devolucoes, evidencias, retiradasFull } from '@/db/schema';
 import { CONFIG_TAREFAS, type NomeTarefa } from '@/modules/fila/tarefas';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { obterArmazenamento, provedorAtual } from './armazenamento';
@@ -31,12 +31,10 @@ async function carregar(db: Db, evidenciaId: string) {
       enviadoEm: evidencias.enviadoEm,
       /** DEV-… ou, na retirada do Full, RF-… (vai no carimbo da foto). */
       codigo: sql<string>`coalesce(${devolucoes.codigo}, ${retiradasFull.codigo})`,
-      usuarioNome: usuarios.nome,
     })
     .from(evidencias)
     .leftJoin(devolucoes, eq(devolucoes.id, evidencias.devolucaoId))
     .leftJoin(retiradasFull, eq(retiradasFull.id, evidencias.retiradaId))
-    .leftJoin(usuarios, eq(usuarios.id, evidencias.enviadoPor))
     .where(eq(evidencias.id, evidenciaId));
   return e ?? null;
 }
@@ -131,11 +129,8 @@ export async function processarFoto(db: Db, evidenciaId: string, ctx: ContextoPr
   const e = await comecar(db, evidenciaId);
   if (!e) return;
   try {
-    const { conteudo } = await carimbarFoto(await readFile(e.caminhoTemporario), {
-      quando: e.enviadoEm,
-      codigo: e.codigo,
-      usuario: e.usuarioNome ?? 'usuário removido',
-    });
+    // Carimbo só com a data, a hora e o código (E28): sem o nome de quem enviou.
+    const { conteudo } = await carimbarFoto(await readFile(e.caminhoTemporario), { quando: e.enviadoEm, codigo: e.codigo });
     const chave = chaveEvidencia(donoDaEvidencia(e).id, e.id, 'jpg');
     const armazenamento = obterArmazenamento();
     await armazenamento.salvar(chave, Readable.from([conteudo]), { tipoConteudo: 'image/jpeg', tamanho: conteudo.length });

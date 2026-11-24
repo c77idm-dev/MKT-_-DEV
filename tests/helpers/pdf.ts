@@ -1,4 +1,4 @@
-import { decodePDFRawStream, PDFArray, PDFDocument, PDFName, PDFNumber, PDFRawStream, type PDFPage } from 'pdf-lib';
+import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFRawStream, PDFString, type PDFPage } from 'pdf-lib';
 
 function fluxosDaPagina(doc: PDFDocument, pagina: PDFPage): PDFRawStream[] {
   const conteudo = doc.context.lookup(pagina.node.get(PDFName.of('Contents')));
@@ -36,4 +36,27 @@ export async function imagensDoPdf(bytes: Uint8Array): Promise<{ largura: number
     imagens.push({ largura: numero('Width'), altura: numero('Height') });
   }
   return imagens;
+}
+
+export type LinkDoPdf = { pagina: number; uri: string; x: number; y: number; largura: number; altura: number };
+
+/** As anotações de link (Link com ação URI) de cada página, na ordem em que foram postas (1ª página = 1). */
+export async function linksDoPdf(bytes: Uint8Array): Promise<LinkDoPdf[]> {
+  const doc = await PDFDocument.load(bytes);
+  const links: LinkDoPdf[] = [];
+  doc.getPages().forEach((pagina, i) => {
+    const anotacoes = pagina.node.Annots();
+    if (!anotacoes) return;
+    for (let k = 0; k < anotacoes.size(); k++) {
+      const a = anotacoes.lookup(k, PDFDict);
+      if (a.get(PDFName.of('Subtype')) !== PDFName.of('Link')) continue;
+      const acao = a.lookup(PDFName.of('A'), PDFDict);
+      if (acao.get(PDFName.of('S')) !== PDFName.of('URI')) continue;
+      const uri = acao.lookup(PDFName.of('URI'));
+      const texto = uri instanceof PDFString || uri instanceof PDFHexString ? uri.decodeText() : String(uri);
+      const [x1, y1, x2, y2] = a.lookup(PDFName.of('Rect'), PDFArray).asArray().map((n) => (n as PDFNumber).asNumber());
+      links.push({ pagina: i + 1, uri: texto, x: x1, y: y1, largura: x2 - x1, altura: y2 - y1 });
+    }
+  });
+  return links;
 }

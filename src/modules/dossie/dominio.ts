@@ -40,22 +40,9 @@ export const IMAGEM_REDUZIDA: OpcoesImagem = { ladoMaior: 1024, qualidade: 60 };
 
 /**
  * Teto de fotos no corpo do PDF: cabe nos 8 MB a 1024 px/60 e limita a memória do pdf-lib (o web tem 512 MB). As de
- * cima viram um aviso ("veja no sistema"); os hashes de todas continuam na integridade.
+ * cima viram um aviso: "toque aqui para abrir" quando a foto tem o link público (E28); sem ele, "veja no sistema".
  */
 export const MAX_FOTOS_DOSSIE = 120;
-
-/**
- * Foto do anúncio no ML (extra, 23/11): a referência do que foi vendido, ao lado do produto esperado. Pequena (o
- * anúncio é só referência) e no mesmo tamanho nas duas tentativas do PDF, para ser baixada uma vez só.
- */
-export const IMAGEM_ANUNCIO: OpcoesImagem = { ladoMaior: 400, qualidade: 70 };
-/** Prazo de cada foto do anúncio (o CDN do ML responde em menos de 1 s). */
-export const PRAZO_FOTO_ANUNCIO_MS = 5_000;
-/**
- * Tempo total das fotos do anúncio num dossiê: uma devolução com muitos produtos não gasta o prazo de 100 s (gerar.ts)
- * esperando o CDN. Acabou o tempo, as que faltam ficam "indisponível".
- */
-export const ORCAMENTO_FOTOS_ANUNCIO_MS = 20_000;
 
 /** Peso médio de uma imagem a 1280 px/70 no PDF, para escolher a qualidade antes da 1ª passada. */
 const BYTES_POR_IMAGEM = 170 * 1024;
@@ -107,11 +94,6 @@ export type UnidadeDossie = {
   /** Do produto esperado (null quando o SKU está fora do cadastro). */
   descricao: string | null;
   eanEsperado: string | null;
-  /**
-   * Foto do anúncio no ML do produto esperado (produtos.foto_url, emenda E22), ou null. Só uma referência do que foi
-   * vendido: o PDF a baixa do CDN do ML na hora (anuncio.ts) e ela nunca entra como prova guardada (extra).
-   */
-  fotoUrl: string | null;
   eanLido: string | null;
   divergente: boolean;
   produtoRecebido: { sku: string; descricao: string } | null;
@@ -134,25 +116,12 @@ export type EvidenciaDossie = {
   provedor: string | null;
   /** Hora em que o servidor recebeu: é a do carimbo da foto (decisão 6). */
   enviadoEm: Date;
-  enviadoPorNome: string | null;
-  processadoEm: Date | null;
-  tamanho: number | null;
-  sha256Original: string;
-  sha256Final: string | null;
-};
-
-export type EventoDossie = {
-  acao: string;
-  de: string | null;
-  para: string | null;
-  em: Date;
-  usuarioNome: string | null;
-  dados: Record<string, unknown> | null;
 };
 
 /**
  * Tudo o que o PDF mostra. Nenhum campo de texto com dado do comprador (o destinatário da NF, em notas_venda, fica de
  * fora); mas a Foto 1 (etiqueta de rastreio e declaração de conteúdo) pode mostrar o nome e o endereço dele na imagem.
+ * Nenhum nome de pessoa do sistema (E28): quem recebeu, conferiu, enviou ou gerou fica só na tela.
  */
 export type DadosDossie = {
   id: string;
@@ -170,13 +139,9 @@ export type DadosDossie = {
   transportadora: string | null;
   motivoCliente: string | null;
   recebidaEm: Date | null;
-  recebidaPorNome: string | null;
   conferenciaIniciadaEm: Date | null;
   conferidaEm: Date | null;
-  conferenteNome: string | null;
   unidades: UnidadeDossie[];
   evidencias: EvidenciaDossie[];
-  eventos: EventoDossie[];
   geradoEm: Date;
-  geradoPorNome: string;
 };

@@ -1,8 +1,11 @@
 import type { DbOuTx } from '@/db/client';
+import { lerEnv } from '@/lib/env';
+import type { OrigemAvaliada } from '@/lib/origem-publica';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { carregarDossie } from './carregar';
 import { ACAO_DOSSIE_GERADO, nomeArquivoDossie } from './dominio';
+import { avisoSemLinks, linksDasProvas } from './links';
 import { midiasDoArmazenamento } from './midias';
 import { gerarPdfDossie, type MidiasDossie, type ResultadoPdf } from './pdf';
 import { criarJuncao, criarSerie } from './serie';
@@ -25,22 +28,28 @@ const juntar = criarJuncao();
  * com quem e quando. O evento guarda só números (páginas, tamanho, imagens): nada de chave de mídia.
  * `sinal`: o pedido (request.signal). Se todos os que esperam por esta geração forem embora, ela para entre uma foto
  * e outra e nada é registrado. Fila cheia: ErroFilaCheia; prazo estourado: ErroPrazoEsgotado (serie.ts).
+ * `origem`: o endereço público do sistema (avaliarOrigemPublica do pedido); com ele, as fotos e o vídeo viram links
+ * públicos de 90 dias no PDF (E28). Sem ele, o PDF sai sem links; quando o pedido não deu o endereço e havia provas
+ * para ligar, uma linha "dossie_sem_links" vai para o log (avisoSemLinks), para a falta não passar em silêncio.
  */
 export async function gerarDossie(
   db: DbOuTx,
   codigo: string,
   usuario: UsuarioSessao,
-  o: { agora?: Date; midias?: MidiasDossie; limiteBytes?: number; sinal?: AbortSignal } = {},
+  o: { agora?: Date; midias?: MidiasDossie; limiteBytes?: number; sinal?: AbortSignal; origem?: OrigemAvaliada } = {},
 ): Promise<ResultadoDossie> {
   o.sinal?.throwIfAborted();
   const agora = o.agora ?? new Date();
-  const dados = await carregarDossie(db, codigo, { em: agora, porNome: usuario.nome });
+  const dados = await carregarDossie(db, codigo, { em: agora });
   if (!dados) return { tipo: 'nao_encontrada' };
   if (!dados.conferidaEm) return { tipo: 'conferencia_pendente' };
   const pdf = await juntar(`${dados.codigo}:${usuario.id}`, o.sinal, (sinalDosPedidos) =>
     emSerie(
       async (sinal) => {
-        const pdf = await gerarPdfDossie(dados, o.midias ?? midiasDoArmazenamento(), { limiteBytes: o.limiteBytes, sinal });
+        const links = linksDasProvas(dados.evidencias, { origem: o.origem?.url ?? null, segredo: lerEnv().SEGREDO_LINKS, agora });
+        const aviso = o.origem ? avisoSemLinks(dados.codigo, dados.evidencias, o.origem, agora) : null;
+        if (aviso) console.warn(aviso);
+        const pdf = await gerarPdfDossie(dados, o.midias ?? midiasDoArmazenamento(), { limiteBytes: o.limiteBytes, sinal, links });
         // Quem pediu foi embora (ou passou do prazo) enquanto o PDF ficava pronto: nada de "dossiê gerado".
         sinal.throwIfAborted();
         await registrarEvento(db, {
