@@ -3,9 +3,8 @@ import type { DadosDossie, EvidenciaDossie, UnidadeDossie } from '../../src/modu
 /** Dados de um dossiê de provas (extra) para os testes do PDF: 3 unidades (Confere, Não confere, ausente), fotos e vídeo. */
 export const AGORA_DOSSIE = new Date('2026-11-19T18:30:00Z'); // 15:30 em Brasília
 const ENVIO = new Date('2026-11-19T13:02:00Z'); // 10:02
-const sha = (n: number) => n.toString(16).repeat(64).slice(0, 64);
 
-function evidencia(p: Partial<EvidenciaDossie> & Pick<EvidenciaDossie, 'id' | 'tipo'>, n: number): EvidenciaDossie {
+function evidencia(p: Partial<EvidenciaDossie> & Pick<EvidenciaDossie, 'id' | 'tipo'>): EvidenciaDossie {
   const video = p.tipo === 'VIDEO_PROVA';
   return {
     itemId: null,
@@ -14,11 +13,6 @@ function evidencia(p: Partial<EvidenciaDossie> & Pick<EvidenciaDossie, 'id' | 't
     caminho: `evidencias/dev-1/${p.id}.${video ? 'mp4' : 'jpg'}`,
     provedor: 'disco',
     enviadoEm: ENVIO,
-    enviadoPorNome: 'Operador Teste',
-    processadoEm: ENVIO,
-    tamanho: 1000,
-    sha256Original: sha(n),
-    sha256Final: sha(n + 1),
     ...p,
   };
 }
@@ -29,7 +23,6 @@ function unidade(p: Partial<UnidadeDossie> & Pick<UnidadeDossie, 'id' | 'unidade
     status: 'AGUARDANDO_NF',
     descricao: 'Fone Bluetooth Ação',
     eanEsperado: '7891000000014',
-    fotoUrl: null,
     eanLido: null,
     divergente: false,
     produtoRecebido: null,
@@ -58,10 +51,8 @@ export function dadosDossieTeste(m: Partial<DadosDossie> = {}): DadosDossie {
     transportadora: 'Correios',
     motivoCliente: 'Produto não funciona',
     recebidaEm: new Date('2026-11-19T13:00:00Z'),
-    recebidaPorNome: 'Recebedor Teste',
     conferenciaIniciadaEm: new Date('2026-11-19T13:01:00Z'),
     conferidaEm: new Date('2026-11-19T13:20:00Z'),
-    conferenteNome: 'Conferente Teste',
     unidades: [
       unidade({
         id: 'u1', unidade: 1, eanLido: '7891000000014', serial: 'SN-ABC-1', loteFabricacao: 'L2026', validade: '12/2027',
@@ -74,26 +65,17 @@ export function dadosDossieTeste(m: Partial<DadosDossie> = {}): DadosDossie {
       unidade({ id: 'u3', unidade: 3, status: 'AUSENTE', destino: null, motivo: 'AUSENTE' }),
     ],
     evidencias: [
-      evidencia({ id: 'f1', tipo: 'FOTO_1_ETIQUETA' }, 1),
-      evidencia({ id: 'f2', tipo: 'FOTO_2_EMBALAGEM' }, 2),
-      evidencia({ id: 'f3u1', tipo: 'FOTO_3_PRODUTO', itemId: 'u1' }, 3),
-      evidencia({ id: 'f4u1', tipo: 'FOTO_4_CODIGO_SERIAL', itemId: 'u1' }, 4),
-      evidencia({ id: 'av1u1', tipo: 'EXTRA', itemId: 'u1' }, 5),
-      evidencia({ id: 'av2u1', tipo: 'EXTRA', itemId: 'u1' }, 6),
-      evidencia({ id: 'f3u2', tipo: 'FOTO_3_PRODUTO', itemId: 'u2' }, 7),
-      evidencia({ id: 'f4u2', tipo: 'FOTO_4_CODIGO_SERIAL', itemId: 'u2' }, 8),
-      evidencia({ id: 'video', tipo: 'VIDEO_PROVA' }, 9),
-    ],
-    eventos: [
-      { acao: 'criada', de: null, para: 'PENDENTE_CHEGADA', em: new Date('2026-11-18T12:00:00Z'), usuarioNome: null, dados: null },
-      { acao: 'recebida', de: 'PENDENTE_CHEGADA', para: 'AGUARDANDO_CONFERENCIA', em: new Date('2026-11-19T13:00:00Z'), usuarioNome: 'Recebedor Teste', dados: null },
-      { acao: 'evidencia_processada', de: null, para: null, em: ENVIO, usuarioNome: null, dados: { tipo: 'FOTO_3_PRODUTO', itemId: 'u1', evidenciaId: 'f3u1' } },
-      { acao: 'conferencia_concluida', de: 'EM_CONFERENCIA', para: 'AGUARDANDO_NF', em: new Date('2026-11-19T13:20:00Z'), usuarioNome: 'Conferente Teste', dados: null },
-      { acao: 'cancelada', de: 'AGUARDANDO_NF', para: 'AGUARDANDO_NF', em: new Date('2026-11-19T13:21:00Z'), usuarioNome: 'Gestora Teste', dados: { motivo: 'Teste de motivo' } },
-      { acao: 'dossie_gerado', de: null, para: null, em: new Date('2026-11-19T14:00:00Z'), usuarioNome: 'Gestora Teste', dados: null },
+      evidencia({ id: 'f1', tipo: 'FOTO_1_ETIQUETA' }),
+      evidencia({ id: 'f2', tipo: 'FOTO_2_EMBALAGEM' }),
+      evidencia({ id: 'f3u1', tipo: 'FOTO_3_PRODUTO', itemId: 'u1' }),
+      evidencia({ id: 'f4u1', tipo: 'FOTO_4_CODIGO_SERIAL', itemId: 'u1' }),
+      evidencia({ id: 'av1u1', tipo: 'EXTRA', itemId: 'u1' }),
+      evidencia({ id: 'av2u1', tipo: 'EXTRA', itemId: 'u1' }),
+      evidencia({ id: 'f3u2', tipo: 'FOTO_3_PRODUTO', itemId: 'u2' }),
+      evidencia({ id: 'f4u2', tipo: 'FOTO_4_CODIGO_SERIAL', itemId: 'u2' }),
+      evidencia({ id: 'video', tipo: 'VIDEO_PROVA' }),
     ],
     geradoEm: AGORA_DOSSIE,
-    geradoPorNome: 'Gestora Teste',
     ...m,
   };
 }

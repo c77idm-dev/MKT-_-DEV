@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -10,12 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { obterArmazenamento } from '@/modules/midia/armazenamento';
 import type { ArmazenamentoMemoria } from '@/modules/midia/armazenamento-memoria';
 import { binariosFfmpeg, temFfmpeg } from '@/modules/midia/ffmpeg';
-import { dadosDossieTeste } from '../../../tests/helpers/fabricas-dossie';
 import { jpegTeste } from '../../../tests/helpers/fabricas-dossie-banco';
-import { textoDoPdf } from '../../../tests/helpers/pdf';
 import { IMAGEM_PADRAO, type EvidenciaDossie } from './dominio';
 import { midiasDoArmazenamento } from './midias';
-import { gerarPdfDossie } from './pdf';
 import { criarSerie } from './serie';
 
 const comFfmpeg = await temFfmpeg();
@@ -61,31 +57,20 @@ async function guardada(conteudo: Buffer, p: Partial<EvidenciaDossie> = {}): Pro
     caminho,
     provedor: 'disco',
     enviadoEm: new Date(),
-    enviadoPorNome: 'Operador',
-    processadoEm: new Date(),
-    tamanho: conteudo.length,
-    sha256Original: 'a'.repeat(64),
-    sha256Final: createHash('sha256').update(conteudo).digest('hex'),
     ...p,
   };
 }
 
 describe('midiasDoArmazenamento: fotos (extra)', () => {
-  it('lê a foto pelo provedor dela e entrega reduzida; o hash guardado não é recalculado', async () => {
+  it('lê a foto pelo provedor dela e entrega reduzida', async () => {
     const e = await guardada(await jpegTeste({ r: 10, g: 120, b: 200 }, 2000, 1500));
     const r = await midiasDoArmazenamento({ pastaTemporaria: pasta }).foto(e, IMAGEM_PADRAO);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect({ largura: r.imagem.largura, altura: r.imagem.altura }).toEqual({ largura: 1280, altura: 960 });
     expect((await sharp(r.imagem.jpeg).metadata()).format).toBe('jpeg');
-    expect(r.sha256Calculado).toBeNull();
-  });
-
-  it('sem o hash final guardado: calcula o SHA-256 do arquivo lido', async () => {
-    const conteudo = await jpegTeste({ r: 10, g: 20, b: 30 });
-    const e = await guardada(conteudo, { sha256Final: null });
-    const r = await midiasDoArmazenamento({ pastaTemporaria: pasta }).foto(e, IMAGEM_PADRAO);
-    expect(r).toMatchObject({ ok: true, sha256Calculado: createHash('sha256').update(conteudo).digest('hex') });
+    // Sem SHA-256 no resultado: a integridade saiu do dossiê (E28).
+    expect(Object.keys(r).sort()).toEqual(['imagem', 'ok']);
   });
 
   it('arquivo sumido do armazenamento: aviso, sem a chave no texto', async () => {
@@ -165,11 +150,11 @@ describe('midiasDoArmazenamento: vídeo (extra)', () => {
     expect(r).toMatchObject({ imagem: null, problema: 'Arquivo do vídeo não encontrado no armazenamento.' });
   });
 
-  it('stream que quebra no meio da cópia: aviso no lugar do quadro, sem hash parcial; a pasta temporária fica vazia', async () => {
-    const e = await guardada(Buffer.from('x'), { tipo: 'VIDEO_PROVA', sha256Final: null });
+  it('stream que quebra no meio da cópia: aviso no lugar do quadro; a pasta temporária fica vazia', async () => {
+    const e = await guardada(Buffer.from('x'), { tipo: 'VIDEO_PROVA' });
     vi.spyOn(obterArmazenamento(), 'ler').mockResolvedValueOnce(fluxoQueQuebra());
     const r = await midiasDoArmazenamento({ pastaTemporaria: pasta }).quadroDoVideo(e, IMAGEM_PADRAO);
-    expect(r).toEqual({ imagem: null, duracaoSegundos: null, sha256Calculado: null, problema: 'Não foi possível ler o arquivo do vídeo.' });
+    expect(r).toEqual({ imagem: null, duracaoSegundos: null, problema: 'Não foi possível ler o arquivo do vídeo.' });
     expect(await readdir(pasta)).toEqual([]);
   });
 
@@ -185,7 +170,7 @@ describe('midiasDoArmazenamento: vídeo (extra)', () => {
     const e = await guardada(Buffer.from('x'), { tipo: 'VIDEO_PROVA' });
     await writeFile(join(pasta, 'arquivo'), 'não sou pasta');
     const r = await midiasDoArmazenamento({ pastaTemporaria: join(pasta, 'arquivo', 'sub') }).quadroDoVideo(e, IMAGEM_PADRAO);
-    expect(r).toEqual({ imagem: null, duracaoSegundos: null, sha256Calculado: null, problema: 'Não foi possível tirar um quadro do vídeo.' });
+    expect(r).toEqual({ imagem: null, duracaoSegundos: null, problema: 'Não foi possível tirar um quadro do vídeo.' });
   });
 
   it.skipIf(!comFfmpeg)('vídeo de verdade (precisa do ffmpeg): um quadro reduzido e a duração; a 2ª tentativa reusa o quadro', async () => {
@@ -197,52 +182,17 @@ describe('midiasDoArmazenamento: vídeo (extra)', () => {
     );
     const conteudo = await readFile(origem);
     await rm(origem, { force: true });
-    const e = await guardada(conteudo, { tipo: 'VIDEO_PROVA', sha256Final: null });
+    const e = await guardada(conteudo, { tipo: 'VIDEO_PROVA' });
     const midias = midiasDoArmazenamento({ pastaTemporaria: pasta });
     const r = await midias.quadroDoVideo(e, IMAGEM_PADRAO);
     expect(r.problema).toBeNull();
     expect(r.imagem).not.toBeNull();
     expect(r.imagem!.largura).toBe(640);
     expect(r.duracaoSegundos).toBeCloseTo(2, 0);
-    expect(r.sha256Calculado).toBe(createHash('sha256').update(conteudo).digest('hex'));
     expect(await readdir(pasta)).toEqual([]);
     // Na 2ª tentativa (PDF acima de 8 MB) o quadro já extraído é reusado: nem precisa do arquivo de novo.
     await (obterArmazenamento() as ArmazenamentoMemoria).apagar(e.caminho!);
     const segunda = await midias.quadroDoVideo(e, { ladoMaior: 320, qualidade: 60 });
     expect(segunda.imagem!.largura).toBe(320);
-  });
-});
-
-describe('midiasDoArmazenamento: foto do anúncio no ML (extra)', () => {
-  it('baixa pelo fetch dado (os testes nunca saem para a rede), a 400 px, com o prazo pedido; host fora da lista nem chama', async () => {
-    const jpeg = await jpegTeste({ r: 200, g: 60, b: 40 }, 1200, 1200);
-    const fetchFn = vi.fn<typeof fetch>(async () => new Response(new Uint8Array(jpeg), { headers: { 'content-type': 'image/jpeg' } }));
-    const midias = midiasDoArmazenamento({ pastaTemporaria: pasta, fetchFn });
-    const r = await midias.fotoDoAnuncio('https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg', { prazoMs: 1_000 });
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect({ largura: r.imagem.largura, altura: r.imagem.altura }).toEqual({ largura: 400, altura: 400 });
-    expect(fetchFn).toHaveBeenCalledTimes(1);
-    expect(fetchFn.mock.calls[0][1]?.redirect).toBe('manual');
-
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    // O domínio das fotos do ML falso (e2e) não está na lista: "indisponível" sem pedido nenhum.
-    expect(await midias.fotoDoAnuncio('https://imagens.ml-falso.example/mlf-fone-01.png', { prazoMs: 1_000 })).toEqual({ ok: false, motivo: 'host_nao_permitido' });
-    expect(fetchFn).toHaveBeenCalledTimes(1);
-  });
-
-  it('no PDF, com o tempo das fotos do anúncio pela metade e o CDN falhando aos poucos: o dossiê sai, com "indisponível"', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    // Cada pedido leva uns 15 ms e falha: a 2ª foto recebe o resto do tempo, com fração de ms (uns 3984,7).
-    const fetchFn = vi.fn<typeof fetch>(async () => {
-      await new Promise((r) => setTimeout(r, 15));
-      throw new TypeError('fetch failed');
-    });
-    const dados = dadosDossieTeste({ evidencias: [] });
-    const fotos = ['https://http2.mlstatic.com/D_611111-MLB70000000001_072026-O.jpg', 'https://http2.mlstatic.com/D_622222-MLB70000000002_072026-O.jpg'];
-    dados.unidades = dados.unidades.map((u, i) => ({ ...u, fotoUrl: fotos[i === 2 ? 1 : 0] }));
-    const r = await gerarPdfDossie(dados, midiasDoArmazenamento({ pastaTemporaria: pasta, fetchFn }), { orcamentoAnunciosMs: 4_000 });
-    expect(fetchFn).toHaveBeenCalledTimes(2);
-    expect((await textoDoPdf(r.bytes)).replace(/\s+/g, ' ').match(/Foto do anúncio indisponível/g)).toHaveLength(3);
   });
 });

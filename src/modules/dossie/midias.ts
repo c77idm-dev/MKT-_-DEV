@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -9,7 +8,6 @@ import { armazenamentoDoProvedor } from '@/modules/midia/armazenamento';
 import { LIMITE_FOTO_BYTES } from '@/modules/midia/dominio';
 import { ErroArquivoNaoEncontrado } from '@/modules/midia/erros';
 import { binariosFfmpeg, executar, sondar, type Binarios } from '@/modules/midia/ffmpeg';
-import { baixarFotoAnuncio } from './anuncio';
 import type { EvidenciaDossie } from './dominio';
 import { reduzirImagem, type ImagemPdf } from './imagens';
 import type { MidiasDossie, ResultadoFoto, ResultadoQuadro } from './pdf';
@@ -99,20 +97,19 @@ async function lerAteOLimite(fluxo: Readable, limite: number, prazo: AbortSignal
   }
 }
 
-type Video = { quadro: Buffer | null; duracaoSegundos: number | null; sha256Calculado: string | null; problema: string | null };
+type Video = { quadro: Buffer | null; duracaoSegundos: number | null; problema: string | null };
 
-const semVideo = (problema: string): Video => ({ quadro: null, duracaoSegundos: null, sha256Calculado: null, problema });
+const semVideo = (problema: string): Video => ({ quadro: null, duracaoSegundos: null, problema });
 
 /**
  * As mídias do dossiê lidas do armazenamento (disco ou S3), uma por vez. Foto: lida inteira (com limite e prazo) e
  * reduzida pelo sharp. Vídeo: copiado para um arquivo temporário (MIDIA_TMP_DIR), o ffprobe mede a duração e o ffmpeg
  * tira um quadro; a pasta temporária é apagada logo depois. O quadro fica guardado para a 2ª tentativa do PDF.
  * Erro de leitura, prazo estourado ou pasta temporária impossível viram aviso no PDF; só o cancelamento do dossiê
- * (`sinal`) sobe como erro. Foto do anúncio no ML (extra): a única que vem de fora, pelo CDN do ML (anuncio.ts);
- * `fetchFn` só nos testes.
+ * (`sinal`) sobe como erro. Nenhum pedido para fora do sistema (a foto do anúncio do ML saiu do dossiê na E28).
  */
 export function midiasDoArmazenamento(
-  o: { binarios?: Binarios; pastaTemporaria?: string; prazoLeituraMs?: number; limiteFotoBytes?: number; fetchFn?: typeof fetch } = {},
+  o: { binarios?: Binarios; pastaTemporaria?: string; prazoLeituraMs?: number; limiteFotoBytes?: number } = {},
 ): MidiasDossie {
   const videos = new Map<string, Promise<Video>>();
   const prazoMs = o.prazoLeituraMs ?? PRAZO_LEITURA_MS;
@@ -130,7 +127,6 @@ export function midiasDoArmazenamento(
     }
     try {
       const arquivo = join(pasta, 'video');
-      const hash = e.sha256Final ? null : createHash('sha256');
       const prazo = prazoDaLeitura(prazoMs, sinal);
       let fluxo: Readable;
       try {
@@ -141,24 +137,13 @@ export function midiasDoArmazenamento(
         return semVideo(sumiu(erro) ? VIDEO_SUMIU : VIDEO_ILEGIVEL);
       }
       try {
-        // O pipeline destrói a origem quando algo falha; o hash só vale se a cópia terminou inteira.
-        await pipeline(
-          fluxo,
-          async function* (origem: AsyncIterable<Buffer>) {
-            for await (const parte of origem) {
-              hash?.update(parte);
-              yield parte;
-            }
-          },
-          createWriteStream(arquivo),
-          { signal: prazo },
-        );
+        // O pipeline destrói a origem quando algo falha.
+        await pipeline(fluxo, createWriteStream(arquivo), { signal: prazo });
       } catch (erro) {
         sinal?.throwIfAborted();
         avisar('dossie_video_ilegivel', e.id, erro);
         return semVideo(sumiu(erro) ? VIDEO_SUMIU : VIDEO_ILEGIVEL);
       }
-      const sha256Calculado = hash ? hash.digest('hex') : null;
       let duracaoSegundos: number | null = null;
       try {
         duracaoSegundos = (await sondar(binarios.ffprobe, arquivo, { limiteMs: PRAZO_QUADRO_MS })).duracao;
@@ -169,10 +154,10 @@ export function midiasDoArmazenamento(
       try {
         const r = await executar(binarios.ffmpeg, argumentosQuadro(arquivo, saida, segundoDoQuadro(duracaoSegundos)), { limiteMs: PRAZO_QUADRO_MS });
         if (r.codigo !== 0) throw new Error(`ffmpeg saiu com o código ${r.codigo}`);
-        return { quadro: await readFile(saida), duracaoSegundos, sha256Calculado, problema: null };
+        return { quadro: await readFile(saida), duracaoSegundos, problema: null };
       } catch (erro) {
         avisar('dossie_video_sem_quadro', e.id, erro);
-        return { quadro: null, duracaoSegundos, sha256Calculado, problema: SEM_QUADRO };
+        return { quadro: null, duracaoSegundos, problema: SEM_QUADRO };
       }
     } finally {
       // Uma falha ao limpar (EBUSY no Windows) não troca o resultado por um erro.
@@ -195,9 +180,8 @@ export function midiasDoArmazenamento(
         avisar('dossie_foto_ilegivel', e.id, erro);
         return { ok: false, motivo: IMAGEM_ILEGIVEL };
       }
-      const sha256Calculado = e.sha256Final ? null : createHash('sha256').update(conteudo).digest('hex');
       try {
-        return { ok: true, imagem: await reduzirImagem(conteudo, opcoes), sha256Calculado };
+        return { ok: true, imagem: await reduzirImagem(conteudo, opcoes) };
       } catch (erro) {
         avisar('dossie_foto_ilegivel', e.id, erro);
         return { ok: false, motivo: IMAGEM_ILEGIVEL };
@@ -217,11 +201,7 @@ export function midiasDoArmazenamento(
           problema = SEM_QUADRO;
         }
       }
-      return { imagem, duracaoSegundos: v.duracaoSegundos, sha256Calculado: v.sha256Calculado, problema };
-    },
-
-    fotoDoAnuncio(url, { prazoMs, sinal }) {
-      return baixarFotoAnuncio(url, { fetchFn: o.fetchFn, prazoMs, sinal });
+      return { imagem, duracaoSegundos: v.duracaoSegundos, problema };
     },
   };
 }

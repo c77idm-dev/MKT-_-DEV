@@ -141,7 +141,11 @@ describe('GET /api/devolucoes/[codigo]/dossie (extra)', () => {
     expect(texto).toContain(p.reclamacaoId);
     expect(texto).toContain('Não foi possível tirar um quadro do vídeo.');
     expect(texto).toContain(`gerado em`);
-    expect(texto).toContain(gestor.nome);
+    // Nenhum nome de pessoa (E28): nem quem gerou, nem quem recebeu, conferiu ou enviou as fotos.
+    expect(texto).not.toContain(gestor.nome);
+    expect(texto).not.toContain(p.operador.nome);
+    // Sem histórico e sem integridade dos arquivos (E28).
+    expect(texto).not.toMatch(/Histórico|Integridade|SHA-256/);
     // Nada de chave de mídia, link assinado ou id interno, nem no texto nem nos metadados.
     expect(texto).not.toMatch(PROIBIDO_NO_PDF);
     const doc = await PDFDocument.load(bytes);
@@ -149,7 +153,7 @@ describe('GET /api/devolucoes/[codigo]/dossie (extra)', () => {
       expect(meta ?? '').not.toMatch(PROIBIDO_NO_PDF);
     }
     expect(doc.getTitle()).toBe(`Dossiê de provas ${p.codigo}`);
-    expect(doc.getAuthor()).toBe('Loja Exemplo Ltda');
+    expect(doc.getAuthor()).toBeUndefined();
 
     const eventos = await eventosDossie(p.id);
     expect(eventos).toHaveLength(1);

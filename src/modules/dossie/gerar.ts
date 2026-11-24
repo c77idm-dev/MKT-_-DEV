@@ -34,7 +34,7 @@ export async function gerarDossie(
 ): Promise<ResultadoDossie> {
   o.sinal?.throwIfAborted();
   const agora = o.agora ?? new Date();
-  const dados = await carregarDossie(db, codigo, { em: agora, porNome: usuario.nome });
+  const dados = await carregarDossie(db, codigo, { em: agora });
   if (!dados) return { tipo: 'nao_encontrada' };
   if (!dados.conferidaEm) return { tipo: 'conferencia_pendente' };
   const pdf = await juntar(`${dados.codigo}:${usuario.id}`, o.sinal, (sinalDosPedidos) =>

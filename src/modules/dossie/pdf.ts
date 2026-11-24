@@ -1,40 +1,33 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 import { formatarDataHora } from '@/lib/formatar';
-import { ROTULO_CANAL, ROTULO_DESTINO, ROTULO_MOTIVO, rotuloStatus } from '@/modules/devolucoes/dominio';
-import { complementoDoEvento } from '@/modules/historico/complementos';
-import { rotuloDaAcao } from '@/modules/historico/eventos';
+import { ROTULO_CANAL, ROTULO_DESTINO, ROTULO_MOTIVO } from '@/modules/devolucoes/dominio';
 import { paraWinAnsi } from '@/modules/lotes/pdf';
 import { textoCarimbo } from '@/modules/midia/carimbo';
 import {
   DESCRICAO_EVIDENCIA,
-  ehTipoEvidencia,
   ROTULO_EVIDENCIA,
   ROTULO_SITUACAO_PROCESSAMENTO,
   type SituacaoProcessamento,
   type TipoEvidencia,
 } from '@/modules/midia/dominio';
 import {
-  ACAO_DOSSIE_GERADO,
   formatarDuracao,
   IMAGEM_REDUZIDA,
   LIMITE_BYTES_DOSSIE,
   leituraDoCodigo,
   MAX_FOTOS_DOSSIE,
   opcoesIniciais,
-  ORCAMENTO_FOTOS_ANUNCIO_MS,
-  PRAZO_FOTO_ANUNCIO_MS,
   ROTULO_LEITURA,
   type DadosDossie,
   type EvidenciaDossie,
   type OpcoesImagem,
   type UnidadeDossie,
 } from './dominio';
-import type { ResultadoFotoAnuncio } from './anuncio';
 import type { ImagemPdf } from './imagens';
 
 /** Foto lida do armazenamento já reduzida, ou o motivo de não ter vindo (o PDF põe um aviso no lugar). */
-export type ResultadoFoto = { ok: true; imagem: ImagemPdf; sha256Calculado: string | null } | { ok: false; motivo: string };
-export type ResultadoQuadro = { imagem: ImagemPdf | null; duracaoSegundos: number | null; sha256Calculado: string | null; problema: string | null };
+export type ResultadoFoto = { ok: true; imagem: ImagemPdf } | { ok: false; motivo: string };
+export type ResultadoQuadro = { imagem: ImagemPdf | null; duracaoSegundos: number | null; problema: string | null };
 
 /**
  * De onde vêm as imagens (o armazenamento, em produção). Chamado uma imagem por vez, só para as evidências PRONTA.
@@ -43,11 +36,6 @@ export type ResultadoQuadro = { imagem: ImagemPdf | null; duracaoSegundos: numbe
 export type MidiasDossie = {
   foto(e: EvidenciaDossie, opcoes: OpcoesImagem, sinal?: AbortSignal): Promise<ResultadoFoto>;
   quadroDoVideo(e: EvidenciaDossie, opcoes: OpcoesImagem, sinal?: AbortSignal): Promise<ResultadoQuadro>;
-  /**
-   * Foto do anúncio no ML (extra): a referência do que foi vendido, baixada do CDN do ML (anuncio.ts), já a 400 px.
-   * Falha vira { ok: false }; só o cancelamento do dossiê (`sinal`) sobe como erro. `prazoMs`: o desta foto, inteiro.
-   */
-  fotoDoAnuncio(url: string, o: { prazoMs: number; sinal?: AbortSignal }): Promise<ResultadoFotoAnuncio>;
 };
 
 export type SecaoPdf = { titulo: string; pagina: number };
@@ -67,7 +55,7 @@ const LINHA = rgb(0.8, 0.8, 0.8);
 const FUNDO_AVISO = rgb(0.95, 0.95, 0.95);
 const VERDE = rgb(0.07, 0.35, 0.25);
 
-type Fontes = { normal: PDFFont; negrito: PDFFont; mono: PDFFont };
+type Fontes = { normal: PDFFont; negrito: PDFFont };
 
 /** Quebra em linhas que cabem na largura; "\n" separa parágrafos. Palavra maior que a linha é cortada. */
 function quebrar(texto: string, fonte: PDFFont, tamanho: number, largura: number): string[] {
@@ -119,10 +107,6 @@ function avisoDaSituacao(situacao: SituacaoProcessamento): string {
   }
 }
 
-function nomeDoTipo(tipo: TipoEvidencia): string {
-  return tipo === 'EXTRA' ? 'Foto da avaria' : ROTULO_EVIDENCIA[tipo];
-}
-
 type Celula = { legenda: string; descricao: string | null; evidencia: EvidenciaDossie | null };
 
 const ehPronta = (x: EvidenciaDossie) => x.situacao === 'PRONTA' && x.caminho !== null;
@@ -137,39 +121,13 @@ function fotosDoCorpo(d: DadosDossie): EvidenciaDossie[] {
   return fotos.filter((x): x is EvidenciaDossie => x !== null && ehPronta(x));
 }
 
-/**
- * Ações cujo `dados.motivo` entra no histórico do dossiê: encerramento, ausentes, conferência e as do ML. O resto (o
- * retorno da SEFAZ em nf_rejeitada, a justificativa do cancelamento da NF em devolucao_reaberta) é texto fiscal interno,
- * livre e vindo de fora: no PDF que vai ao ML sai só o rótulo.
- */
-const ACOES_COM_MOTIVO = new Set(['cancelada', 'extraviada', 'concluida', 'conferencia_concluida']);
-const motivoVaiNoDossie = (acao: string) => ACOES_COM_MOTIVO.has(acao) || acao.startsWith('ml_') || acao.startsWith('contestacao_');
-
-/**
- * O que entra no corpo: as fotos dentro do teto, o cancelamento do dossiê e a foto do anúncio de cada URL (baixada uma
- * vez para as duas tentativas do PDF).
- */
-type Plano = { noPdf: Set<string>; fora: number; maxFotos: number; sinal?: AbortSignal; anuncio: (url: string) => Promise<ResultadoFotoAnuncio> };
+/** O que entra no corpo: as fotos dentro do teto e o cancelamento do dossiê. */
+type Plano = { noPdf: Set<string>; fora: number; maxFotos: number; sinal?: AbortSignal };
 
 /** Legenda (2 linhas) + caixa da foto + carimbo. */
 const alturaDaLinha = (alturaCaixa: number) => 30 + alturaCaixa + 16;
 const CAIXA_UNIDADE = 230;
 const CAIXA_AVARIA = 200;
-const CAIXA_ANUNCIO = 120;
-
-const LEGENDA_ANUNCIO = 'Foto do anúncio no ML (o que foi vendido)';
-const NOTA_ANUNCIO = 'Referência do anúncio no Mercado Livre, não da conferência: não é arquivo guardado no sistema (sem carimbo e sem SHA-256).';
-const COMPARAR_ANUNCIO = 'Compare com as fotos da unidade (o que voltou).';
-const ANUNCIO_INDISPONIVEL = 'Foto do anúncio indisponível';
-const SO_REFERENCIA_ANUNCIO = 'A foto do anúncio no ML, nas unidades, é só referência: não tem carimbo nem SHA-256.';
-const TITULO_REFERENCIA_ANUNCIO = 'Referência do anúncio (não é prova)';
-/** Com menos tempo que isso no orçamento das fotos do anúncio, nem pede. */
-const PRAZO_MINIMO_ANUNCIO_MS = 200;
-
-/** "1", "1 e 2", "1, 2 e 3". */
-function juntarNumeros(n: number[]): string {
-  return n.length <= 1 ? n.join('') : `${n.slice(0, -1).join(', ')} e ${n[n.length - 1]}`;
-}
 
 /** Escreve de cima para baixo, abrindo páginas novas quando o espaço acaba. */
 class Escritor {
@@ -251,17 +209,8 @@ class Escritor {
     this.y -= altura + 10;
   }
 
-  /**
-   * A imagem cabendo na caixa (sem distorcer), ou o aviso no lugar. A imagem entra no PDF já reduzida; `embutida`: uma
-   * que já está no arquivo (a mesma foto do anúncio em várias unidades vai uma vez só).
-   */
-  async caixa(
-    x: number,
-    topo: number,
-    largura: number,
-    altura: number,
-    conteudo: { imagem: ImagemPdf } | { embutida: PDFImage } | { aviso: string },
-  ): Promise<void> {
+  /** A imagem cabendo na caixa (sem distorcer), ou o aviso no lugar. A imagem entra no PDF já reduzida. */
+  async caixa(x: number, topo: number, largura: number, altura: number, conteudo: { imagem: ImagemPdf } | { aviso: string }): Promise<void> {
     const temImagem = !('aviso' in conteudo);
     this.pagina.drawRectangle({
       x,
@@ -273,7 +222,7 @@ class Escritor {
       ...(temImagem ? {} : { color: FUNDO_AVISO }),
     });
     if (!('aviso' in conteudo)) {
-      const imagem = 'embutida' in conteudo ? conteudo.embutida : await this.doc.embedJpg(conteudo.imagem.jpeg);
+      const imagem = await this.doc.embedJpg(conteudo.imagem.jpeg);
       const escala = Math.min((largura - 4) / imagem.width, (altura - 4) / imagem.height);
       const w = imagem.width * escala;
       const h = imagem.height * escala;
@@ -300,8 +249,8 @@ async function montar(
   sinal?.throwIfAborted();
   const doc = await PDFDocument.create();
   doc.setTitle(`Dossiê de provas ${d.codigo}`);
-  doc.setSubject('Provas da devolução: fotos, quadro do vídeo, histórico e integridade dos arquivos');
-  doc.setAuthor(d.empresa ?? SISTEMA);
+  doc.setSubject('Provas da devolução: fotos e quadro do vídeo');
+  // Sem autor (E28): nenhum nome de pessoa no PDF.
   doc.setCreator(SISTEMA);
   doc.setProducer(SISTEMA);
   doc.setLanguage('pt-BR');
@@ -310,7 +259,6 @@ async function montar(
   const f: Fontes = {
     normal: await doc.embedFont(StandardFonts.Helvetica),
     negrito: await doc.embedFont(StandardFonts.HelveticaBold),
-    mono: await doc.embedFont(StandardFonts.Courier),
   };
   const e = new Escritor(doc, f);
   const secoes: SecaoPdf[] = [];
@@ -319,27 +267,10 @@ async function montar(
     secoes.push({ titulo, pagina: e.paginas.length });
     e.titulo(titulo);
   };
-  /** SHA-256 calculado agora, para o que não tinha o hash final guardado. */
-  const calculados = new Map<string, string>();
-  const unidadeDe = new Map(d.unidades.map((u) => [u.id, u]));
   const ehML = d.canal === 'MERCADO_LIVRE';
   const geradoEm = formatarDataHora(d.geradoEm);
   const video = d.evidencias.find((x) => x.tipo === 'VIDEO_PROVA') ?? null;
   const pronta = ehPronta;
-  /** Foto do anúncio (extra): cada URL entra uma vez no arquivo; e as unidades em que apareceu, para a integridade. */
-  const anunciosEmbutidos = new Map<string, PDFImage>();
-  const anunciosNoCorpo = new Map<string, number[]>();
-
-  function nomeDaEvidencia(x: EvidenciaDossie): string {
-    const u = x.itemId ? unidadeDe.get(x.itemId) : undefined;
-    if (x.tipo === 'EXTRA') {
-      if (x.itemId === null) return `Foto extra ${extrasDe(d, null).indexOf(x) + 1} · Pacote`;
-      if (!u) return 'Foto extra';
-      return `Foto da avaria ${extrasDe(d, u.id).indexOf(x) + 1} · Unidade ${u.unidade}`;
-    }
-    if (x.tipo === 'FOTO_1_ETIQUETA' || x.tipo === 'FOTO_2_EMBALAGEM') return `${ROTULO_EVIDENCIA[x.tipo]} · Pacote`;
-    return u ? `${ROTULO_EVIDENCIA[x.tipo]} · Unidade ${u.unidade}` : ROTULO_EVIDENCIA[x.tipo];
-  }
 
   function carimboDe(x: EvidenciaDossie): string {
     return textoCarimbo({ quando: x.enviadoEm, codigo: d.codigo });
@@ -351,9 +282,7 @@ async function montar(
     if (!plano.noPdf.has(c.evidencia.id)) return { aviso: `Foto fora deste PDF (limite de ${plano.maxFotos} fotos): veja no sistema.` };
     sinal?.throwIfAborted();
     const r = await midias.foto(c.evidencia, opcoes, sinal);
-    if (!r.ok) return { aviso: r.motivo };
-    if (r.sha256Calculado) calculados.set(c.evidencia.id, r.sha256Calculado);
-    return { imagem: r.imagem };
+    return r.ok ? { imagem: r.imagem } : { aviso: r.motivo };
   }
 
   /** Fotos em grade (1 ou 2 colunas). Uma foto por vez: lê, reduz e embute antes de pedir a próxima. */
@@ -389,12 +318,9 @@ async function montar(
   e.desenhar(d.codigo, MARGEM, e.y - 20, 20, f.negrito);
   e.y -= 34;
   if (d.empresa) e.escrever(`Empresa: ${d.empresa}`, { tamanho: 11, fonte: f.negrito });
-  e.escrever(`Gerado pelo sistema ${SISTEMA} em ${geradoEm} por ${d.geradoPorNome}.`, { tamanho: 10, cor: CINZA });
+  e.escrever(`Gerado pelo sistema ${SISTEMA} em ${geradoEm}.`, { tamanho: 10, cor: CINZA });
   e.y -= 4;
-  e.escrever(
-    'Provas da conferência desta devolução: fotos do pacote e de cada unidade, um quadro do Vídeo de Prova, o histórico e o código de integridade (SHA-256) de cada arquivo.',
-    { tamanho: 10 },
-  );
+  e.escrever('Provas da conferência desta devolução: fotos do pacote e de cada unidade e um quadro do Vídeo de Prova.', { tamanho: 10 });
   e.subtitulo('Dados da devolução');
   e.campo('Código da devolução', d.codigo);
   e.campo('Canal', d.canal ? ROTULO_CANAL[d.canal] : 'A identificar');
@@ -412,10 +338,8 @@ async function montar(
     e.campo('Motivo da reclamação no ML', m ? (m.texto ? `${m.texto} (${m.id})` : m.id) : '—');
   }
   e.campo('Chegada', d.recebidaEm ? formatarDataHora(d.recebidaEm) : 'Sem registro de chegada');
-  e.campo('Recebida por', d.recebidaPorNome ?? '—');
   e.campo('Início da conferência', d.conferenciaIniciadaEm ? formatarDataHora(d.conferenciaIniciadaEm) : '—');
   e.campo('Fim da conferência', d.conferidaEm ? formatarDataHora(d.conferidaEm) : '—');
-  e.campo('Conferente', d.conferenteNome ?? '—');
   const ausentes = d.unidades.filter((u) => u.motivo === 'AUSENTE').length;
   e.campo('Unidades', `${d.unidades.length}${ausentes > 0 ? ` (${ausentes} não veio no pacote)` : ''}`);
   e.subtitulo('Conteúdo');
@@ -429,8 +353,6 @@ async function montar(
   const titulosUnidades = d.unidades.map((u) => `Unidade ${u.unidade} de ${d.unidades.length}`);
   if (d.unidades.length > 0) reservar(d.unidades.length === 1 ? 'Unidade 1' : `Unidades 1 a ${d.unidades.length}`, titulosUnidades);
   reservar('Vídeo de Prova', ['Vídeo de Prova']);
-  reservar('Histórico', ['Histórico']);
-  reservar('Integridade dos arquivos (SHA-256)', ['Integridade dos arquivos']);
   e.y -= 8;
   e.quadro('O Vídeo de Prova vai em arquivo separado: o Mercado Livre não aceita vídeo dentro do PDF.');
   if (plano.fora > 0) {
@@ -465,55 +387,10 @@ async function montar(
     await secaoDaUnidade(u);
   }
 
-  /**
-   * Foto do anúncio no ML (extra), na coluna dos valores, logo abaixo do produto esperado: a caixa com a foto (ou
-   * "indisponível") e, ao lado, a legenda e a nota de que é referência do anúncio, não prova da conferência.
-   */
-  async function blocoDoAnuncio(u: UnidadeDossie, ausente: boolean): Promise<void> {
-    let conteudo: { embutida: PDFImage } | { aviso: string } = { aviso: ANUNCIO_INDISPONIVEL };
-    if (u.fotoUrl) {
-      sinal?.throwIfAborted();
-      const r = await plano.anuncio(u.fotoUrl);
-      if (r.ok) {
-        let embutida = anunciosEmbutidos.get(u.fotoUrl);
-        if (!embutida) {
-          embutida = await doc.embedJpg(r.imagem.jpeg);
-          anunciosEmbutidos.set(u.fotoUrl, embutida);
-        }
-        conteudo = { embutida };
-        anunciosNoCorpo.set(u.fotoUrl, [...(anunciosNoCorpo.get(u.fotoUrl) ?? []), u.unidade]);
-      }
-    }
-    const x = MARGEM + LARGURA_ROTULO;
-    const xTexto = x + CAIXA_ANUNCIO + 12;
-    const larguraTexto = MARGEM + LARGURA - xTexto;
-    const legenda = quebrar(LEGENDA_ANUNCIO, f.negrito, 9.5, larguraTexto);
-    // O convite a comparar só quando há o que comparar: a foto entrou e a unidade veio no pacote.
-    const comparar = !ausente && 'embutida' in conteudo;
-    const nota = quebrar(comparar ? `${NOTA_ANUNCIO} ${COMPARAR_ANUNCIO}` : NOTA_ANUNCIO, f.normal, 8.5, larguraTexto);
-    const altura = Math.max(CAIXA_ANUNCIO, legenda.length * 13 + 4 + nota.length * 11);
-    e.caber(altura + 10);
-    const topo = e.y;
-    await e.caixa(x, topo, CAIXA_ANUNCIO, CAIXA_ANUNCIO, conteudo);
-    let y = topo;
-    for (const l of legenda) {
-      e.desenhar(l, xTexto, y - 9.5, 9.5, f.negrito);
-      y -= 13;
-    }
-    y -= 4;
-    for (const l of nota) {
-      e.desenhar(l, xTexto, y - 8.5, 8.5, f.normal, CINZA);
-      y -= 11;
-    }
-    e.y = topo - altura - 10;
-  }
-
   async function secaoDaUnidade(u: UnidadeDossie): Promise<void> {
     const ausente = u.motivo === 'AUSENTE' || u.status === 'AUSENTE';
     if (ausente) e.quadro('Não veio no pacote (ausente)', { negrito: true });
     e.campo('Produto esperado', `${u.sku} · ${u.descricao ?? 'SKU fora do cadastro de produtos'}`);
-    // O que foi vendido (a foto do anúncio) ao lado do produto esperado; o que voltou, nas fotos da unidade. Só no ML.
-    if (ehML) await blocoDoAnuncio(u, ausente);
     e.campo('EAN esperado', u.eanEsperado ?? '—');
     if (!ausente) {
       const leitura = leituraDoCodigo(u);
@@ -564,7 +441,6 @@ async function montar(
       sinal?.throwIfAborted();
       const q = await midias.quadroDoVideo(video, opcoes, sinal);
       duracao = q.duracaoSegundos;
-      if (q.sha256Calculado) calculados.set(video.id, q.sha256Calculado);
       conteudo = q.imagem ? { imagem: q.imagem } : { aviso: q.problema ?? 'Quadro do vídeo indisponível.' };
     }
     e.escrever('Um quadro do vídeo:', { tamanho: 9, cor: CINZA });
@@ -573,82 +449,12 @@ async function montar(
     e.y -= 302;
     e.campo('Data da gravação', `${formatarDataHora(video.enviadoEm)} (hora em que o servidor recebeu)`);
     e.campo('Duração', duracao !== null ? formatarDuracao(duracao) : '—');
-    e.campo('Enviado por', video.enviadoPorNome ?? '—');
     e.campo('Situação', ROTULO_SITUACAO_PROCESSAMENTO[video.situacao]);
   }
   e.y -= 4;
   e.quadro('O vídeo vai em arquivo separado.\nO Mercado Livre não aceita vídeo dentro do PDF: anexe o arquivo do vídeo na resposta, junto com este dossiê.', {
     negrito: true,
   });
-
-  // 5. Histórico
-  abrirSecao('Histórico');
-  const eventos = d.eventos.filter((ev) => ev.acao !== ACAO_DOSSIE_GERADO);
-  if (eventos.length === 0) e.escrever('Nenhum evento registrado.');
-  for (const ev of eventos) {
-    const tipo = typeof ev.dados?.tipo === 'string' && ehTipoEvidencia(ev.dados.tipo) ? ev.dados.tipo : null;
-    const item = typeof ev.dados?.itemId === 'string' ? unidadeDe.get(ev.dados.itemId) : undefined;
-    const detalhe = tipo ? ` · ${nomeDoTipo(tipo)}${item ? ` · Unidade ${item.unidade}` : ''}` : '';
-    // (extra, E25) Como na tela: "Chegada registrada (voltou do armazém do ML)".
-    const complemento = complementoDoEvento(ev.acao, ev.dados);
-    const linhas: { texto: string; tamanho: number; fonte: PDFFont; cor: RGB }[] = [
-      { texto: `${rotuloDaAcao(ev.acao)}${complemento ? ` ${complemento}` : ''}${detalhe}`, tamanho: 10, fonte: f.negrito, cor: PRETO },
-    ];
-    if (ev.para && ev.de !== ev.para) {
-      linhas.push({ texto: ev.de ? `De ${rotuloStatus(ev.de)} para ${rotuloStatus(ev.para)}` : `Status: ${rotuloStatus(ev.para)}`, tamanho: 9.5, fonte: f.normal, cor: PRETO });
-    }
-    const motivo = ev.dados?.motivo;
-    if (typeof motivo === 'string' && motivoVaiNoDossie(ev.acao)) linhas.push({ texto: `Motivo: ${motivo}`, tamanho: 9.5, fonte: f.normal, cor: PRETO });
-    linhas.push({ texto: `${formatarDataHora(ev.em)} · ${ev.usuarioNome ?? 'Sistema'}`, tamanho: 8.5, fonte: f.normal, cor: CINZA });
-    e.caber(linhas.length * 14 + 8);
-    for (const l of linhas) e.escrever(l.texto, { tamanho: l.tamanho, fonte: l.fonte, cor: l.cor });
-    e.y -= 8;
-  }
-
-  // 6. Integridade dos arquivos
-  abrirSecao('Integridade dos arquivos');
-  e.escrever(`Gerado em ${geradoEm} por ${d.geradoPorNome}, pelo sistema ${SISTEMA}.`, { tamanho: 10.5, fonte: f.negrito });
-  e.y -= 2;
-  // A foto do anúncio (extra) também é imagem do PDF, mas não é arquivo guardado nem tem carimbo: a abertura fala só
-  // das fotos da conferência e, quando a do anúncio entrou, diz isso.
-  e.escrever(
-    `O SHA-256 é a impressão digital de cada arquivo guardado no sistema: qualquer mudança no arquivo muda o código. As fotos da conferência neste PDF (e o quadro do vídeo) são cópias reduzidas; os códigos abaixo são dos arquivos guardados. Cada foto da conferência tem gravado o carimbo com a data e a hora em que o servidor a recebeu, o código da devolução e o usuário.${anunciosNoCorpo.size > 0 ? ` ${SO_REFERENCIA_ANUNCIO}` : ''}`,
-    { tamanho: 9.5, cor: CINZA },
-  );
-  e.y -= 6;
-  for (const x of ordenarEvidencias(d)) {
-    const final = x.sha256Final ?? calculados.get(x.id);
-    const linhas: { texto: string; tamanho: number; fonte: PDFFont; cor: RGB; recuo?: number }[] = [
-      { texto: `${nomeDaEvidencia(x)} · ${ROTULO_SITUACAO_PROCESSAMENTO[x.situacao]}`, tamanho: 10, fonte: f.negrito, cor: PRETO },
-      x.tipo === 'VIDEO_PROVA' || !pronta(x)
-        ? { texto: `Recebido em ${formatarDataHora(x.enviadoEm)} por ${x.enviadoPorNome ?? 'usuário removido'}`, tamanho: 9, fonte: f.normal, cor: PRETO }
-        : { texto: `Carimbo (data e hora da captura): ${carimboDe(x)}`, tamanho: 9, fonte: f.normal, cor: PRETO },
-      { texto: 'SHA-256 do arquivo guardado:', tamanho: 8.5, fonte: f.normal, cor: CINZA },
-      {
-        texto: final ? `${final}${x.sha256Final ? '' : ' (calculado agora)'}` : '— (o arquivo final ainda não existe)',
-        tamanho: 8,
-        fonte: final ? f.mono : f.normal,
-        cor: PRETO,
-        recuo: 8,
-      },
-      { texto: 'SHA-256 do original recebido:', tamanho: 8.5, fonte: f.normal, cor: CINZA },
-      { texto: x.sha256Original, tamanho: 8, fonte: f.mono, cor: PRETO, recuo: 8 },
-    ];
-    e.caber(linhas.length * 13 + 10);
-    for (const l of linhas) e.escrever(l.texto, { tamanho: l.tamanho, fonte: l.fonte, cor: l.cor, recuo: l.recuo });
-    e.y -= 10;
-  }
-  if (d.evidencias.length === 0) e.escrever('Esta devolução não tem fotos nem vídeo.');
-  // A foto do anúncio (extra) não é prova guardada: aparece só para dizer isso, sem código de integridade, num bloco
-  // à parte dos arquivos com hash.
-  if (anunciosNoCorpo.size > 0) e.subtitulo(TITULO_REFERENCIA_ANUNCIO, 2 * 14 + 10);
-  for (const unidades of anunciosNoCorpo.values()) {
-    const onde = unidades.length === 1 ? `Unidade ${unidades[0]}` : `Unidades ${juntarNumeros(unidades)}`;
-    e.caber(2 * 14 + 10);
-    e.escrever(`Foto do anúncio no ML · ${onde}`, { tamanho: 10, fonte: f.negrito });
-    e.escrever('Referência do anúncio, não guardada no sistema: baixada do Mercado Livre ao gerar este PDF, sem SHA-256.', { tamanho: 9 });
-    e.y -= 10;
-  }
 
   // Índice da capa (agora que as páginas existem) e rodapé em todas.
   for (const item of indice) {
@@ -661,7 +467,7 @@ async function montar(
     e.desenhar(ref, MARGEM + LARGURA - f.normal.widthOfTextAtSize(paraWinAnsi(ref), 10.5), item.y, 10.5, f.normal, PRETO, item.pagina);
   }
   const total = e.paginas.length;
-  const rodape = `${d.codigo} · Dossiê de provas · gerado em ${geradoEm} por ${d.geradoPorNome}`;
+  const rodape = `${d.codigo} · Dossiê de provas · gerado em ${geradoEm}`;
   e.paginas.forEach((p, i) => {
     const numero = `Página ${i + 1} de ${total}`;
     const larguraNumero = f.normal.widthOfTextAtSize(numero, 7.5);
@@ -674,94 +480,23 @@ async function montar(
   return { bytes, paginas: total, secoes };
 }
 
-/** Pacote, depois cada unidade (Fotos 3 e 4 e as da avaria), depois o vídeo e o resto. */
-function ordenarEvidencias(d: DadosDossie): EvidenciaDossie[] {
-  const ordem: EvidenciaDossie[] = [];
-  const pegar = (filtro: (x: EvidenciaDossie) => boolean) => {
-    for (const x of d.evidencias) if (filtro(x) && !ordem.includes(x)) ordem.push(x);
-  };
-  pegar((x) => x.tipo === 'FOTO_1_ETIQUETA');
-  pegar((x) => x.tipo === 'FOTO_2_EMBALAGEM');
-  pegar((x) => x.tipo === 'EXTRA' && x.itemId === null);
-  for (const u of d.unidades) {
-    pegar((x) => x.itemId === u.id && x.tipo === 'FOTO_3_PRODUTO');
-    pegar((x) => x.itemId === u.id && x.tipo === 'FOTO_4_CODIGO_SERIAL');
-    pegar((x) => x.itemId === u.id && x.tipo === 'EXTRA');
-  }
-  pegar((x) => x.tipo === 'VIDEO_PROVA');
-  pegar(() => true);
-  return ordem;
-}
-
 /**
- * Fotos do anúncio (extra): cada URL é pedida uma vez por dossiê (a promessa vale para as duas tentativas do PDF), uma
- * por vez (as seções são montadas em ordem), só as que couberam no teto de fotos e dentro do tempo total
- * (`orcamentoMs`): acabou o tempo, as que faltam nem são pedidas e ficam "indisponível". Um erro que não seja o
- * cancelamento do dossiê também vira "indisponível".
- */
-function fotosDoAnuncio(
-  midias: MidiasDossie,
-  noPdf: ReadonlySet<string>,
-  orcamentoMs: number,
-  sinal: AbortSignal | undefined,
-): (url: string) => Promise<ResultadoFotoAnuncio> {
-  const pedidas = new Map<string, Promise<ResultadoFotoAnuncio>>();
-  let gastoMs = 0;
-  async function baixar(url: string): Promise<ResultadoFotoAnuncio> {
-    if (!noPdf.has(url)) return { ok: false, motivo: 'fora_do_limite' };
-    const restante = orcamentoMs - gastoMs;
-    if (restante < PRAZO_MINIMO_ANUNCIO_MS) return { ok: false, motivo: 'sem_tempo' };
-    const inicio = performance.now();
-    try {
-      // O prazo vira um AbortSignal.timeout, que só aceita inteiro; o restante (de performance.now()) tem fração.
-      return await midias.fotoDoAnuncio(url, { prazoMs: Math.floor(Math.min(PRAZO_FOTO_ANUNCIO_MS, restante)), sinal });
-    } catch (erro) {
-      // Rede de segurança: só o cancelamento do dossiê sobe; qualquer outro erro vira "indisponível", nunca derruba o PDF.
-      sinal?.throwIfAborted();
-      console.warn(
-        JSON.stringify({ em: new Date().toISOString(), nivel: 'aviso', origem: 'web', evento: 'dossie_foto_anuncio_erro', erro: erro instanceof Error ? erro.name : typeof erro }),
-      );
-      return { ok: false, motivo: 'rede' };
-    } finally {
-      gastoMs += performance.now() - inicio;
-    }
-  }
-  return (url) => {
-    let pedida = pedidas.get(url);
-    if (!pedida) {
-      pedida = baixar(url);
-      pedidas.set(url, pedida);
-    }
-    return pedida;
-  };
-}
-
-/**
- * O dossiê em PDF (extra). Imagens a 1280 px e qualidade 70; se o PDF passar de 8 MB, refaz uma vez a 1024 px e 60
- * (o ML recusa anexos grandes). Quando a estimativa (fotos × ~170 KB) já passa do limite, começa direto em 1024/60.
+ * O dossiê em PDF (extra; enxuto pela E28: sem histórico, sem integridade dos arquivos, sem a foto do anúncio e sem
+ * nomes de pessoas). Imagens a 1280 px e qualidade 70; se o PDF passar de 8 MB, refaz uma vez a 1024 px e 60 (o ML
+ * recusa anexos grandes). Quando a estimativa (fotos × ~170 KB) já passa do limite, começa direto em 1024/60.
  * Até MAX_FOTOS_DOSSIE fotos no corpo; as de cima viram aviso. Mídia que falta ou não ficou pronta vira um aviso,
  * nunca um erro; o cancelamento (`sinal`: o pedido foi embora ou o dossiê passou do prazo) para entre uma foto e outra.
- * Foto do anúncio no ML (extra, só nas devoluções do ML): conta no mesmo teto, com as vagas que sobram depois das
- * provas (nunca tira o lugar de uma), e tem um tempo total próprio (`orcamentoAnunciosMs`, padrão 20 s).
  */
 export async function gerarPdfDossie(
   d: DadosDossie,
   midias: MidiasDossie,
-  config: { limiteBytes?: number; maxFotos?: number; sinal?: AbortSignal; orcamentoAnunciosMs?: number } = {},
+  config: { limiteBytes?: number; maxFotos?: number; sinal?: AbortSignal } = {},
 ): Promise<ResultadoPdf> {
   const limite = config.limiteBytes ?? LIMITE_BYTES_DOSSIE;
   const maxFotos = config.maxFotos ?? MAX_FOTOS_DOSSIE;
   const prontas = fotosDoCorpo(d);
   const noPdf = new Set(prontas.slice(0, maxFotos).map((x) => x.id));
-  const urlsAnuncio = d.canal === 'MERCADO_LIVRE' ? [...new Set(d.unidades.map((u) => u.fotoUrl).filter((u): u is string => !!u))] : [];
-  const anunciosNoPdf = new Set(urlsAnuncio.slice(0, Math.max(0, maxFotos - noPdf.size)));
-  const plano: Plano = {
-    noPdf,
-    fora: prontas.length - noPdf.size,
-    maxFotos,
-    sinal: config.sinal,
-    anuncio: fotosDoAnuncio(midias, anunciosNoPdf, config.orcamentoAnunciosMs ?? ORCAMENTO_FOTOS_ANUNCIO_MS, config.sinal),
-  };
+  const plano: Plano = { noPdf, fora: prontas.length - noPdf.size, maxFotos, sinal: config.sinal };
   const comQuadro = d.evidencias.some((x) => x.tipo === 'VIDEO_PROVA' && ehPronta(x));
   const inicial = opcoesIniciais(noPdf.size + (comQuadro ? 1 : 0), limite);
 
