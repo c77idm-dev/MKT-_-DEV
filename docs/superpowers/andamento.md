@@ -1,15 +1,39 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 24/11/2026 (ficha da venda, E27, e dossiê mais enxuto, E28, em construção; a VPS segue na imagem `3f01630`). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 25/11/2026 (ficha da venda, E27, e dossiê mais enxuto, E28, no `main` em `01499ff` e no ar na VPS). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
-- **Dossiê mais enxuto (E28; pedido do administrador, aprovado pelo usuário em 24/11): em construção.** Branch `dossie-enxuto`, worktree `reputacao` (porta 3108, banco `devolucoes_test_f8`), run `wf_dc62a57b-7a5`. Muda só o PDF:
+- **Integração de 24/11: E27 e E28 juntas no `main` em `01499ff` (branch `integracao-24-11`, worktree `bitbrain`, porta 3107, banco `devolucoes_test_f7`) e no ar.**
+  - **Conferido de fora em 25/11:**
+    - `/api/saude` ok (banco e fila);
+    - a rota nova `/api/provas/arquivo` responde 403 ("Provas da devolução") a um link sem assinatura, ou seja, a versão nova está no ar.
+  - **Falta a saída do roteiro da VPS:**
+    - 18 migrações;
+    - a tabela `vendas_ml` crescendo a cada varredura (15 min);
+    - os erros nos registros;
+    - o `git pull --ff-only` em `/opt/devolucoes`;
+    - a imagem `a274ecb` removida, ficando `3f01630` para voltar atrás.
+  - **Bateria final sobre o conjunto:**
+    - typecheck e lint limpos;
+    - unidade 1083; integração 653 (7 pulados);
+    - e2e 268 (12 pulados de propósito, 0 falhas); e2e do modo Bitbrain 16.
+  - **Conferir no celular:**
+    - o link "Abrir a venda no ML" (`mercadolivre.com.br/vendas/<pedido>/detalhe`) abre a venda certa;
+    - o "Assistir ao vídeo" do dossiê toca num **iPhone** e num **Android** reais (só o WebKit do Playwright foi testado);
+    - se um PDF sair sem links, procurar `dossie_sem_links` no log do `web`.
+  - **Decidido pelo usuário em 24/11:**
+    - a Retirada do Full só com etiquetas amarelas pode ser concluída;
+    - o aviso "ainda espera o pacote" no cartão verde fica;
+    - a mesma proteção vale no amarelo "Este pacote já chegou";
+    - a devolução do ML sem reclamação diz "Sem os dados da venda do ML (devolução sem reclamação no sistema)."
+  - **Pendente de decisão do usuário:** o amarelo "Fale com o Gestor" (devolução cancelada ou extraviada) ainda não tem a proteção da câmera. Pela câmera, ler o pedido na mesma etiqueta mostra a ficha da outra devolução com "Dar chegada".
+- **Dossiê mais enxuto (E28; pedido do administrador, aprovado pelo usuário em 24/11): ✅ no ar (integração de 24/11).** Branch `dossie-enxuto`, run `wf_dc62a57b-7a5`, revisão sem achado sério. Muda só o PDF:
   - saem o Histórico, a Integridade (SHA-256), a foto do anúncio com os avisos de "referência" e os nomes das pessoas;
   - as fotos novas ganham o carimbo só com a data e o DEV; as antigas ficam como estão;
   - cada foto e o quadro do vídeo viram link, e há um link "Assistir ao vídeo" que toca no navegador;
   - os links abrem **sem login** (escolha do usuário) e valem 90 dias; gerar o PDF de novo cria links novos.
   - Texto completo: emenda E28.
-- **Ficha da venda (E27, extra; o usuário aprovou em 24/11): em construção.** Branch `ficha-venda`, worktree `dossie` (porta 3109, banco `devolucoes_test_f9`), run `wf_9d1d29c4-05d` (dois construtores, revisão em três olhares, verificação e correção).
+- **Ficha da venda (E27, extra; o usuário aprovou em 24/11): ✅ no ar (integração de 24/11).** Branch `ficha-venda`, run `wf_9d1d29c4-05d`. A revisão achou 3 problemas sérios da câmera no Receber pacote (risco de dar chegada na devolução errada), todos corrigidos.
   - **O pedido do admin:** digitar ou ler o número do pedido do ML e ver os detalhes **básicos** da venda, ligados à reclamação. Só pedidos que já estão no sistema.
   - **A ficha mostra:**
     - pedido, data, conta e situação;
