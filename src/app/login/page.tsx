@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { FaixaCodigoBarras } from '@/components/FaixaCodigoBarras';
+import { paginaInicial } from '@/modules/auth/permissoes';
 import { usuarioAtual } from '@/modules/auth/servidor';
 import { FormularioLogin } from './FormularioLogin';
 import { MarcaLogin } from './MarcaLogin';
@@ -14,7 +15,9 @@ export const metadata: Metadata = { title: 'Entrar · Gestão de Devoluções' }
  * ganharia dos dois juntos; o `supports-` garante que o dvh vence).
  */
 export default async function PaginaLogin() {
-  if (await usuarioAtual()) redirect('/fluxo');
+  // (E29) Com sessão, vai para a página inicial do perfil (o Operador, para a Bancada).
+  const usuario = await usuarioAtual();
+  if (usuario) redirect(paginaInicial(usuario.perfil));
   return (
     <main className="flex min-h-screen flex-col supports-[min-height:100dvh]:min-h-dvh bg-superficie md:grid md:grid-cols-2">
       <section

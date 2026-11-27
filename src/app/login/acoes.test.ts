@@ -51,3 +51,19 @@ describe('entrar: limite por IP', () => {
     for (let i = 0; i < 30; i++) await expect(entrar({ erro: null }, formulario('u@x', 'certa'))).rejects.toThrow('NEXT_REDIRECT');
   });
 });
+
+describe('entrar: página inicial por perfil (E29)', () => {
+  it('o Operador vai para a Bancada; o Gestor e o Fiscal, para o Fluxo', async () => {
+    const { redirect } = await import('next/navigation');
+    for (const [perfil, destino] of [
+      ['OPERADOR', '/bancada'],
+      ['GESTOR', '/fluxo'],
+      ['FISCAL', '/fluxo'],
+    ] as const) {
+      vi.mocked(redirect).mockClear();
+      autenticar.mockResolvedValue({ ok: true, usuario: { id: 'u', nome: 'U', email: 'u@x', perfil } });
+      await expect(entrar({ erro: null }, formulario('u@x', 'certa'))).rejects.toThrow('NEXT_REDIRECT');
+      expect(redirect).toHaveBeenCalledWith(destino);
+    }
+  });
+});

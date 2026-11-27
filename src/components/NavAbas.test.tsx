@@ -49,3 +49,15 @@ describe('NavAbas rótulo curto', () => {
     expect(link.getAttribute('aria-label')).toBe('Produtos e Fornecedores');
   });
 });
+
+describe('NavAbas: a aba Bancada do Operador (E29)', () => {
+  it('tem ícone, o rótulo curto "Bancada" e fica marcada na Bancada', () => {
+    mocks.caminho = '/bancada';
+    render(<NavAbas abas={[{ rotulo: 'Bancada', href: '/bancada' }]} />);
+    const link = screen.getByRole('link', { name: 'Bancada' });
+    expect(link.getAttribute('href')).toBe('/bancada');
+    expect(link.getAttribute('aria-current')).toBe('page');
+    expect(link.getAttribute('data-curto')).toBe('Bancada');
+    expect(link.querySelector('svg[aria-hidden="true"] *')).not.toBeNull();
+  });
+});

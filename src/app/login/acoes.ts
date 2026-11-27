@@ -6,6 +6,7 @@ import { obterDb } from '@/db';
 import { ipDaRequisicao } from '@/lib/limite-taxa';
 import { autenticar } from '@/modules/auth/autenticar';
 import { limiteLoginPadrao, MENSAGEM_LIMITE_IP } from '@/modules/auth/limite-login';
+import { paginaInicial } from '@/modules/auth/permissoes';
 import { COOKIE_SESSAO } from '@/modules/auth/servidor';
 import { criarSessao, encerrarSessao } from '@/modules/auth/sessoes';
 
@@ -39,7 +40,8 @@ export async function entrar(_anterior: EstadoLogin, formulario: FormData): Prom
     path: '/',
     expires: expiraEm,
   });
-  redirect('/fluxo');
+  // (E29) O Operador começa na Bancada; quem acompanha, no Fluxo.
+  redirect(paginaInicial(resultado.usuario.perfil));
 }
 
 export async function sair(): Promise<void> {

@@ -8,6 +8,13 @@ export type AbaNav = { rotulo: string; href: string };
 
 /** Traços dos ícones (viewBox 24×24), um por aba do menu (spec §6.0). */
 const ICONES: Record<string, ReactNode> = {
+  // (E29) A Bancada do Operador: o pacote, como o "Receber pacote" do menu do Fluxo.
+  '/bancada': (
+    <>
+      <path d="M21 8v8a2 2 0 0 1-1 1.7l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.7l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z" />
+      <path d="M3.3 7L12 12l8.7-5M12 22V12" />
+    </>
+  ),
   '/fluxo': (
     <>
       <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -37,6 +44,7 @@ const ICONES: Record<string, ReactNode> = {
 
 /** Rótulos curtos só para o celular (barra estreita); o nome acessível continua o rótulo completo. */
 const ROTULO_CURTO: Record<string, string> = {
+  '/bancada': 'Bancada',
   '/fluxo': 'Fluxo',
   '/contestacoes': 'Contestações',
   '/lotes': 'Lotes',
