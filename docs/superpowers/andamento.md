@@ -1,6 +1,6 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 27/11/2026 (desenho da E29 aprovado: Bancada do Operador, Corrigir do Gestor e Apagadas; no ar continua a `01499ff`, com E27 e E28). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 27/11/2026 à noite (E29 construída e revisada duas vezes, na última rodada de correção; no ar continua a `01499ff`, com E27 e E28). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
 - **E29: Bancada do Operador, Corrigir (Gestor) e Apagadas (27/11, extra). O desenho foi aprovado pelo usuário ("isso", "isso", "top") e está escrito na emenda E29, na branch `bancada-gestor`.**
@@ -17,14 +17,18 @@ Atualizado em 27/11/2026 (desenho da E29 aprovado: Bancada do Operador, Corrigir
     - frente B (`corrigir-gestor`, migração `0018`): worktree `dossie`, porta 3109, banco `devolucoes_test_f9`.
   - **Frente A pronta** (`5780486`): unidade 1122, integração 656, e2e 280, 0 falhas.
   - **Frente B pronta** (`d8ad0b0`): unidade 1159, integração 711, e2e 276. As 2 falhas no celular (`integracao-fiscal.spec.ts:74`, `lotes-remessa.spec.ts:21`, esperando o worker da NF) passaram 10 de 10 quando rodadas sozinhas. São instáveis e já existiam.
-  - **Revisão em andamento (27/11), run `wf_5dca7467-42b`:**
-    - na branch `integracao-27-11` (worktree `bitbrain`, 3107, banco `devolucoes_test_f7`), a partir de `bancada-gestor` `6267b17`;
-    - as duas frentes juntas e os itens de junção (filtro das apagadas na fila da Bancada, links para `/bancada`, a tarefa de lotes ignora as apagadas, o Operador volta à Bancada ao concluir a conferência);
-    - 4 olhares (permissões; correções e dados; Bancada; aderência e testes), um cético por achado sério, as correções e a bateria completa.
-  - As branches `bancada-operador` e `corrigir-gestor` estão no GitHub. **Juntar `bancada-gestor` na integração antes do `main`:** este andamento só está nela.
-  - **Decidido pelo usuário (27/11, "pode"):** os alertas "Prazo do ML vencendo" e "Entregue sem leitura" ficam só no painel do Gestor. O funcionário vê só o selo "Urgente" na fila da Bancada.
-  - **Para a revisão:** ao concluir a conferência, o funcionário deve voltar à Bancada, não ao detalhe.
-  - **Depois:** revisão independente de cada frente, correções, a integração na branch `integracao-27-11` (worktree `bitbrain`, 3107) com a bateria completa, e o deploy.
+  - **Revisão e integração (27/11), run `wf_5dca7467-42b` e a continuação à mão:**
+    - na branch `integracao-27-11` (worktree `bitbrain`, 3107, banco `devolucoes_test_f7`), a partir de `bancada-gestor` `6267b17`, com as duas frentes juntas e os itens de junção (filtro das apagadas na fila, links para `/bancada`, a tarefa de lotes ignora as apagadas, o Operador volta à Bancada ao concluir);
+    - **1ª revisão (4 olhares + céticos):** 16 achados sérios, 14 confirmados e corrigidos (NF em devolução apagada; câmera trocando o cartão verde; desfazer a chegada apagando provas de contestação já enviada; "OK" e contestação do ML inconsistentes; trocar estoque com unidade de outra devolução; "Full" e "De cliente" juntos; Fotos 1/2 escondidas no celular; códigos DEV-/RF- caindo em "De onde veio"; testes de corrida);
+    - **2ª revisão (só leitura), sem nada grave. Corrigidos:** "Ler outro código" lembra todos os descartados; o cartão verde não remonta a cada código; o Operador vê só "Urgente" (sem data); "Registrar chegada" travado durante o envio do Full; a tarefa do resultado do ML relê tudo com a devolução travada (sem deadlock, conferido); cancelar descarta a contestação e o "OK" ainda não enviados; `?ok=` só por chaves próprias;
+    - **bateria completa em `584e075` (antes da última rodada):** typecheck e lint limpos; unidade 1244; integração 753 (7 pulados); e2e 292 de 294 (o `recebimento-camera.spec.ts:258` ficou desatualizado pela correção "o cartão verde não remonta" e está sendo ajustado); e2e do modo Bitbrain 16.
+  - **Decidido pelo usuário (27/11):**
+    - "pode": os alertas "Prazo do ML vencendo" e "Entregue sem leitura" ficam só no painel do Gestor; o funcionário vê só o selo "Urgente";
+    - cancelar ou extraviar uma devolução já conferida (Aguardando NF) exige **reabrir a conferência antes** (o cancelamento direto sai dessa etapa);
+    - reabrir e concluir de novo **mantém a data da primeira conferência** na planilha "Volta ao armazém" (o estoque não entra duas vezes).
+  - **Última rodada de correção (em andamento):** o teste da câmera; `lock_timeout` de 5 s nas ações do Gestor (o ML pode demorar até ~3 min dentro da transação do resultado); cancelar avisa da contestação já pedida e `enviarContestacao` recusa devolução cancelada; as duas decisões acima.
+  - As branches `bancada-operador` e `corrigir-gestor` estão no GitHub. **Juntar `bancada-gestor` (este andamento e o contrato) na integração antes do `main`.**
+  - **Depois:** bateria completa sobre o código final, revisão do que mudou, "Como ficou" da E29, juntar tudo no `main` (só com revisão feita), CI gerar a imagem e deploy na VPS pela sessão Claude web (backup antes; `IMAGEM_TAG=<sha>`; conferir 19 migrações e `/api/saude`; remover a imagem antiga pelo nome; rollback `01499ff`). Depois, conferir no celular com um login de Operador e um de Gestor.
 - **Integração de 24/11: E27 e E28 juntas no `main` em `01499ff` (branch `integracao-24-11`, worktree `bitbrain`, porta 3107, banco `devolucoes_test_f7`) e no ar.**
   - **Conferido de fora em 25/11:**
     - `/api/saude` ok (banco e fila);
