@@ -15,6 +15,10 @@ Atualizado em 27/11/2026 (desenho da E29 aprovado: Bancada do Operador, Corrigir
   - **Em construção desde 27/11, run `wf_6ffb47c1-390`:**
     - frente A (`bancada-operador`): worktree `reputacao`, porta 3108, banco `devolucoes_test_f8`;
     - frente B (`corrigir-gestor`, migração `0018`): worktree `dossie`, porta 3109, banco `devolucoes_test_f9`.
+  - **Frente A pronta** (`5780486`): unidade 1122, integração 656, e2e 280, 0 falhas.
+  - **Frente B:** a primeira metade está pronta (`e94fa7f`: unidade 1099, integração 701). A segunda metade, com as telas, as Apagadas, o expurgo e o e2e, está na bateria final.
+  - **Decidido pelo usuário (27/11, "pode"):** os alertas "Prazo do ML vencendo" e "Entregue sem leitura" ficam só no painel do Gestor. O funcionário vê só o selo "Urgente" na fila da Bancada.
+  - **Para a revisão:** ao concluir a conferência, o funcionário deve voltar à Bancada, não ao detalhe.
   - **Depois:** revisão independente de cada frente, correções, a integração na branch `integracao-27-11` (worktree `bitbrain`, 3107) com a bateria completa, e o deploy.
 - **Integração de 24/11: E27 e E28 juntas no `main` em `01499ff` (branch `integracao-24-11`, worktree `bitbrain`, porta 3107, banco `devolucoes_test_f7`) e no ar.**
   - **Conferido de fora em 25/11:**
