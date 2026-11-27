@@ -77,6 +77,8 @@ async function reclamacoesSemVenda(db: DbOuTx, contas: string[] | null, porGrupo
       from reclamacoes_ml r
       join devolucoes d on d.id = r.devolucao_id
       where d.canal = 'MERCADO_LIVRE'
+        -- (extra, E29) A devolução apagada não pede a venda ao ML.
+        and d.apagada_em is null
         and ${filtroConta}
         and exists (
           select 1 from unnest(d.pedidos_externos) p

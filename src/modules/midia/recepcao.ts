@@ -3,6 +3,7 @@ import type { Db, DbOuTx } from '@/db/client';
 import { ehViolacaoDeUnicidade } from '@/db/erros';
 import { devolucoes, evidencias, itensDevolucao, retiradasFull } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { pode } from '@/modules/auth/permissoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { obterFila } from '@/modules/fila/fila';
@@ -104,7 +105,7 @@ export async function autorizarEnvio(db: DbOuTx, meta: MetadadosEnvio, tamanho: 
   const [d] = await db
     .select({ status: devolucoes.status, conferenteId: devolucoes.conferenteId, naoIdentificada: devolucoes.naoIdentificada })
     .from(devolucoes)
-    .where(eq(devolucoes.id, devolucaoId));
+    .where(and(eq(devolucoes.id, devolucaoId), devolucaoVisivel));
   if (!d) throw new ErroEnvio(404, 'Devolução não encontrada.');
   const naConferencia = d.status === 'EM_CONFERENCIA' && d.conferenteId === usuario.id;
   const noRecebimento =

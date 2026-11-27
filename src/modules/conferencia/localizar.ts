@@ -1,6 +1,7 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes } from '@/db/schema';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { rotuloStatus, type StatusDevolucao } from '@/modules/devolucoes/dominio';
 import { normalizarRastreio } from '@/modules/devolucoes/rastreio';
@@ -45,7 +46,7 @@ export async function localizarParaConferencia(db: DbOuTx, texto: string, usuari
   const limpo = texto.trim();
   if (!limpo) throw new ErroConferencia('Leia ou digite o código de rastreamento, o código DEV ou o número do pedido do ML (extra).');
   if (/^DEV-\d+$/i.test(limpo)) {
-    const [d] = await db.select({ id: devolucoes.id, codigo: devolucoes.codigo }).from(devolucoes).where(eq(devolucoes.codigo, limpo.toUpperCase()));
+    const [d] = await db.select({ id: devolucoes.id, codigo: devolucoes.codigo }).from(devolucoes).where(and(eq(devolucoes.codigo, limpo.toUpperCase()), devolucaoVisivel));
     if (!d) throw new ErroConferencia(`Devolução ${limpo.toUpperCase()} não encontrada.`);
     return { tipo: 'devolucao', ...d };
   }
@@ -53,7 +54,7 @@ export async function localizarParaConferencia(db: DbOuTx, texto: string, usuari
   const lista = await db
     .select({ id: devolucoes.id, codigo: devolucoes.codigo, status: devolucoes.status })
     .from(devolucoes)
-    .where(eq(devolucoes.rastreio, codigo))
+    .where(and(eq(devolucoes.rastreio, codigo), devolucaoVisivel))
     .orderBy(desc(devolucoes.numero));
   if (lista.length === 0) {
     const doPedido = await devolucoesDoPedidoML(db, codigo);

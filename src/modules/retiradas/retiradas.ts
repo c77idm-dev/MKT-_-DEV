@@ -3,6 +3,7 @@ import type { Db, DbOuTx } from '@/db/client';
 import { evidencias, itensRetiradaFull, produtos, retiradasFull } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
 import { pode } from '@/modules/auth/permissoes';
+import { retiradaVisivel } from '@/modules/apagadas/filtro';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { darChegadaPeloPedido, procurarPeloPedidoML, type ResultadoRecebimento } from '@/modules/devolucoes/recebimento';
 import { registrarEvento } from '@/modules/historico/eventos';
@@ -32,10 +33,16 @@ function etiquetaOuErro(bruta: string): string {
   return etiqueta;
 }
 
-/** Trava a retirada até o fim da transação e exige que ainda esteja Aberta. Devolve o código (RF-…). */
+/**
+ * Trava a retirada até o fim da transação e exige que ainda esteja Aberta. Devolve o código (RF-…).
+ * (extra, E29) A apagada não é achada: nada se grava nela.
+ */
 async function travarAberta(tx: DbOuTx, retiradaId: string, travar = true): Promise<string> {
   if (!ehUuid(retiradaId)) throw new ErroRetirada('Retirada não encontrada.');
-  const consulta = tx.select({ situacao: retiradasFull.situacao, codigo: retiradasFull.codigo }).from(retiradasFull).where(eq(retiradasFull.id, retiradaId));
+  const consulta = tx
+    .select({ situacao: retiradasFull.situacao, codigo: retiradasFull.codigo })
+    .from(retiradasFull)
+    .where(and(eq(retiradasFull.id, retiradaId), retiradaVisivel));
   const [r] = travar ? await consulta.for('update') : await consulta;
   if (!r) throw new ErroRetirada('Retirada não encontrada.');
   if (r.situacao !== 'ABERTA') throw new ErroRetirada('Esta retirada já foi conferida.');
@@ -91,7 +98,8 @@ export async function criarRetirada(
     const [aberta] = await tx
       .select({ id: retiradasFull.id, codigo: retiradasFull.codigo })
       .from(retiradasFull)
-      .where(and(eq(retiradasFull.codigoEtiqueta, etiqueta), eq(retiradasFull.situacao, 'ABERTA')))
+      // (extra, E29) A Aberta apagada com a mesma etiqueta não é reaproveitada: nasce outra.
+      .where(and(eq(retiradasFull.codigoEtiqueta, etiqueta), eq(retiradasFull.situacao, 'ABERTA'), retiradaVisivel))
       .orderBy(desc(retiradasFull.numero))
       .limit(1);
     if (aberta) return { ...aberta, nova: false };
@@ -279,7 +287,10 @@ export async function situacaoParaEnvio(
   retiradaId: string,
   itemId: string | null,
 ): Promise<{ existe: boolean; aberta: boolean; itemDaRetirada: boolean }> {
-  const [r] = await db.select({ situacao: retiradasFull.situacao }).from(retiradasFull).where(eq(retiradasFull.id, retiradaId));
+  const [r] = await db
+    .select({ situacao: retiradasFull.situacao })
+    .from(retiradasFull)
+    .where(and(eq(retiradasFull.id, retiradaId), retiradaVisivel));
   if (!r) return { existe: false, aberta: false, itemDaRetirada: false };
   const itens = itemId
     ? await db

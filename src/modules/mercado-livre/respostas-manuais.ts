@@ -2,6 +2,7 @@ import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { contasBitbrain, contestacoesCanal, devolucoes, reclamacoesMl } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { pode } from '@/modules/auth/permissoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import type { DadosSelo } from '@/modules/devolucoes/selos';
@@ -41,7 +42,7 @@ export async function listarOkPendentes(db: DbOuTx, agora: Date = new Date()): P
     .from(reclamacoesMl)
     .innerJoin(devolucoes, eq(devolucoes.id, reclamacoesMl.devolucaoId))
     .leftJoin(contasBitbrain, eq(contasBitbrain.empresa, reclamacoesMl.conta))
-    .where(eq(reclamacoesMl.respostaPendente, 'OK'))
+    .where(and(eq(reclamacoesMl.respostaPendente, 'OK'), devolucaoVisivel))
     .orderBy(sql`${devolucoes.prazoConferenciaCanal} asc nulls last`, asc(devolucoes.numero))
     .limit(200);
   return linhas.map((l) => ({ ...l, selo: seloPrazoML(l.prazo, agora) }));
@@ -81,7 +82,8 @@ export async function marcarContestacaoRespondida(
   const [c] = await db
     .select({ status: contestacoesCanal.status, devolucaoId: contestacoesCanal.devolucaoId, motivo: contestacoesCanal.motivoCanal })
     .from(contestacoesCanal)
-    .where(eq(contestacoesCanal.id, id));
+    .innerJoin(devolucoes, eq(devolucoes.id, contestacoesCanal.devolucaoId))
+    .where(and(eq(contestacoesCanal.id, id), devolucaoVisivel));
   if (!c) throw new ErroContestacao(['Contestação não encontrada.']);
   if (c.status === 'ENVIADA') throw new ErroContestacao(['Esta contestação já está marcada como respondida.']);
   await db.transaction(async (tx) => {
@@ -104,10 +106,17 @@ export async function marcarContestacaoRespondida(
 
 /** Alerta "Respostas para dar no ML" (D10): os "OK" pendentes mais as contestações que esperam o Gestor ou falharam. */
 export async function contarRespostasParaDarNoML(db: DbOuTx): Promise<number> {
-  const [ok] = await db.select({ total: count() }).from(reclamacoesMl).where(eq(reclamacoesMl.respostaPendente, 'OK'));
+  // (extra, E29) As da devolução apagada não contam.
+  const [ok] = await db
+    .select({ total: count() })
+    .from(reclamacoesMl)
+    // leftJoin: a reclamação sem devolução ligada continua contando, como antes.
+    .leftJoin(devolucoes, eq(devolucoes.id, reclamacoesMl.devolucaoId))
+    .where(and(eq(reclamacoesMl.respostaPendente, 'OK'), devolucaoVisivel));
   const [contestacoes] = await db
     .select({ total: count() })
     .from(contestacoesCanal)
-    .where(inArray(contestacoesCanal.status, ['AGUARDANDO_GESTOR', 'FALHOU']));
+    .innerJoin(devolucoes, eq(devolucoes.id, contestacoesCanal.devolucaoId))
+    .where(and(inArray(contestacoesCanal.status, ['AGUARDANDO_GESTOR', 'FALHOU']), devolucaoVisivel));
   return Number(ok?.total ?? 0) + Number(contestacoes?.total ?? 0);
 }

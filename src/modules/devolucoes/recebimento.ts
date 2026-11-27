@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { registrarEvento } from '@/modules/historico/eventos';
 import type { StatusDevolucao } from './dominio';
@@ -57,7 +58,7 @@ async function maisRecentePorRastreio(db: DbOuTx, rastreio: string) {
   const [linha] = await db
     .select({ codigo: devolucoes.codigo, status: devolucoes.status, recebidaEm: devolucoes.recebidaEm })
     .from(devolucoes)
-    .where(eq(devolucoes.rastreio, rastreio))
+    .where(and(eq(devolucoes.rastreio, rastreio), devolucaoVisivel))
     .orderBy(desc(devolucoes.numero))
     .limit(1);
   return linha ?? null;
@@ -68,19 +69,22 @@ async function maisRecenteEntre(db: DbOuTx, ids: string[]) {
   const [linha] = await db
     .select({ codigo: devolucoes.codigo, status: devolucoes.status, recebidaEm: devolucoes.recebidaEm })
     .from(devolucoes)
-    .where(inArray(devolucoes.id, ids))
+    .where(and(inArray(devolucoes.id, ids), devolucaoVisivel))
     .orderBy(desc(devolucoes.numero))
     .limit(1);
   return linha ?? null;
 }
 
-/** As devoluções de uma regra, em qualquer status, na ordem fixa do número. */
+/**
+ * As devoluções de uma regra, em qualquer status, na ordem fixa do número. (extra, E29) A apagada não é achada: a
+ * leitura dela dá "não encontrada".
+ */
 function candidatas(db: DbOuTx, condicao: SQL): Promise<Candidata[]> {
   // Ordem fixa: duas transações travam as linhas na mesma ordem, sem deadlock.
   return db
     .select({ id: devolucoes.id, codigo: devolucoes.codigo, status: devolucoes.status })
     .from(devolucoes)
-    .where(condicao)
+    .where(and(condicao, devolucaoVisivel))
     .orderBy(asc(devolucoes.numero));
 }
 
@@ -187,7 +191,11 @@ export async function receberPorRastreio(
       for (const d of aReceber) {
         // O status de agora, com trava: outra leitura pode ter acabado de registrar a chegada (fica a dela), e a
         // sincronização do ML pode ter trocado Pendente e No CD entre si, ou cancelado (fica para o fallback).
-        const [linha] = await tx.select({ status: devolucoes.status }).from(devolucoes).where(eq(devolucoes.id, d.id)).for('update');
+        const [linha] = await tx
+          .select({ status: devolucoes.status })
+          .from(devolucoes)
+          .where(and(eq(devolucoes.id, d.id), devolucaoVisivel))
+          .for('update');
         if (!linha || !A_RECEBER.includes(linha.status)) continue;
         const de = linha.status;
         exigirTransicao({ de, para: 'AGUARDANDO_CONFERENCIA', ator: usuario.perfil }, MENSAGEM_PERFIL);
@@ -280,7 +288,7 @@ export async function darChegadaPeloPedido(
         recebidaEm: devolucoes.recebidaEm,
       })
       .from(devolucoes)
-      .where(eq(devolucoes.id, p.devolucaoId))
+      .where(and(eq(devolucoes.id, p.devolucaoId), devolucaoVisivel))
       .for('update');
     if (!linha) throw new ErroDevolucao('Devolução não encontrada.');
     if (linha.canal !== 'MERCADO_LIVRE' || !linha.pedidos.some((x) => pedidos.includes(x))) {

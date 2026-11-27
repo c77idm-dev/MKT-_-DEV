@@ -5,6 +5,7 @@ import type { MotivoCanal } from '@/conectores/marketplace/tipos';
 import type { DbOuTx } from '@/db/client';
 import { contasBitbrain, contestacoesCanal, devolucoes, evidencias, itensDevolucao, reclamacoesMl, usuarios } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { pode } from '@/modules/auth/permissoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import type { DadosSelo } from '@/modules/devolucoes/selos';
@@ -75,7 +76,8 @@ export async function listarContestacoes(db: DbOuTx, status: StatusContestacao, 
     })
     .from(contestacoesCanal)
     .innerJoin(devolucoes, eq(devolucoes.id, contestacoesCanal.devolucaoId))
-    .where(eq(contestacoesCanal.status, status))
+    // (extra, E29) A contestação da devolução apagada sai da lista junto com ela.
+    .where(and(eq(contestacoesCanal.status, status), devolucaoVisivel))
     .orderBy(sql`${contestacoesCanal.prazo} asc nulls last`, asc(contestacoesCanal.criadaEm))
     .limit(200);
   return linhas.map((l) => ({
@@ -93,7 +95,12 @@ export async function listarContestacoes(db: DbOuTx, status: StatusContestacao, 
 }
 
 export async function contarContestacoes(db: DbOuTx): Promise<Record<StatusContestacao, number>> {
-  const linhas = await db.select({ status: contestacoesCanal.status, total: count() }).from(contestacoesCanal).groupBy(contestacoesCanal.status);
+  const linhas = await db
+    .select({ status: contestacoesCanal.status, total: count() })
+    .from(contestacoesCanal)
+    .innerJoin(devolucoes, eq(devolucoes.id, contestacoesCanal.devolucaoId))
+    .where(devolucaoVisivel)
+    .groupBy(contestacoesCanal.status);
   const contagem: Record<StatusContestacao, number> = { AGUARDANDO_GESTOR: 0, ENVIADA: 0, FALHOU: 0 };
   for (const l of linhas) contagem[l.status] = Number(l.total);
   return contagem;
@@ -174,7 +181,7 @@ export async function obterContestacao(db: DbOuTx, id: string, agora: Date = new
     .leftJoin(usuarios, eq(usuarios.id, contestacoesCanal.revisadoPor))
     .leftJoin(reclamacoesMl, eq(reclamacoesMl.claimId, devolucoes.reclamacaoId))
     .leftJoin(contasBitbrain, eq(contasBitbrain.empresa, reclamacoesMl.conta))
-    .where(eq(contestacoesCanal.id, id));
+    .where(and(eq(contestacoesCanal.id, id), devolucaoVisivel));
   if (!c) return null;
   const itens = await db
     .select({
@@ -261,7 +268,9 @@ export async function revisarEEnviar(db: DbOuTx, fila: Fila, id: string, e: Entr
   const [c] = await db
     .select({ status: contestacoesCanal.status, revisadoPor: contestacoesCanal.revisadoPor, devolucaoId: contestacoesCanal.devolucaoId })
     .from(contestacoesCanal)
-    .where(eq(contestacoesCanal.id, id));
+    .innerJoin(devolucoes, eq(devolucoes.id, contestacoesCanal.devolucaoId))
+    // (extra, E29) A contestação da devolução apagada não vai ao ML.
+    .where(and(eq(contestacoesCanal.id, id), devolucaoVisivel));
   if (!c) throw new ErroContestacao(['Contestação não encontrada.']);
   if (c.status === 'ENVIADA') throw new ErroContestacao(['Esta contestação já foi enviada ao Mercado Livre.']);
   if (c.status === 'AGUARDANDO_GESTOR' && c.revisadoPor) throw new ErroContestacao(['O envio já foi pedido. Aguarde o resultado.']);

@@ -5,6 +5,7 @@ import { interpretarData, interpretarInteiro, textoOpcional } from '@/lib/valore
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { normalizarSku } from '@/modules/catalogo/documentos';
 import { idsDosProdutos } from '@/modules/catalogo/produtos';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { interpretarCanal } from './canais';
 import {
@@ -83,6 +84,7 @@ export async function codigosNaoIdentificadosPorRastreio(db: DbOuTx, rastreios: 
         eq(devolucoes.naoIdentificada, true),
         inArray(devolucoes.rastreio, lista),
         notInArray(devolucoes.status, ENCERRADAS),
+        devolucaoVisivel,
         exceto ? ne(devolucoes.id, exceto) : undefined,
       ),
     )
@@ -169,6 +171,8 @@ export async function codigosAtivosPorPedido(db: DbOuTx, pares: { canal: Canal; 
       and(
         inArray(devolucoes.canal, canais),
         notInArray(devolucoes.status, ENCERRADAS),
+        // (extra, E29) A apagada não segura o pedido: o Gestor pode cadastrar outra devolução para ele.
+        devolucaoVisivel,
         sql`${devolucoes.pedidosExternos} && ARRAY[${sql.join(
           pedidos.map((p) => sql`${p}`),
           sql`, `,

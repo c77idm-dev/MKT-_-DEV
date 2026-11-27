@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes, itensDevolucao } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { pode } from '@/modules/auth/permissoes';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { idsDosProdutos } from '@/modules/catalogo/produtos';
@@ -41,10 +42,10 @@ export async function encerrarPendente(
     const [atualizada] = await tx
       .update(devolucoes)
       .set({ status: para, atualizadaEm: agora })
-      .where(and(eq(devolucoes.id, id), eq(devolucoes.status, 'PENDENTE_CHEGADA')))
+      .where(and(eq(devolucoes.id, id), eq(devolucoes.status, 'PENDENTE_CHEGADA'), devolucaoVisivel))
       .returning({ id: devolucoes.id });
     if (!atualizada) {
-      const [existe] = await tx.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.id, id)).limit(1);
+      const [existe] = await tx.select({ id: devolucoes.id }).from(devolucoes).where(and(eq(devolucoes.id, id), devolucaoVisivel)).limit(1);
       if (!existe) throw new ErroDevolucao('Devolução não encontrada.');
       throw new ErroDevolucao('Só dá para cancelar ou marcar como extraviada uma devolução Pendente de chegada.');
     }
@@ -101,10 +102,10 @@ export async function identificarDevolucao(
         naoIdentificada: false,
         atualizadaEm: agora,
       })
-      .where(and(eq(devolucoes.id, id), eq(devolucoes.naoIdentificada, true)))
+      .where(and(eq(devolucoes.id, id), eq(devolucoes.naoIdentificada, true), devolucaoVisivel))
       .returning({ id: devolucoes.id });
     if (!atualizada) {
-      const [existe] = await tx.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.id, id)).limit(1);
+      const [existe] = await tx.select({ id: devolucoes.id }).from(devolucoes).where(and(eq(devolucoes.id, id), devolucaoVisivel)).limit(1);
       if (!existe) throw new ErroDevolucao('Devolução não encontrada.');
       throw new ErroDevolucao('Esta devolução já foi identificada.');
     }

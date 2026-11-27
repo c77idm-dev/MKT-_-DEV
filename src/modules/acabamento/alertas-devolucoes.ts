@@ -1,6 +1,7 @@
 import { and, eq, gt, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { contestacoesCanal, devolucoes, eventosHistorico, itensDevolucao, lotes, notasFiscais } from '@/db/schema';
+import { devolucaoIdVisivel, devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { STATUS_ML_CANCELAMENTO, STATUS_ML_EXTRAVIO } from '@/modules/mercado-livre/status';
 import { diasUteisDepois, JANELA_ALERTA_EVENTO_MS, prazoVencendo } from './alertas-regras';
 
@@ -11,7 +12,7 @@ export async function devolucoesComPrazoVencendo(db: DbOuTx, agora: Date): Promi
   const linhas = await db
     .select({ id: devolucoes.id, prazo: devolucoes.prazoConferenciaCanal })
     .from(devolucoes)
-    .where(and(inArray(devolucoes.status, [...ANTES_DA_CONFERENCIA]), isNotNull(devolucoes.prazoConferenciaCanal)));
+    .where(and(inArray(devolucoes.status, [...ANTES_DA_CONFERENCIA]), isNotNull(devolucoes.prazoConferenciaCanal), devolucaoVisivel));
   return linhas.filter((l) => l.prazo && prazoVencendo(l.prazo, agora)).map((l) => l.id);
 }
 
@@ -21,7 +22,7 @@ export async function contestacoesComPrazoVencendo(db: DbOuTx, agora: Date): Pro
     .select({ id: contestacoesCanal.id, devolucaoCodigo: devolucoes.codigo, prazo: contestacoesCanal.prazo })
     .from(contestacoesCanal)
     .innerJoin(devolucoes, eq(devolucoes.id, contestacoesCanal.devolucaoId))
-    .where(and(inArray(contestacoesCanal.status, ['AGUARDANDO_GESTOR', 'FALHOU']), isNotNull(contestacoesCanal.prazo)));
+    .where(and(inArray(contestacoesCanal.status, ['AGUARDANDO_GESTOR', 'FALHOU']), isNotNull(contestacoesCanal.prazo), devolucaoVisivel));
   return linhas.filter((l) => l.prazo && prazoVencendo(l.prazo, agora)).map(({ id, devolucaoCodigo }) => ({ id, devolucaoCodigo }));
 }
 
@@ -31,7 +32,9 @@ export async function notasRejeitadas(db: DbOuTx): Promise<{ devolucaoIds: strin
     .select({ devolucaoId: notasFiscais.devolucaoId, loteCodigo: lotes.codigo })
     .from(notasFiscais)
     .leftJoin(lotes, eq(lotes.id, notasFiscais.loteId))
-    .where(eq(notasFiscais.situacao, 'REJEITADA'));
+    // (extra, E29) A NF rejeitada da devolução apagada não vira alerta (a de remessa não tem devolução).
+    .leftJoin(devolucoes, eq(devolucoes.id, notasFiscais.devolucaoId))
+    .where(and(eq(notasFiscais.situacao, 'REJEITADA'), devolucaoVisivel));
   const devolucaoIds = [...new Set(linhas.flatMap((l) => (l.devolucaoId ? [l.devolucaoId] : [])))];
   const codigos = [...new Set(linhas.flatMap((l) => (l.loteCodigo ? [l.loteCodigo] : [])))].sort();
   return { devolucaoIds, lotes: codigos.map((codigo) => ({ codigo })) };
@@ -41,7 +44,8 @@ export async function contarSemFornecedor(db: DbOuTx): Promise<number> {
   const [{ total }] = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(itensDevolucao)
-    .where(eq(itensDevolucao.status, 'SEM_FORNECEDOR'));
+    .innerJoin(devolucoes, eq(devolucoes.id, itensDevolucao.devolucaoId))
+    .where(and(eq(itensDevolucao.status, 'SEM_FORNECEDOR'), devolucaoVisivel));
   return total;
 }
 
@@ -50,7 +54,7 @@ export async function devolucoesEntreguesSemLeitura(db: DbOuTx, agora: Date): Pr
   const linhas = await db
     .select({ id: devolucoes.id, entregue: devolucoes.entregueSegundoCanalEm })
     .from(devolucoes)
-    .where(and(eq(devolucoes.status, 'PENDENTE_CHEGADA'), isNotNull(devolucoes.entregueSegundoCanalEm)));
+    .where(and(eq(devolucoes.status, 'PENDENTE_CHEGADA'), isNotNull(devolucoes.entregueSegundoCanalEm), devolucaoVisivel));
   return linhas.filter((l) => l.entregue && diasUteisDepois(l.entregue, agora) >= 2).map((l) => l.id);
 }
 
@@ -60,7 +64,16 @@ async function entidadesComEventoRecente(db: DbOuTx, entidade: 'devolucao' | 'lo
   const linhas = await db
     .selectDistinct({ id: eventosHistorico.entidadeId })
     .from(eventosHistorico)
-    .where(and(eq(eventosHistorico.entidade, entidade), eq(eventosHistorico.acao, acao), gt(eventosHistorico.em, desde), extra));
+    .where(
+      and(
+        eq(eventosHistorico.entidade, entidade),
+        eq(eventosHistorico.acao, acao),
+        gt(eventosHistorico.em, desde),
+        extra,
+        // (extra, E29) O alerta da devolução apagada some com ela.
+        entidade === 'devolucao' ? devolucaoIdVisivel(eventosHistorico.entidadeId) : undefined,
+      ),
+    );
   return linhas.map((l) => l.id);
 }
 

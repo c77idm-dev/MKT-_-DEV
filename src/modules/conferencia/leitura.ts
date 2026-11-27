@@ -1,7 +1,8 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes, evidencias, itensDevolucao, produtos, usuarios } from '@/db/schema';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import type { VideoObrigatorio } from '@/modules/configuracoes/dominio';
 import { lerConfiguracao } from '@/modules/configuracoes/ler';
 import type { Canal, DestinoItem, MotivoItem, StatusDevolucao, StatusItem } from '@/modules/devolucoes/dominio';
@@ -58,7 +59,12 @@ export type DadosConferencia = {
 };
 
 /** Tudo o que a bancada e a seção "Conferência" do detalhe mostram. */
-export async function obterConferencia(db: DbOuTx, chave: { id: string } | { codigo: string }): Promise<DadosConferencia | null> {
+export async function obterConferencia(
+  db: DbOuTx,
+  chave: { id: string } | { codigo: string },
+  /** (extra, E29) A apagada não é achada; o detalhe que o Gestor abre pela lista Apagadas passa `incluirApagada`. */
+  opcoes: { incluirApagada?: boolean } = {},
+): Promise<DadosConferencia | null> {
   const conferente = alias(usuarios, 'conferente');
   const onde = 'id' in chave ? eq(devolucoes.id, chave.id) : eq(devolucoes.codigo, chave.codigo.trim().toUpperCase());
   const [d] = await db
@@ -76,7 +82,7 @@ export async function obterConferencia(db: DbOuTx, chave: { id: string } | { cod
     })
     .from(devolucoes)
     .leftJoin(conferente, eq(conferente.id, devolucoes.conferenteId))
-    .where(onde)
+    .where(and(onde, opcoes.incluirApagada ? undefined : devolucaoVisivel))
     .limit(1);
   if (!d) return null;
 

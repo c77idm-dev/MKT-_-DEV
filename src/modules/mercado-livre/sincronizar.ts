@@ -5,6 +5,7 @@ import type { DadosDevolucaoML } from '@/conectores/marketplace/mercadolivre/tip
 import type { DevolucaoExterna } from '@/conectores/marketplace/tipos';
 import type { DbOuTx } from '@/db/client';
 import { contestacoesCanal, devolucoes, reclamacoesMl, vendasMl } from '@/db/schema';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { normalizarSku } from '@/modules/catalogo/documentos';
 import { criarDevolucao, type DadosCanal, type DadosNovaDevolucao } from '@/modules/devolucoes/criar';
 import type { StatusDevolucao } from '@/modules/devolucoes/dominio';
@@ -229,7 +230,11 @@ async function atualizar(tx: DbOuTx, atual: Atual, d: DevolucaoExterna, motivo: 
   if (!atual.entregueSegundoCanalEm && d.entregueEm) await evento(tx, atual.id, 'ml_entregue', agora, { dados: { entregueEm: d.entregueEm.toISOString() } });
 }
 
-/** D9: devolução manual (ou de planilha) ativa do mesmo pedido no ML, ainda sem id externo. */
+/**
+ * D9: devolução manual (ou de planilha) ativa do mesmo pedido no ML, ainda sem id externo. (extra, E29) A apagada fica de
+ * fora: a reclamação nova não se liga a ela e vira a devolução do ML. A devolução do ML apagada continua achada pelo
+ * `devolucao_externa_id` em `aplicarReclamacao` (sem filtro), sem criar outra e sem limpar `apagada_em`.
+ */
 async function manualDoPedido(tx: DbOuTx, pedidos: string[]): Promise<Atual | null> {
   if (pedidos.length === 0) return null;
   const [d] = await tx
@@ -241,6 +246,7 @@ async function manualDoPedido(tx: DbOuTx, pedidos: string[]): Promise<Atual | nu
         isNull(devolucoes.devolucaoExternaId),
         ne(devolucoes.origem, 'API'),
         notInArray(devolucoes.status, ENCERRADAS),
+        devolucaoVisivel,
         sql`${devolucoes.pedidosExternos} && ARRAY[${sql.join(
           pedidos.map((p) => sql`${p}`),
           sql`, `,

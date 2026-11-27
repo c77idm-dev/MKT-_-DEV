@@ -5,6 +5,7 @@ import { devolucoes, fornecedores, itensDevolucao, lotes, notasFiscais, produtos
 import { formatarDataHora } from '@/lib/formatar';
 import { primeiroValor, type ParametrosBusca } from '@/lib/parametros';
 import { ehUuid } from '@/lib/uuid';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { lerConfiguracao } from '@/modules/configuracoes/ler';
 import { ROTULO_MOTIVO, ROTULO_STATUS_ITEM, type StatusItem } from '@/modules/devolucoes/dominio';
 import { CARTOES_POR_COLUNA } from '@/modules/devolucoes/quadro';
@@ -95,7 +96,7 @@ function condicoes(filtros: FiltrosLotes, soAtivos: boolean): SQL {
       ${lotes.codigo} ilike ${like} or ${lotes.rastreioEnvio} ilike ${like}
       or exists (
         select 1 from "itens_devolucao" "i" inner join "devolucoes" "d" on "d"."id" = "i"."devolucao_id"
-        where "i"."lote_id" = ${lotes.id}
+        where "i"."lote_id" = ${lotes.id} and "d"."apagada_em" is null
           and ("d"."codigo" ilike ${like} or "i"."serial" ilike ${like} or "i"."sku" ilike ${like} or "i"."ean_lido" ilike ${like}
             or exists (select 1 from "produtos" "p" where "p"."id" = "i"."produto_recebido_id" and "p"."sku" ilike ${like}))
       )
@@ -168,8 +169,13 @@ export type UnidadeSemFornecedorVista = {
 export async function listarSemFornecedor(db: DbOuTx, opcoes: { limite?: number } = {}): Promise<{ unidades: UnidadeSemFornecedorVista[]; total: number }> {
   const recebido = alias(produtos, 'produto_recebido');
   const esperado = alias(produtos, 'produto_esperado');
-  const onde = eq(itensDevolucao.status, 'SEM_FORNECEDOR');
-  const [{ total }] = await db.select({ total: count() }).from(itensDevolucao).where(onde);
+  // (extra, E29) A unidade da devolução apagada não aparece como pendência.
+  const onde = and(eq(itensDevolucao.status, 'SEM_FORNECEDOR'), devolucaoVisivel);
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(itensDevolucao)
+    .innerJoin(devolucoes, eq(devolucoes.id, itensDevolucao.devolucaoId))
+    .where(onde);
   if (opcoes.limite === 0) return { unidades: [], total };
   const consulta = db
     .select({

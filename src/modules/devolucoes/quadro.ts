@@ -1,6 +1,7 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes } from '@/db/schema';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import type { DestinoEstoque } from '@/modules/fiscal/dominio';
 import { resumoLotesQuadro, type CartaoLoteVista } from '@/modules/lotes/consultas';
 import { buscarDevolucoes, type ResumoDevolucao } from './busca';
@@ -38,7 +39,7 @@ export async function contarEstoque(db: DbOuTx): Promise<ContagemEstoque> {
       problema: sql<number>`(count(*) filter (where ${temNoDestino('PROBLEMA')}))::int`,
     })
     .from(devolucoes)
-    .where(eq(devolucoes.status, 'AGUARDANDO_NF'));
+    .where(and(eq(devolucoes.status, 'AGUARDANDO_NF'), devolucaoVisivel));
   return { bom: linha?.bom ?? 0, problema: linha?.problema ?? 0 };
 }
 

@@ -1,6 +1,7 @@
 import { and, count, inArray, sql, type SQL } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes } from '@/db/schema';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { STATUS_DEVOLUCAO, type StatusDevolucao } from './dominio';
 
 const ENCERRADAS: readonly StatusDevolucao[] = ['CONCLUIDA', 'CANCELADA', 'EXTRAVIADA'];
@@ -29,6 +30,6 @@ export function condicaoAfetaReputacao(comStatusEscolhido = false): SQL {
 
 /** (extra) O número do botão "Afetam a reputação" do Fluxo, numa consulta só. */
 export async function contarAfetamReputacao(db: DbOuTx): Promise<number> {
-  const [{ total }] = await db.select({ total: count() }).from(devolucoes).where(condicaoAfetaReputacao());
+  const [{ total }] = await db.select({ total: count() }).from(devolucoes).where(and(condicaoAfetaReputacao(), devolucaoVisivel));
   return total;
 }

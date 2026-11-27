@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, notInArray, sql, type AnyColumn, type SQL } 
 import { alias } from 'drizzle-orm/pg-core';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes, itensDevolucao, itensRetiradaFull, produtos, retiradasFull } from '@/db/schema';
+import { devolucaoVisivel, retiradaVisivel } from '@/modules/apagadas/filtro';
 import { SITUACAO_RETIRADA, situacaoDaUnidade, type LinhaVolta, type Periodo } from './dominio';
 
 /** O dia inteiro de "de" até o fim de "ate", no horário de Brasília (igual à Busca Avançada). */
@@ -10,16 +11,17 @@ function noPeriodo(coluna: AnyColumn, p: Periodo): SQL {
 }
 
 /**
+ * (extra, E29) A devolução e a retirada apagadas ficam de fora.
  * Unidades de devolução com destino BOM cuja conferência foi concluída (devolucoes.conferida_em) no período, em qualquer
  * status depois dela (AUSENTE e PENDENTE ficam de fora; PROBLEMA não tem destino BOM).
  */
 function unidadesBom(p: Periodo): SQL | undefined {
-  return and(eq(itensDevolucao.destino, 'BOM'), notInArray(itensDevolucao.status, ['PENDENTE', 'AUSENTE']), noPeriodo(devolucoes.conferidaEm, p));
+  return and(eq(itensDevolucao.destino, 'BOM'), notInArray(itensDevolucao.status, ['PENDENTE', 'AUSENTE']), noPeriodo(devolucoes.conferidaEm, p), devolucaoVisivel);
 }
 
 /** Itens das retiradas do Full Conferidas (retiradas_full.concluida_em) no período. */
 function retiradasConferidas(p: Periodo): SQL | undefined {
-  return and(eq(retiradasFull.situacao, 'CONFERIDA'), noPeriodo(retiradasFull.concluidaEm, p));
+  return and(eq(retiradasFull.situacao, 'CONFERIDA'), noPeriodo(retiradasFull.concluidaEm, p), retiradaVisivel);
 }
 
 export type OpcoesLista = {

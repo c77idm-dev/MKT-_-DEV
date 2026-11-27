@@ -5,6 +5,7 @@ import { obterEmissorNFe } from '@/conectores/nfe/registro';
 import type { Db } from '@/db/client';
 import { ehViolacaoDeUnicidade } from '@/db/erros';
 import { devolucoes, notasFiscais, notasVenda } from '@/db/schema';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import type { AmbienteNfe } from '@/modules/configuracoes/dominio';
 import { ROTULO_STATUS } from '@/modules/devolucoes/dominio';
@@ -62,7 +63,12 @@ export async function solicitarEmissao(db: Db, alvo: AlvoEmissao, usuario: Usuar
   try {
     return await db.transaction(async (tx) => {
       if (destino.devolucaoId) {
-        const [d] = await tx.select({ status: devolucoes.status }).from(devolucoes).where(eq(devolucoes.id, destino.devolucaoId)).for('update');
+        // (extra, E29) A devolução apagada não ganha NF.
+        const [d] = await tx
+          .select({ status: devolucoes.status })
+          .from(devolucoes)
+          .where(and(eq(devolucoes.id, destino.devolucaoId), devolucaoVisivel))
+          .for('update');
         if (!d) throw new ErroFiscal('Devolução não encontrada.');
         if (d.status !== 'AGUARDANDO_NF') throw new ErroFiscal(`A devolução está ${ROTULO_STATUS[d.status]}: a NF de devolução só sai em Aguardando NF.`);
         const [ativa] = await tx

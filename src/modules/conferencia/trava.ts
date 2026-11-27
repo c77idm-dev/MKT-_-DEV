@@ -1,13 +1,17 @@
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import type { Db, DbOuTx } from '@/db/client';
 import { devolucoes, itensDevolucao, usuarios } from '@/db/schema';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { rotuloStatus } from '@/modules/devolucoes/dominio';
 import { exigirTransicao } from '@/modules/devolucoes/transicoes';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { ErroConferencia } from './erros';
 
-/** Lê a devolução travando a linha até o fim da transação: duas pessoas no mesmo pacote esperam uma pela outra. */
+/**
+ * Lê a devolução travando a linha até o fim da transação: duas pessoas no mesmo pacote esperam uma pela outra.
+ * (extra, E29) A apagada não é achada: nada da conferência vale para ela.
+ */
 export async function travarDevolucao(tx: DbOuTx, devolucaoId: string) {
   const [d] = await tx
     .select({
@@ -19,7 +23,7 @@ export async function travarDevolucao(tx: DbOuTx, devolucaoId: string) {
       conferenteId: devolucoes.conferenteId,
     })
     .from(devolucoes)
-    .where(eq(devolucoes.id, devolucaoId))
+    .where(and(eq(devolucoes.id, devolucaoId), devolucaoVisivel))
     .for('update');
   if (!d) throw new ErroConferencia('Devolução não encontrada.');
   return d;

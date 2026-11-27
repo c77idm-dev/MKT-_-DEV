@@ -1,13 +1,23 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes, fornecedores, itensDevolucao, produtos, usuarios } from '@/db/schema';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { listarEventos } from '@/modules/historico/eventos';
 
+export type OpcoesDetalhe = {
+  /**
+   * (extra, E29) A apagada não é achada (detalhe, dossiê). Só o Gestor, pela lista Apagadas, pede o detalhe dela com
+   * `incluirApagada`.
+   */
+  incluirApagada?: boolean;
+};
+
 /** Tudo o que a página de detalhe mostra: dados, unidades e histórico. */
-export async function obterDetalhe(db: DbOuTx, codigo: string) {
+export async function obterDetalhe(db: DbOuTx, codigo: string, opcoes: OpcoesDetalhe = {}) {
   const criador = alias(usuarios, 'criador');
   const recebedor = alias(usuarios, 'recebedor');
+  const apagador = alias(usuarios, 'apagador');
   const [d] = await db
     .select({
       id: devolucoes.id,
@@ -28,11 +38,16 @@ export async function obterDetalhe(db: DbOuTx, codigo: string) {
       recebidaEm: devolucoes.recebidaEm,
       criadoPorNome: criador.nome,
       recebidaPorNome: recebedor.nome,
+      /** (extra, E29) Os dados que o Gestor corrige (`corrigirDados`) e a marca de apagada. */
+      observacoes: devolucoes.observacoes,
+      apagadaEm: devolucoes.apagadaEm,
+      apagadaPorNome: apagador.nome,
     })
     .from(devolucoes)
     .leftJoin(criador, eq(criador.id, devolucoes.criadoPor))
     .leftJoin(recebedor, eq(recebedor.id, devolucoes.recebidaPor))
-    .where(eq(devolucoes.codigo, codigo.trim().toUpperCase()))
+    .leftJoin(apagador, eq(apagador.id, devolucoes.apagadaPor))
+    .where(and(eq(devolucoes.codigo, codigo.trim().toUpperCase()), opcoes.incluirApagada ? undefined : devolucaoVisivel))
     .limit(1);
   if (!d) return null;
   const itens = await db

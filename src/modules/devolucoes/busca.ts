@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, exists, ilike, inArray, like, or, sql, type 
 import type { DbOuTx } from '@/db/client';
 import { devolucoes, fornecedores, itensDevolucao, produtos } from '@/db/schema';
 import { escaparLike } from '@/lib/texto';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { somenteDigitos } from '@/modules/catalogo/documentos';
 import type { DestinoEstoque, SituacaoNotaFiscal } from '@/modules/fiscal/dominio';
 import type { AfetaReputacao } from '@/modules/mercado-livre/dominio';
@@ -119,6 +120,8 @@ export async function buscarDevolucoes(
   const porPagina = opcoes.porPagina ?? POR_PAGINA_DEVOLUCOES;
   const pagina = Math.max(1, opcoes.pagina ?? 1);
   const lista = condicoes(db, filtros);
+  // (extra, E29) A apagada não aparece na busca, nas etapas, no quadro nem nos alertas (que buscam pelos ids).
+  lista.push(devolucaoVisivel);
   if (opcoes.status) lista.push(opcoes.status.length > 0 ? inArray(devolucoes.status, [...opcoes.status]) : sql`false`);
   if (opcoes.ids) lista.push(opcoes.ids.length > 0 ? inArray(devolucoes.id, [...opcoes.ids]) : sql`false`);
   if (opcoes.destino) {
@@ -126,7 +129,7 @@ export async function buscarDevolucoes(
       sql`exists (select 1 from "itens_devolucao" where "itens_devolucao"."devolucao_id" = "devolucoes"."id" and "itens_devolucao"."status" = 'AGUARDANDO_NF' and "itens_devolucao"."destino" = ${opcoes.destino}::destino_item)`,
     );
   }
-  const onde = lista.length > 0 ? and(...lista) : undefined;
+  const onde = and(...lista);
 
   const [{ total }] = await db.select({ total: count() }).from(devolucoes).where(onde);
   const base =
