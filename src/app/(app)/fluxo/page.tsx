@@ -44,6 +44,8 @@ const ACOES_FLUXO: (AcaoFluxo & { permissao: Acao })[] = [
     rotulo: 'Planilha Volta ao armazém',
     icone: 'planilha',
   },
+  // (extra, E29) O que foi apagado, de onde o Gestor restaura.
+  { permissao: 'administrar', href: '/fluxo/apagadas', quando: 'Apagou algo por engano', rotulo: 'Apagadas', icone: 'lixeira' },
 ];
 
 export default async function PaginaFluxo({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {

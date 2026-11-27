@@ -48,6 +48,17 @@ describe('MenuAcoesFluxo', () => {
     expect(screen.queryByRole('link', { name: 'Nova devolução' })).toBeNull();
   });
 
+  it('(extra, E29) "Apagadas" tem o ícone da lixeira, no traço dos outros', () => {
+    render(<MenuAcoesFluxo acoes={[{ href: '/fluxo/apagadas', quando: 'Apagou algo por engano', rotulo: 'Apagadas', icone: 'lixeira' }]} />);
+    abrir();
+    const link = screen.getByRole('link', { name: 'Apagadas' });
+    expect(link.getAttribute('href')).toBe('/fluxo/apagadas');
+    const icone = link.querySelector('svg');
+    expect(icone?.getAttribute('viewBox')).toBe('0 0 24 24');
+    expect(icone?.getAttribute('stroke')).toBe('currentColor');
+    expect(icone?.querySelectorAll('path').length).toBeGreaterThan(0);
+  });
+
   it('"Fechar" fecha o painel e o foco volta ao botão', () => {
     render(<MenuAcoesFluxo acoes={TODAS} />);
     const { gatilho, dialogo } = abrir();

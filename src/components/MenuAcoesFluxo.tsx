@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useId, useRef, type ReactNode } from 'react';
 import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO } from './estilos';
 
-export type IconeAcao = 'pacote' | 'mais' | 'caminhao' | 'planilha';
+export type IconeAcao = 'pacote' | 'mais' | 'caminhao' | 'planilha' | 'lixeira';
 
 /** Uma linha do menu: quando usar (linha pequena), o nome da ação (negrito) e o destino. */
 export type AcaoFluxo = { href: string; quando: string; rotulo: string; icone: IconeAcao; destaque?: boolean };
@@ -31,6 +31,8 @@ const ICONES: Record<IconeAcao, ReactNode> = {
       <path d="M3 10h18M3 15h18M9 10v10" />
     </>
   ),
+  // (extra, E29) Apagadas.
+  lixeira: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />,
 };
 
 function Icone({ children, tamanho }: { children: ReactNode; tamanho: number }) {
