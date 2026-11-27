@@ -3,21 +3,37 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import type { EvidenciaServidor } from '@/components/conferencia/estadoSlot';
-import { CARTAO, LINK_VOLTAR, ROTULO } from '@/components/estilos';
+import { ALERTA_ATENCAO, CARTAO, LINK_VOLTAR, ROTULO } from '@/components/estilos';
+import { MensagemSucesso } from '@/components/MensagemSucesso';
 import { RegistrarServiceWorker } from '@/components/pwa/RegistrarServiceWorker';
 import { Selo } from '@/components/Selo';
 import { obterDb } from '@/db';
 import { formatarDataHora } from '@/lib/formatar';
+import { primeiroValor } from '@/lib/parametros';
+import { diasParaSumir, textoSomeEm } from '@/modules/apagadas/dominio';
 import { pode } from '@/modules/auth/permissoes';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { listarEventos, rotuloDaAcao } from '@/modules/historico/eventos';
 import { linksDasEvidencias } from '@/modules/midia/links-evidencias';
 import { obterRetirada } from '@/modules/retiradas/consultas';
 import { ehCodigoRetirada, ROTULO_SITUACAO_RETIRADA } from '@/modules/retiradas/dominio';
-import { biparAcao, concluirAcao, darChegadaEtiquetaAmarelaAcao, procurarEtiquetaAmarelaAcao, quantidadeAcao, removerAcao } from './acoes';
+import {
+  apagarRetiradaAcao,
+  biparAcao,
+  concluirAcao,
+  darChegadaEtiquetaAmarelaAcao,
+  procurarEtiquetaAmarelaAcao,
+  quantidadeAcao,
+  reabrirRetiradaAcao,
+  removerAcao,
+} from './acoes';
+import { CorrigirRetirada } from './CorrigirRetirada';
 import { TelaRetirada } from './TelaRetirada';
 
-type Props = { params: Promise<{ codigo: string }> };
+type Props = { params: Promise<{ codigo: string }>; searchParams: Promise<{ ok?: string | string[] }> };
+
+/** (extra, E29) Confirmações do Corrigir (Gestor) (o redirecionamento leva `?ok=`). */
+const MENSAGEM_OK: Record<string, string> = { reaberta: 'Retirada reaberta. Corrija os itens e as quantidades e conclua de novo.' };
 
 /** Na retirada as evidências são fotos (da etiqueta ou do item): o histórico fala de foto. */
 const ROTULO_FOTO: Record<string, string> = {
@@ -27,7 +43,7 @@ const ROTULO_FOTO: Record<string, string> = {
   evidencia_falhou: 'Foto falhou no servidor',
 };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Pick<Props, 'params'>): Promise<Metadata> {
   const { codigo } = await params;
   return { title: `${codigo} · Retirada do Full · Gestão de Devoluções` };
 }
@@ -52,16 +68,20 @@ function Foto({ url, alt }: { url: string | undefined; alt: string }) {
 }
 
 /** Retirada do Full (melhoria 3). Aberta + quem opera: a tela de conferência. Senão (Conferida ou Fiscal): só leitura. */
-export default async function PaginaRetirada({ params }: Props) {
+export default async function PaginaRetirada({ params, searchParams }: Props) {
   const usuario = await exigirPermissao('ver_listas');
   const { codigo } = await params;
   if (!ehCodigoRetirada(codigo)) notFound();
   const db = obterDb();
-  const r = await obterRetirada(db, codigo);
+  const ehGestor = pode(usuario.perfil, 'administrar');
+  // (extra, E29) Só o Gestor abre a apagada (pela lista Apagadas), só para ver.
+  const r = (await obterRetirada(db, codigo)) ?? (ehGestor ? await obterRetirada(db, codigo, { incluirApagada: true }) : null);
   if (!r) notFound();
+  const apagada = r.apagadaEm !== null;
+  const ok = MENSAGEM_OK[primeiroValor((await searchParams).ok)];
   const links = await linksDasEvidencias(r.evidencias);
   const podeOperar = pode(usuario.perfil, 'operar_devolucoes');
-  const aberta = r.situacao === 'ABERTA';
+  const aberta = r.situacao === 'ABERTA' && !apagada;
 
   const cabecalho = (
     <div className="flex flex-col gap-1">
@@ -70,12 +90,36 @@ export default async function PaginaRetirada({ params }: Props) {
       </Link>
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="font-mono text-xl font-bold">{r.codigo}</h1>
-        <Selo texto={ROTULO_SITUACAO_RETIRADA[r.situacao]} tom={aberta ? 'atencao' : 'bom'} />
+        <Selo texto={ROTULO_SITUACAO_RETIRADA[r.situacao]} tom={r.situacao === 'ABERTA' ? 'atencao' : 'bom'} />
+        {apagada && <Selo texto="Apagada" tom="erro" />}
       </div>
       <p className="break-all text-sm text-texto-2">
         Retirada do Full · Etiqueta <span className="font-mono">{r.codigoEtiqueta}</span>
       </p>
+      {ok && <MensagemSucesso texto={ok} />}
+      {r.apagadaEm && (
+        <div className={`${ALERTA_ATENCAO} flex flex-col`}>
+          <p>
+            Apagada em {formatarDataHora(r.apagadaEm)}
+            {r.apagadaPorNome ? ` por ${r.apagadaPorNome}` : ''}. {textoSomeEm(diasParaSumir(r.apagadaEm, new Date()))}. Para trazê-la de volta, use
+            Restaurar em Apagadas. (extra)
+          </p>
+          <Link href="/fluxo/apagadas" className={LINK_VOLTAR}>
+            Ir para Apagadas
+          </Link>
+        </div>
+      )}
     </div>
+  );
+
+  // (extra, E29) Corrigir (Gestor): o último bloco da página, recolhido. Não aparece na apagada (ela volta por Apagadas).
+  const corrigir = !apagada && (
+    <CorrigirRetirada
+      codigo={r.codigo}
+      situacao={r.situacao}
+      perfil={usuario.perfil}
+      acoes={{ reabrir: reabrirRetiradaAcao.bind(null, r.id, r.codigo), apagar: apagarRetiradaAcao.bind(null, r.id, r.codigo) }}
+    />
   );
 
   if (aberta && podeOperar) {
@@ -104,6 +148,7 @@ export default async function PaginaRetirada({ params }: Props) {
             etiquetaAmarela: { procurar: procurarEtiquetaAmarelaAcao, darChegada: darChegadaEtiquetaAmarelaAcao },
           }}
         />
+        {corrigir}
       </div>
     );
   }
@@ -173,6 +218,7 @@ export default async function PaginaRetirada({ params }: Props) {
           ))}
         </ol>
       </section>
+      {corrigir}
     </div>
   );
 }

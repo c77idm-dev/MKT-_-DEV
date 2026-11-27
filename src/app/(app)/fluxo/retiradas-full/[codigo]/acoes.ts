@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { obterDb } from '@/db';
 import { formatarDataHora } from '@/lib/formatar';
 import { exigirPermissao } from '@/modules/auth/servidor';
@@ -9,6 +10,8 @@ import { ErroDevolucao } from '@/modules/devolucoes/erros';
 import type { ResultadoRecebimento } from '@/modules/devolucoes/recebimento';
 import { fichasDasDevolucoes, type FichaVenda } from '@/modules/mercado-livre/ficha-venda';
 import { listarItensRetirada, type ItemRetiradaVista } from '@/modules/retiradas/consultas';
+import { apagarRetirada, reabrirRetirada } from '@/modules/retiradas/correcoes';
+import { ehCodigoRetirada } from '@/modules/retiradas/dominio';
 import { ErroRetirada } from '@/modules/retiradas/erros';
 import {
   alterarQuantidade,
@@ -124,4 +127,40 @@ export async function concluirAcao(retiradaId: string): Promise<ResultadoAcaoRet
   const r = await executar(retiradaId, (db) => concluirRetirada(db, String(retiradaId), usuario));
   if (r.ok) revalidatePath('/fluxo/retiradas-full', 'layout');
   return r;
+}
+
+// --- Corrigir (Gestor) (extra, emenda E29, itens 7 e 8). As regras ficam em retiradas/correcoes.ts. ---
+
+export type EstadoCorrigirRetirada = { erros: string[] };
+const RETIRADA_NAO_ENCONTRADA: EstadoCorrigirRetirada = { erros: ['Retirada não encontrada.'] };
+
+async function corrigirRetirada(fazer: () => Promise<void>): Promise<EstadoCorrigirRetirada | null> {
+  try {
+    await fazer();
+    return null;
+  } catch (erro) {
+    if (erro instanceof ErroRetirada) return { erros: [erro.message] };
+    throw erro;
+  }
+}
+
+/** Item 7: Conferida → Aberta, para corrigir os itens e as quantidades. */
+export async function reabrirRetiradaAcao(retiradaId: string, codigo: string): Promise<EstadoCorrigirRetirada> {
+  const usuario = await exigirPermissao('administrar');
+  if (!ehCodigoRetirada(codigo)) return RETIRADA_NAO_ENCONTRADA;
+  const recusa = await corrigirRetirada(() => reabrirRetirada(obterDb(), String(retiradaId), usuario));
+  if (recusa) return recusa;
+  // A lista, a retirada e a planilha Volta ao armazém mudam.
+  revalidatePath('/fluxo', 'layout');
+  redirect(`/fluxo/retiradas-full/${codigo}?ok=reaberta`);
+}
+
+/** Item 8: apagar esconde (90 dias em Apagadas). A retirada some: a tela vai para a lista, com o aviso. */
+export async function apagarRetiradaAcao(retiradaId: string, codigo: string): Promise<EstadoCorrigirRetirada> {
+  const usuario = await exigirPermissao('administrar');
+  if (!ehCodigoRetirada(codigo)) return RETIRADA_NAO_ENCONTRADA;
+  const recusa = await corrigirRetirada(() => apagarRetirada(obterDb(), String(retiradaId), usuario));
+  if (recusa) return recusa;
+  revalidatePath('/fluxo', 'layout');
+  redirect(`/fluxo/retiradas-full?apagada=${codigo}`);
 }

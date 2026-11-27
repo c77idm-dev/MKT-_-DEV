@@ -20,9 +20,21 @@ import {
   ROTULO,
 } from '@/components/estilos';
 import { useEnvioFormulario } from '@/components/useEnvioFormulario';
+import type { StatusDevolucao } from '@/modules/devolucoes/dominio';
 import type { EstadoAcaoGestor } from './acoes';
 
 type Acao = (anterior: EstadoAcaoGestor, dados: FormData) => Promise<EstadoAcaoGestor>;
+
+/**
+ * (extra, E29) De onde a devolução sai, na pergunta da confirmação. Antes da E29, só o Pendente de chegada (texto da E24).
+ */
+const DE_ONDE_SAI: Partial<Record<StatusDevolucao, string>> = {
+  PENDENTE_CHEGADA: 'sai da espera de chegada e isso não se desfaz pela tela.',
+  AGUARDANDO_CONFERENCIA: 'sai da espera da conferência e isso não se desfaz pela tela.',
+  EM_CONFERENCIA: 'sai da conferência (a trava de quem confere é solta) e isso não se desfaz pela tela.',
+  AGUARDANDO_NF:
+    'sai da etapa Aguardando NF sem NF de devolução e isso não se desfaz pela tela. As unidades do Estoque Bom continuam na planilha Volta ao armazém.',
+};
 
 /** O novo status escolhido e os textos dos botões de cada escolha. */
 type NovoStatus = 'CANCELADA' | 'EXTRAVIADA';
@@ -40,14 +52,15 @@ const ID_ERRO_ESCOLHA = 'erro-escolha-encerrar';
 export const TRAVA_CONFIRMACAO_MS = 700;
 
 /**
- * Spec §5.2: Pendente de chegada → Cancelada ou Extraviada, por ação manual do Gestor.
+ * Spec §5.2: Pendente de chegada → Cancelada ou Extraviada, por ação manual do Gestor. (extra, E29) Também em Aguardando
+ * conferência, Em conferência e Aguardando NF; o bloco fica dentro do "Corrigir (Gestor) (extra)" (PainelCorrigir).
  * Emenda E24 (23/11): um Gestor cancelou uma devolução sem querer, procurando onde registrar a chegada. Por isso o
- * bloco fica recolhido em "Mais ações do Gestor", nada vem marcado, o botão é vermelho e diz o que faz, e só o
+ * bloco fica recolhido (hoje, no "Corrigir (Gestor) (extra)"), nada vem marcado, o botão é vermelho e diz o que faz, e só o
  * 2º toque, na confirmação, envia: o "Sim" tocado antes de a pergunta ficar 0,7 s na tela não vale (toque duplo), e
  * o Enter numa opção não envia (o "Sim" é o botão padrão do formulário). O código vem da rota (useParams): o
  * `[codigo]/page.tsx` é congelado (§3).
  */
-export function FormularioEncerrar({ acao }: { acao: Acao }) {
+export function FormularioEncerrar({ acao, status }: { acao: Acao; status: StatusDevolucao }) {
   const { codigo } = useParams<{ codigo?: string }>();
   const [estado, aoEnviar, pendente] = useEnvioFormulario(acao, { erros: [] }, ID_ERROS_ENCERRAR);
   const [para, setPara] = useState<NovoStatus | null>(null);
@@ -123,119 +136,103 @@ export function FormularioEncerrar({ acao }: { acao: Acao }) {
   // Normaliza como o detalhe (obterDetalhe): /fluxo/devolucoes/dev-000437 mostra a DEV-000437, igual ao título.
   const codigoNormalizado = codigo?.trim().toUpperCase();
   const quem = codigoNormalizado ? `A ${codigoNormalizado}` : 'A devolução';
-  const textoPergunta = `Tem certeza? ${quem} sai da espera de chegada e isso não se desfaz pela tela.`;
+  const textoPergunta = `Tem certeza? ${quem} ${DE_ONDE_SAI[status] ?? DE_ONDE_SAI.PENDENTE_CHEGADA}`;
 
   return (
-    <details className={`${CARTAO} group`}>
-      {/* A seta mostra que o bloco abre (o display flex tira o marcador padrão; no Safari, o -webkit-details-marker). */}
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-base font-bold [&::-webkit-details-marker]:hidden">
-        Mais ações do Gestor
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="size-5 shrink-0 text-texto-2 transition-transform group-open:rotate-180"
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </summary>
-      <form
-        onSubmit={aoSubmeter}
-        onKeyDown={aoTeclar}
-        aria-labelledby="titulo-encerrar"
-        className="mt-3 flex flex-col gap-3"
-      >
-        <h2 id="titulo-encerrar" className="text-base font-bold">
-          Cancelar ou marcar como extraviada
-        </h2>
+    <form
+      onSubmit={aoSubmeter}
+      onKeyDown={aoTeclar}
+      aria-labelledby="titulo-encerrar"
+      className="flex flex-col gap-3"
+    >
+      <h3 id="titulo-encerrar" className="text-base font-bold">
+        Cancelar ou marcar como extraviada
+      </h3>
+      {status === 'PENDENTE_CHEGADA' && (
         <div className="flex flex-col rounded-lg bg-destaque-suave px-3 pt-2 text-sm">
           <p>Isto não registra a chegada. Para registrar a chegada do pacote, use Receber pacote no Fluxo. (extra)</p>
           <Link href="/fluxo/recebimento" className={LINK_VOLTAR}>
             Ir para Receber pacote
           </Link>
         </div>
-        {/* Durante o envio, a escolha e o motivo ficam travados: a tela mostra o que foi enviado (o FormData já foi lido). */}
-        <fieldset
-          disabled={pendente}
-          className="flex flex-col"
-          aria-describedby={semEscolha ? ID_ERRO_ESCOLHA : undefined}
-        >
-          <legend className={ROTULO}>Novo status</legend>
-          <label className="flex min-h-11 items-center gap-3 text-[15px]">
-            <input
-              ref={primeiraOpcao}
-              type="radio"
-              name="para"
-              value="CANCELADA"
-              checked={para === 'CANCELADA'}
-              onChange={() => escolher('CANCELADA')}
-              className="size-5"
-            />
-            Cancelada
-          </label>
-          <label className="flex min-h-11 items-center gap-3 text-[15px]">
-            <input
-              type="radio"
-              name="para"
-              value="EXTRAVIADA"
-              checked={para === 'EXTRAVIADA'}
-              onChange={() => escolher('EXTRAVIADA')}
-              className="size-5"
-            />
-            Extraviada
-          </label>
-        </fieldset>
-        {semEscolha && (
-          <p id={ID_ERRO_ESCOLHA} role="alert" className={ALERTA_ERRO}>
-            Escolha se a devolução foi cancelada ou extraviada.
-          </p>
-        )}
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="motivo" className={ROTULO}>
-            Motivo
-          </label>
-          <textarea
-            id="motivo"
-            name="motivo"
-            required
-            minLength={3}
-            maxLength={500}
-            rows={3}
-            disabled={pendente}
-            className={`${CAMPO} min-h-24 py-2`}
+      )}
+      {/* Durante o envio, a escolha e o motivo ficam travados: a tela mostra o que foi enviado (o FormData já foi lido). */}
+      <fieldset
+        disabled={pendente}
+        className="flex flex-col"
+        aria-describedby={semEscolha ? ID_ERRO_ESCOLHA : undefined}
+      >
+        <legend className={ROTULO}>Novo status</legend>
+        <label className="flex min-h-11 items-center gap-3 text-[15px]">
+          <input
+            ref={primeiraOpcao}
+            type="radio"
+            name="para"
+            value="CANCELADA"
+            checked={para === 'CANCELADA'}
+            onChange={() => escolher('CANCELADA')}
+            className="size-5"
           />
-        </div>
-        <ListaErros erros={estado.erros} id={ID_ERROS_ENCERRAR} />
-        <RodapeFormulario>
-          {confirmando && para ? (
-            <div className={`${ALERTA_ATENCAO} flex w-full flex-col gap-2`}>
-              <p ref={pergunta} tabIndex={-1} className="text-[15px] outline-none">
-                {textoPergunta}
-              </p>
-              <button type="submit" disabled={pendente} className={BOTAO_PERIGO}>
-                {pendente ? 'Registrando…' : TEXTOS[para].confirmar}
-              </button>
-              <button type="button" onClick={voltar} disabled={pendente} className={BOTAO_SECUNDARIO}>
-                Voltar
-              </button>
-            </div>
-          ) : (
-            <button
-              ref={botao}
-              type="submit"
-              onClick={aoTocarBotao}
-              className={para ? `${BOTAO_PERIGO} md:w-auto` : `${BOTAO_SECUNDARIO} w-full md:w-auto`}
-            >
-              {para ? TEXTOS[para].botao : 'Escolha uma opção'}
+          Cancelada
+        </label>
+        <label className="flex min-h-11 items-center gap-3 text-[15px]">
+          <input
+            type="radio"
+            name="para"
+            value="EXTRAVIADA"
+            checked={para === 'EXTRAVIADA'}
+            onChange={() => escolher('EXTRAVIADA')}
+            className="size-5"
+          />
+          Extraviada
+        </label>
+      </fieldset>
+      {semEscolha && (
+        <p id={ID_ERRO_ESCOLHA} role="alert" className={ALERTA_ERRO}>
+          Escolha se a devolução foi cancelada ou extraviada.
+        </p>
+      )}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="motivo" className={ROTULO}>
+          Motivo
+        </label>
+        <textarea
+          id="motivo"
+          name="motivo"
+          required
+          minLength={3}
+          maxLength={500}
+          rows={3}
+          disabled={pendente}
+          className={`${CAMPO} min-h-24 py-2`}
+        />
+      </div>
+      <ListaErros erros={estado.erros} id={ID_ERROS_ENCERRAR} />
+      <RodapeFormulario>
+        {confirmando && para ? (
+          <div className={`${ALERTA_ATENCAO} flex w-full flex-col gap-2`}>
+            <p ref={pergunta} tabIndex={-1} className="text-[15px] outline-none">
+              {textoPergunta}
+            </p>
+            <button type="submit" disabled={pendente} className={BOTAO_PERIGO}>
+              {pendente ? 'Registrando…' : TEXTOS[para].confirmar}
             </button>
-          )}
-        </RodapeFormulario>
-      </form>
-    </details>
+            <button type="button" onClick={voltar} disabled={pendente} className={BOTAO_SECUNDARIO}>
+              Voltar
+            </button>
+          </div>
+        ) : (
+          <button
+            ref={botao}
+            type="submit"
+            onClick={aoTocarBotao}
+            className={para ? `${BOTAO_PERIGO} md:w-auto` : `${BOTAO_SECUNDARIO} w-full md:w-auto`}
+          >
+            {para ? TEXTOS[para].botao : 'Escolha uma opção'}
+          </button>
+        )}
+      </RodapeFormulario>
+    </form>
   );
 }
 

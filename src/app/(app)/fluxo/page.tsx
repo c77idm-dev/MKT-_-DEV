@@ -3,6 +3,7 @@ import { AlertasPainel, ALERTAS_NO_PAINEL } from '@/components/acabamento/Alerta
 import { AtalhoReputacao } from '@/components/AtalhoReputacao';
 import { BuscaAvancada } from '@/components/BuscaAvancada';
 import { EtapasCelular } from '@/components/EtapasCelular';
+import { MensagemSucesso } from '@/components/MensagemSucesso';
 import { MenuAcoesFluxo, type AcaoFluxo } from '@/components/MenuAcoesFluxo';
 import { QuadroFluxo } from '@/components/QuadroFluxo';
 import { VAZIO } from '@/components/estilos';
@@ -11,6 +12,7 @@ import { CartaoLote } from '@/components/lotes/CartaoLote';
 import { obterDb } from '@/db';
 import { primeiroValor, type ParametrosBusca } from '@/lib/parametros';
 import { carregarAlertas } from '@/modules/acabamento/alertas';
+import { mensagemApagada } from '@/modules/apagadas/dominio';
 import { pode, type Acao } from '@/modules/auth/permissoes';
 import { exigirPermissao } from '@/modules/auth/servidor';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
@@ -46,7 +48,11 @@ const ACOES_FLUXO: (AcaoFluxo & { permissao: Acao })[] = [
 
 export default async function PaginaFluxo({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   const usuario = await exigirPermissao('ver_listas');
-  const textoEtapa = primeiroValor((await searchParams).etapa);
+  const parametros = await searchParams;
+  const textoEtapa = primeiroValor(parametros.etapa);
+  // (extra, E29) Depois de apagar uma devolução, o detalhe some: a confirmação aparece aqui. Só o código vem da URL.
+  const apagada = primeiroValor(parametros.apagada).toUpperCase();
+  const confirmacao = /^DEV-\d+$/.test(apagada) ? mensagemApagada(apagada) : null;
   const pedida = /^\d+$/.test(textoEtapa) ? Number(textoEtapa) : 0;
   const [quadro, alertas, afetamReputacao] = await Promise.all([
     montarQuadro(obterDb()),
@@ -88,6 +94,7 @@ export default async function PaginaFluxo({ searchParams }: { searchParams: Prom
         <h1 className="text-xl font-bold">Fluxo de devoluções</h1>
         <MenuAcoesFluxo acoes={acoes} />
       </div>
+      {confirmacao && <MensagemSucesso texto={confirmacao} />}
       <AlertasPainel alertas={alertas} limite={ALERTAS_NO_PAINEL} />
       {/* (extra) "Afetam a reputação · N" ao lado de "Filtros" (aprovado pelo usuário); some quando N = 0. */}
       <BuscaAvancada acao="/fluxo/busca" filtros={{}} atalho={<AtalhoReputacao total={afetamReputacao} />} />

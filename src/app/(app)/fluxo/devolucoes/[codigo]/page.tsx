@@ -5,12 +5,14 @@ import type { ReactNode } from 'react';
 import { FotoProduto } from '@/components/FotoProduto';
 import { MensagemSucesso } from '@/components/MensagemSucesso';
 import { Selo } from '@/components/Selo';
-import { CARTAO, LINK_VOLTAR, ROTULO, VAZIO } from '@/components/estilos';
+import { ALERTA_ATENCAO, CARTAO, LINK_VOLTAR, ROTULO, VAZIO } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { formatarDataHora, formatarDataIso } from '@/lib/formatar';
 import { primeiroValor } from '@/lib/parametros';
+import { diasParaSumir, textoSomeEm } from '@/modules/apagadas/dominio';
 import { pode } from '@/modules/auth/permissoes';
 import { exigirPermissao } from '@/modules/auth/servidor';
+import { textoDoAviso } from '@/modules/devolucoes/avisos-correcao';
 import { obterDetalhe } from '@/modules/devolucoes/detalhe';
 import {
   ETAPA_DO_STATUS,
@@ -25,9 +27,10 @@ import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { TOM_DO_STATUS } from '@/modules/devolucoes/selos';
 import { complementoDoEvento } from '@/modules/historico/complementos';
 import { rotuloDaAcao } from '@/modules/historico/eventos';
-import { encerrarAcao, identificarAcao } from './acoes';
-import { FormularioEncerrar, FormularioIdentificar } from './AcoesGestor';
+import { identificarAcao } from './acoes';
+import { FormularioIdentificar } from './AcoesGestor';
 import { SecaoConferencia } from './secoes/SecaoConferencia';
+import { SecaoCorrigir } from './secoes/SecaoCorrigir';
 import { SecaoFiscal } from './secoes/SecaoFiscal';
 import { SecaoLote } from './secoes/SecaoLote';
 import { SecaoMercadoLivre } from './secoes/SecaoMercadoLivre';
@@ -38,9 +41,14 @@ const MENSAGEM_OK: Record<string, string> = {
   cancelada: 'Devolução cancelada.',
   extraviada: 'Devolução marcada como extraviada.',
   identificada: 'Pacote identificado.',
+  // Corrigir (Gestor) (extra, E29).
+  estoque_trocado: 'Estoque da unidade trocado.',
+  conferencia_reaberta: 'Conferência reaberta. A devolução voltou para Aguardando conferência.',
+  chegada_desfeita: 'Chegada desfeita.',
+  dados_corrigidos: 'Dados corrigidos.',
 };
 
-type Props = { params: Promise<{ codigo: string }>; searchParams: Promise<{ ok?: string | string[] }> };
+type Props = { params: Promise<{ codigo: string }>; searchParams: Promise<{ ok?: string | string[]; aviso?: string | string[] }> };
 
 export async function generateMetadata({ params }: Pick<Props, 'params'>): Promise<Metadata> {
   const { codigo } = await params;
@@ -64,11 +72,16 @@ function motivoDoEvento(dados: Record<string, unknown> | null): string | null {
 export default async function PaginaDevolucao({ params, searchParams }: Props) {
   const usuario = await exigirPermissao('ver_listas');
   const { codigo } = await params;
-  const ok = MENSAGEM_OK[primeiroValor((await searchParams).ok)];
-  const d = await obterDetalhe(obterDb(), codigo);
-  if (!d) notFound();
+  const parametros = await searchParams;
+  const ok = MENSAGEM_OK[primeiroValor(parametros.ok)];
+  // A chave do aviso vem da URL; o texto, de uma lista fixa (um link não põe texto qualquer na página).
+  const aviso = ok ? textoDoAviso(primeiroValor(parametros.aviso)) : null;
   const ehGestor = pode(usuario.perfil, 'administrar');
-  const etapa = ETAPAS.find((e) => e.numero === ETAPA_DO_STATUS[d.status]);
+  // (extra, E29) Só o Gestor abre a apagada (pela lista Apagadas), só para ver: sem as seções e sem correções.
+  const d = (await obterDetalhe(obterDb(), codigo)) ?? (ehGestor ? await obterDetalhe(obterDb(), codigo, { incluirApagada: true }) : null);
+  if (!d || d.expurgadaEm) notFound();
+  const apagada = d.apagadaEm !== null;
+  const etapa = apagada ? undefined : ETAPAS.find((e) => e.numero === ETAPA_DO_STATUS[d.status]);
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
@@ -86,10 +99,28 @@ export default async function PaginaDevolucao({ params, searchParams }: Props) {
           <h1 className="font-mono text-2xl font-bold">{d.codigo}</h1>
           <Selo texto={ROTULO_STATUS[d.status]} tom={TOM_DO_STATUS[d.status]} />
           {d.naoIdentificada && <Selo texto="Não identificada" tom="erro" />}
+          {apagada && <Selo texto="Apagada" tom="erro" />}
         </div>
       </div>
 
       {ok && <MensagemSucesso texto={ok} />}
+      {aviso && (
+        <p role="note" className={ALERTA_ATENCAO}>
+          {aviso}
+        </p>
+      )}
+      {d.apagadaEm && (
+        <div className={`${ALERTA_ATENCAO} flex flex-col`}>
+          <p>
+            Apagada em {formatarDataHora(d.apagadaEm)}
+            {d.apagadaPorNome ? ` por ${d.apagadaPorNome}` : ''}. {textoSomeEm(diasParaSumir(d.apagadaEm, new Date()))}. Para trazê-la de volta, use
+            Restaurar em Apagadas. (extra)
+          </p>
+          <Link href="/fluxo/apagadas" className={LINK_VOLTAR}>
+            Ir para Apagadas
+          </Link>
+        </div>
+      )}
 
       <section aria-labelledby="titulo-dados" className={CARTAO}>
         <h2 id="titulo-dados" className="mb-3 text-base font-bold">
@@ -118,6 +149,8 @@ export default async function PaginaDevolucao({ params, searchParams }: Props) {
           <Dado rotulo="Chegada">
             {d.recebidaEm ? `${formatarDataHora(d.recebidaEm)}${d.recebidaPorNome ? ` por ${d.recebidaPorNome}` : ''}` : 'Ainda não chegou'}
           </Dado>
+          {/* (extra, E29) As observações, que o Gestor corrige em "Corrigir (Gestor)". */}
+          {d.observacoes && <Dado rotulo="Observações (extra)">{d.observacoes}</Dado>}
         </dl>
       </section>
 
@@ -152,14 +185,18 @@ export default async function PaginaDevolucao({ params, searchParams }: Props) {
         )}
       </section>
 
-      {/* (extra, E27) A ficha da venda do ML, logo depois dos itens: o que foi vendido. Some fora do canal ML. */}
-      <SecaoVenda devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
+      {!apagada && (
+        <>
+          {/* (extra, E27) A ficha da venda do ML, logo depois dos itens: o que foi vendido. Some fora do canal ML. */}
+          <SecaoVenda devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
 
-      {/* Uma seção por fase (contrato §2, P2 item 9), nesta ordem, entre "Itens" e "Histórico". */}
-      <SecaoConferencia devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
-      <SecaoMercadoLivre devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
-      <SecaoFiscal devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
-      <SecaoLote devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
+          {/* Uma seção por fase (contrato §2, P2 item 9), nesta ordem, entre "Itens" e "Histórico". */}
+          <SecaoConferencia devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
+          <SecaoMercadoLivre devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
+          <SecaoFiscal devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
+          <SecaoLote devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />
+        </>
+      )}
 
       <section aria-labelledby="titulo-historico" className={CARTAO}>
         <h2 id="titulo-historico" className="mb-3 text-base font-bold">
@@ -192,8 +229,9 @@ export default async function PaginaDevolucao({ params, searchParams }: Props) {
         </ol>
       </section>
 
-      {ehGestor && d.status === 'PENDENTE_CHEGADA' && <FormularioEncerrar acao={encerrarAcao.bind(null, d.id, d.codigo)} />}
-      {ehGestor && d.naoIdentificada && <FormularioIdentificar acao={identificarAcao.bind(null, d.id, d.codigo)} />}
+      {ehGestor && !apagada && d.naoIdentificada && <FormularioIdentificar acao={identificarAcao.bind(null, d.id, d.codigo)} />}
+      {/* (extra, E29) Corrigir (Gestor): o último bloco da página, recolhido (o cancelar da E24 está dentro, por último). */}
+      {ehGestor && !apagada && <SecaoCorrigir devolucaoId={d.id} codigo={d.codigo} status={d.status} usuario={usuario} />}
     </div>
   );
 }

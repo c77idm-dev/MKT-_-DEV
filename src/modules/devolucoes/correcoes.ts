@@ -12,6 +12,7 @@ import type { StatusContestacao } from '@/modules/mercado-livre/dominio';
 import { decidirResultado, processarResultadoConferencia } from '@/modules/mercado-livre/resultado';
 import { armazenamentoDoProvedor } from '@/modules/midia/armazenamento';
 import { apagarTemporario } from '@/modules/midia/temporarios';
+import { AVISO_NADA_MUDOU, AVISOS_CORRECAO } from './avisos-correcao';
 import { chavePedido, codigosAtivosPorPedido, codigosNaoIdentificadosPorRastreio, mensagemRastreioNaoIdentificado } from './criar';
 import { MOTIVOS_ITEM, rotuloStatus, type DestinoItem, type MotivoItem, type StatusDevolucao, type StatusItem } from './dominio';
 import { ErroDevolucao } from './erros';
@@ -125,9 +126,9 @@ async function contestacaoDa(tx: DbOuTx, devolucaoId: string): Promise<Contestac
 }
 
 function avisoDaContestacao(c: Contestacao): string {
-  if (c.status === 'ENVIADA') return 'A contestação desta devolução já foi enviada ao Mercado Livre e continua lá.';
-  if (c.status === 'FALHOU') return 'A contestação desta devolução falhou no envio e continua em Contestações: revise-a antes de enviar de novo.';
-  return 'O envio da contestação desta devolução ao Mercado Livre já foi pedido: ela continua lá.';
+  if (c.status === 'ENVIADA') return AVISOS_CORRECAO.contestacao_enviada;
+  if (c.status === 'FALHOU') return AVISOS_CORRECAO.contestacao_falhou;
+  return AVISOS_CORRECAO.contestacao_pedida;
 }
 
 /**
@@ -522,7 +523,7 @@ export async function corrigirDados(
       antes.unidades = unidadesAntes;
       depois.unidades = unidadesDepois;
     }
-    if (Object.keys(depois).length === 0) return { aviso: 'Nenhum dado mudou.' };
+    if (Object.keys(depois).length === 0) return { aviso: AVISO_NADA_MUDOU };
 
     await tx
       .update(devolucoes)

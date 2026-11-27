@@ -42,6 +42,8 @@ export async function obterDetalhe(db: DbOuTx, codigo: string, opcoes: OpcoesDet
       observacoes: devolucoes.observacoes,
       apagadaEm: devolucoes.apagadaEm,
       apagadaPorNome: apagador.nome,
+      /** (extra, E29) A tarefa dos 90 dias já apagou de vez o conteúdo (fica a linha mínima da do ML). */
+      expurgadaEm: devolucoes.expurgadaEm,
     })
     .from(devolucoes)
     .leftJoin(criador, eq(criador.id, devolucoes.criadoPor))

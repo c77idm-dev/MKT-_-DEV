@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { StatusDevolucao } from '@/modules/devolucoes/dominio';
 import type { EstadoAcaoGestor } from './acoes';
 import { FormularioEncerrar, TRAVA_CONFIRMACAO_MS } from './AcoesGestor';
 
@@ -24,8 +25,8 @@ afterEach(() => {
 
 const PERGUNTA = 'Tem certeza? A DEV-000437 sai da espera de chegada e isso não se desfaz pela tela.';
 
-function montar(acao = vi.fn(async (): Promise<EstadoAcaoGestor> => ({ erros: [] }))) {
-  const tela = render(<FormularioEncerrar acao={acao} />);
+function montar(acao = vi.fn(async (): Promise<EstadoAcaoGestor> => ({ erros: [] })), status: StatusDevolucao = 'PENDENTE_CHEGADA') {
+  const tela = render(<FormularioEncerrar acao={acao} status={status} />);
   return { acao, ...tela };
 }
 
@@ -39,12 +40,9 @@ function lerPergunta() {
 }
 
 describe('FormularioEncerrar (spec §5.2: Pendente de chegada → Cancelada ou Extraviada, só o Gestor)', () => {
-  it('fica recolhido em "Mais ações do Gestor", fechado por padrão', () => {
+  it('tem o título; o bloco recolhido agora é o "Corrigir (Gestor) (extra)" (PainelCorrigir)', () => {
     const { container } = montar();
-    const bloco = container.querySelector('details');
-    expect(bloco).not.toBeNull();
-    expect(bloco?.open).toBe(false);
-    expect(bloco?.querySelector('summary')?.textContent).toBe('Mais ações do Gestor');
+    expect(container.querySelector('details')).toBeNull();
     expect(screen.getByRole('heading', { name: 'Cancelar ou marcar como extraviada' })).toBeTruthy();
   });
 
@@ -54,6 +52,26 @@ describe('FormularioEncerrar (spec §5.2: Pendente de chegada → Cancelada ou E
     expect(aviso.textContent).toContain('Isto não registra a chegada.');
     expect(aviso.textContent).toContain('(extra)');
     expect(screen.getByRole('link', { name: 'Ir para Receber pacote' }).getAttribute('href')).toBe('/fluxo/recebimento');
+  });
+
+  it('(extra, E29) depois da chegada, a pergunta diz de onde a devolução sai, e o aviso da chegada some', () => {
+    const perguntas: [StatusDevolucao, string][] = [
+      ['AGUARDANDO_CONFERENCIA', 'Tem certeza? A DEV-000437 sai da espera da conferência e isso não se desfaz pela tela.'],
+      ['EM_CONFERENCIA', 'Tem certeza? A DEV-000437 sai da conferência (a trava de quem confere é solta) e isso não se desfaz pela tela.'],
+      [
+        'AGUARDANDO_NF',
+        'Tem certeza? A DEV-000437 sai da etapa Aguardando NF sem NF de devolução e isso não se desfaz pela tela. As unidades do Estoque Bom continuam na planilha Volta ao armazém.',
+      ],
+    ];
+    for (const [status, texto] of perguntas) {
+      const { unmount } = montar(undefined, status);
+      expect(screen.queryByRole('link', { name: 'Ir para Receber pacote' })).toBeNull();
+      fireEvent.click(screen.getByRole('radio', { name: 'Cancelada' }));
+      escreverMotivo();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar devolução' }));
+      expect(screen.getByText(texto)).toBeTruthy();
+      unmount();
+    }
   });
 
   it('nenhuma opção vem marcada e o botão é neutro até a escolha', () => {
