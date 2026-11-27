@@ -70,6 +70,14 @@ export const devolucoes = pgTable(
     /** → CONCLUIDA. */
     concluidaEm: timestamp('concluida_em', { withTimezone: true }),
     atualizadaEm: timestamp('atualizada_em', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * (extra, emenda E29) Apagar esconde, não exclui: com `apagada_em`, a devolução some de tudo (`devolucaoVisivel`) e fica
+     * na lista Apagadas, de onde o Gestor restaura. A sincronização do ML continua achando a linha e não cria outra.
+     */
+    apagadaEm: timestamp('apagada_em', { withTimezone: true }),
+    apagadaPor: uuid('apagada_por').references(() => usuarios.id, { onDelete: 'set null' }),
+    /** (extra, E29) A tarefa dos 90 dias já apagou de vez o conteúdo; na do ML fica só a linha mínima, escondida. */
+    expurgadaEm: timestamp('expurgada_em', { withTimezone: true }),
   },
   (t) => [
     uniqueIndex('devolucoes_canal_externa_uq').on(t.canal, t.devolucaoExternaId),

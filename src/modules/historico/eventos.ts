@@ -4,6 +4,7 @@ import { eventosHistorico, usuarios } from '@/db/schema';
 import { ROTULOS_ACABAMENTO } from './rotulos/acabamento';
 import { ROTULOS_BASE } from './rotulos/base';
 import { ROTULOS_CONFERENCIA } from './rotulos/conferencia';
+import { ROTULOS_CORRECOES } from './rotulos/correcoes';
 import { ROTULOS_DOSSIE } from './rotulos/dossie';
 import { ROTULOS_FISCAL } from './rotulos/fiscal';
 import { ROTULOS_LOTES } from './rotulos/lotes';
@@ -90,6 +91,7 @@ export const ROTULO_ACAO: Record<string, string> = {
   ...ROTULOS_ACABAMENTO,
   ...ROTULOS_RETIRADAS,
   ...ROTULOS_DOSSIE,
+  ...ROTULOS_CORRECOES,
 };
 
 export function rotuloDaAcao(acao: string): string {

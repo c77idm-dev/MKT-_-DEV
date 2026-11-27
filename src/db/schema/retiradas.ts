@@ -27,6 +27,9 @@ export const retiradasFull = pgTable(
     /** Entrada de estoque (ponte com a melhoria 4): a data em que a retirada ficou Conferida. */
     concluidaEm: timestamp('concluida_em', { withTimezone: true }),
     criadoEm: timestamp('criado_em', { withTimezone: true }).notNull().defaultNow(),
+    /** (extra, emenda E29) Apagar esconde, não exclui (`retiradaVisivel`); o Gestor restaura pela lista Apagadas. */
+    apagadaEm: timestamp('apagada_em', { withTimezone: true }),
+    apagadaPor: uuid('apagada_por').references(() => usuarios.id, { onDelete: 'set null' }),
   },
   (t) => [
     index('retiradas_full_etiqueta_idx').on(t.codigoEtiqueta),

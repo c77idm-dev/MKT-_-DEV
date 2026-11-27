@@ -3,6 +3,7 @@ import { ROTULO_ACAO, rotuloDaAcao } from './eventos';
 import { ROTULOS_ACABAMENTO } from './rotulos/acabamento';
 import { ROTULOS_BASE } from './rotulos/base';
 import { ROTULOS_CONFERENCIA } from './rotulos/conferencia';
+import { ROTULOS_CORRECOES } from './rotulos/correcoes';
 import { ROTULOS_DOSSIE } from './rotulos/dossie';
 import { ROTULOS_FISCAL } from './rotulos/fiscal';
 import { ROTULOS_LOTES } from './rotulos/lotes';
@@ -18,6 +19,7 @@ const ARQUIVOS: Record<string, Record<string, string>> = {
   acabamento: ROTULOS_ACABAMENTO,
   retiradas: ROTULOS_RETIRADAS,
   dossie: ROTULOS_DOSSIE,
+  correcoes: ROTULOS_CORRECOES,
 };
 
 // Chaves do contrato §4.7: todas as que os planos das Fases 2 a 6 usam. Os arquivos congelam depois da Parte A (§10, E3).
@@ -58,6 +60,11 @@ const RESERVADAS: Record<string, string[]> = {
   ],
   // Dossiê de provas (PDF) (extra, 19/11; emenda E23): prefixo dossie_.
   dossie: ['dossie_gerado'],
+  // Corrigir (Gestor) e Apagadas (emenda E29, extra).
+  correcoes: [
+    'devolucao_apagada', 'devolucao_restaurada', 'destino_trocado', 'conferencia_reaberta', 'chegada_desfeita', 'dados_corrigidos',
+    'retirada_apagada', 'retirada_restaurada', 'retirada_reaberta',
+  ],
 };
 
 describe('rótulos do histórico (contrato §4.7)', () => {
@@ -80,6 +87,18 @@ describe('rótulos do histórico (contrato §4.7)', () => {
   it('as chaves do dossiê de provas têm o prefixo dossie_', () => {
     for (const chave of Object.keys(ROTULOS_DOSSIE)) expect(chave).toMatch(/^dossie_/);
     expect(rotuloDaAcao('dossie_gerado')).toBe('Dossiê de provas (PDF) gerado');
+  });
+
+  it('(extra, E29) as correções do Gestor e as apagadas têm rótulo em rotuloDaAcao', () => {
+    expect(rotuloDaAcao('devolucao_apagada')).toBe('Devolução apagada (Gestor)');
+    expect(rotuloDaAcao('devolucao_restaurada')).toBe('Devolução restaurada (Gestor)');
+    expect(rotuloDaAcao('destino_trocado')).toBe('Estoque do item trocado (Gestor)');
+    expect(rotuloDaAcao('conferencia_reaberta')).toBe('Conferência reaberta (Gestor)');
+    expect(rotuloDaAcao('chegada_desfeita')).toBe('Chegada desfeita (Gestor)');
+    expect(rotuloDaAcao('dados_corrigidos')).toBe('Dados corrigidos (Gestor)');
+    expect(rotuloDaAcao('retirada_apagada')).toBe('Retirada apagada (Gestor)');
+    expect(rotuloDaAcao('retirada_restaurada')).toBe('Retirada restaurada (Gestor)');
+    expect(rotuloDaAcao('retirada_reaberta')).toBe('Retirada reaberta (Gestor)');
   });
 
   it('o cancelamento desfeito por correção tem rótulo (E24), e não aparece como a chave crua', () => {

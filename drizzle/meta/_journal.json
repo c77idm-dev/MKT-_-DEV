@@ -127,6 +127,13 @@
       "when": 1795538780583,
       "tag": "0017_ficha_venda",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795786134207,
+      "tag": "0018_apagadas",
+      "breakpoints": true
     }
   ]
 }
