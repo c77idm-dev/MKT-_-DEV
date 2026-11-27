@@ -6,8 +6,9 @@ import { ListaDevolucoes } from '@/components/ListaDevolucoes';
 import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, LINK_VOLTAR, VAZIO } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { lerPagina, type ParametrosBusca } from '@/lib/parametros';
+import type { Perfil } from '@/modules/auth/perfis';
 import { pode } from '@/modules/auth/permissoes';
-import { exigirPermissao } from '@/modules/auth/servidor';
+import { exigirOuBancada } from '@/modules/auth/servidor';
 import { buscarDevolucoes } from '@/modules/devolucoes/busca';
 import { statusDaEtapa } from '@/modules/devolucoes/dominio';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
@@ -22,10 +23,13 @@ export async function generateMetadata({ params }: Pick<Props, 'params'>): Promi
   return { title: `${etapa?.titulo ?? 'Etapa'} · Gestão de Devoluções` };
 }
 
-/** Botões do topo de cada etapa (só para quem opera devoluções). */
-function acoesDaEtapa(numero: number, podeOperar: boolean): ReactNode {
-  if (!podeOperar) return null;
+/**
+ * Botões do topo de cada etapa (só para quem opera devoluções). (E29) Criar e importar exigem `cadastrar_devolucoes`, e o
+ * "Recebimento" abre a Bancada.
+ */
+function acoesDaEtapa(numero: number, perfil: Perfil): ReactNode {
   if (numero === 1) {
+    if (!pode(perfil, 'cadastrar_devolucoes')) return null;
     return (
       <>
         <Link href="/fluxo/devolucoes/nova" className={BOTAO_PRIMARIO}>
@@ -37,10 +41,11 @@ function acoesDaEtapa(numero: number, podeOperar: boolean): ReactNode {
       </>
     );
   }
+  if (!pode(perfil, 'operar_devolucoes')) return null;
   if (numero === 2) {
     return (
       <>
-        <Link href="/fluxo/recebimento" className={BOTAO_PRIMARIO}>
+        <Link href="/bancada" className={BOTAO_PRIMARIO}>
           Recebimento
         </Link>
         <Link href="/fluxo/conferencia" className={BOTAO_SECUNDARIO}>
@@ -60,7 +65,7 @@ function acoesDaEtapa(numero: number, podeOperar: boolean): ReactNode {
 }
 
 export default async function PaginaEtapa({ params, searchParams }: Props) {
-  const usuario = await exigirPermissao('ver_listas');
+  const usuario = await exigirOuBancada('acompanhar'); // (E29) o Operador vai para a Bancada
   const { numero } = await params;
   const etapa = ETAPAS.find((e) => String(e.numero) === numero);
   if (!etapa) notFound();
@@ -94,7 +99,7 @@ export default async function PaginaEtapa({ params, searchParams }: Props) {
       total={total}
       pagina={pagina}
       nota={etapa.numero === 2 || etapa.numero === 3 ? 'Urgentes do ML primeiro (extra).' : undefined}
-      acoes={acoesDaEtapa(etapa.numero, pode(usuario.perfil, 'operar_devolucoes'))}
+      acoes={acoesDaEtapa(etapa.numero, usuario.perfil)}
     />
   );
 }

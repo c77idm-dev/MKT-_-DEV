@@ -12,7 +12,7 @@ import { obterDb } from '@/db';
 import { primeiroValor, type ParametrosBusca } from '@/lib/parametros';
 import { carregarAlertas } from '@/modules/acabamento/alertas';
 import { pode, type Acao } from '@/modules/auth/permissoes';
-import { exigirPermissao } from '@/modules/auth/servidor';
+import { exigirOuBancada } from '@/modules/auth/servidor';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { montarQuadro } from '@/modules/devolucoes/quadro';
 import { contarAfetamReputacao } from '@/modules/devolucoes/reputacao';
@@ -45,7 +45,8 @@ const ACOES_FLUXO: (AcaoFluxo & { permissao: Acao })[] = [
 ];
 
 export default async function PaginaFluxo({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
-  const usuario = await exigirPermissao('ver_listas');
+  // (E29) O quadro é de quem acompanha; o Operador vai para a Bancada.
+  const usuario = await exigirOuBancada('acompanhar');
   const textoEtapa = primeiroValor((await searchParams).etapa);
   const pedida = /^\d+$/.test(textoEtapa) ? Number(textoEtapa) : 0;
   const [quadro, alertas, afetamReputacao] = await Promise.all([

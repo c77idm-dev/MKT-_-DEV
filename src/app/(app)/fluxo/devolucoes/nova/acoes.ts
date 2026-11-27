@@ -3,14 +3,15 @@
 import { redirect } from 'next/navigation';
 import { obterDb } from '@/db';
 import { textoDoForm } from '@/lib/formulario';
-import { exigirPermissao } from '@/modules/auth/servidor';
+import { exigirOuBancada } from '@/modules/auth/servidor';
 import { criarDevolucao, itensDoFormulario, validarNovaDevolucao } from '@/modules/devolucoes/criar';
 import { ErroDevolucao } from '@/modules/devolucoes/erros';
 
 export type EstadoNovaDevolucao = { erros: string[] };
 
 export async function criarDevolucaoAcao(_anterior: EstadoNovaDevolucao, dados: FormData): Promise<EstadoNovaDevolucao> {
-  const usuario = await exigirPermissao('operar_devolucoes');
+  // (E29) Só o Gestor cria devolução; o Operador vai para a Bancada.
+  const usuario = await exigirOuBancada('cadastrar_devolucoes');
   const { dados: nova, erros } = validarNovaDevolucao({
     canal: textoDoForm(dados, 'canal'),
     pedido: textoDoForm(dados, 'pedido'),

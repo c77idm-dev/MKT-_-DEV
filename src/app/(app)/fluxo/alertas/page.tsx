@@ -5,14 +5,14 @@ import { CartaoDevolucao } from '@/components/CartaoDevolucao';
 import { ITEM_LISTA, LINK_VOLTAR, VAZIO } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { carregarAlertas, detalhesDosAlertas } from '@/modules/acabamento/alertas';
-import { exigirPermissao } from '@/modules/auth/servidor';
+import { exigirOuBancada } from '@/modules/auth/servidor';
 import { buscarDevolucoes } from '@/modules/devolucoes/busca';
 
 export const metadata: Metadata = { title: 'Alertas · Gestão de Devoluções' };
 
 /** (extra) Todos os alertas do perfil e, por alerta, as devoluções, lotes e contestações a que ele se refere. */
 export default async function PaginaAlertas() {
-  const usuario = await exigirPermissao('ver_listas');
+  const usuario = await exigirOuBancada('acompanhar'); // (E29) o Operador vai para a Bancada
   const db = obterDb();
   const [todos, detalhes] = await Promise.all([carregarAlertas(db, usuario.perfil), detalhesDosAlertas(db, usuario.perfil)]);
   const secoes = await Promise.all(

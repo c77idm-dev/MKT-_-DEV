@@ -6,7 +6,7 @@ import { Selo } from '@/components/Selo';
 import { obterDb } from '@/db';
 import { formatarDataHora } from '@/lib/formatar';
 import type { ParametrosBusca } from '@/lib/parametros';
-import { exigirPermissao } from '@/modules/auth/servidor';
+import { exigirOuBancada } from '@/modules/auth/servidor';
 import type { TomSelo } from '@/modules/devolucoes/selos';
 import { listarVoltaAoArmazem, resumirVoltaAoArmazem } from '@/modules/volta-armazem/consulta';
 import {
@@ -60,10 +60,10 @@ function CartaoVolta({ linha }: { linha: LinhaVolta }) {
 
 /**
  * Melhoria 4: "Estoque Bom" (planilha Volta ao armazém). O que foi para o Estoque Bom no período: unidades BOM das
- * conferências concluídas e itens das retiradas do Full conferidas. Só leitura; todos os perfis (ver_listas).
+ * conferências concluídas e itens das retiradas do Full conferidas. Só leitura; Fiscal e Gestor (acompanhar, E29: o Operador vai para a Bancada).
  */
 export default async function PaginaEstoqueBom({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
-  await exigirPermissao('ver_listas');
+  await exigirOuBancada('acompanhar');
   const periodo = lerPeriodo(await searchParams);
   const db = obterDb();
   // Os cartões: no máximo 201 linhas, as mais recentes primeiro. Os totais vêm de uma consulta agregada; a planilha traz tudo.

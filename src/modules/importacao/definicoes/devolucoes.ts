@@ -69,7 +69,8 @@ export const definicaoDevolucoes: DefinicaoImportacao = {
   tipo: 'devolucoes',
   titulo: 'Devoluções',
   rotuloVoltar: ETAPAS[0].titulo,
-  acao: 'operar_devolucoes',
+  // (E29) Só o Gestor importa devoluções; o Operador só recebe e confere.
+  acao: 'cadastrar_devolucoes',
   voltarPara: '/fluxo/etapa/1',
   rotuloCriados: 'Devoluções criadas',
   rotuloAtualizados: null,

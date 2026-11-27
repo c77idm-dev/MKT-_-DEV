@@ -4,7 +4,7 @@ import { ListaLotes } from '@/components/lotes/ListaLotes';
 import { LINK_VOLTAR } from '@/components/estilos';
 import { obterDb } from '@/db';
 import { lerPagina, type ParametrosBusca } from '@/lib/parametros';
-import { exigirPermissao } from '@/modules/auth/servidor';
+import { exigirOuBancada } from '@/modules/auth/servidor';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { lerFiltrosLotes, listarLotes, opcoesFornecedoresDosLotes } from '@/modules/lotes/consultas';
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: `${TITULO} · Gestão de Devoluções
 
 /** Etapa 5 do PDF: os lotes por fornecedor, só leitura, para todos os perfis. A pendência "Sem fornecedor" fica em /lotes. */
 export default async function PaginaEtapaLotes({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
-  await exigirPermissao('ver_listas');
+  await exigirOuBancada('acompanhar'); // (E29) o Operador vai para a Bancada
   const parametros = await searchParams;
   const filtros = lerFiltrosLotes(parametros);
   const pagina = lerPagina(parametros);

@@ -7,7 +7,7 @@ import { FormularioXmls } from '@/components/fiscal/FormularioXmls';
 import { obterDb } from '@/db';
 import { lerPagina, primeiroValor, type ParametrosBusca } from '@/lib/parametros';
 import { pode } from '@/modules/auth/permissoes';
-import { exigirPermissao } from '@/modules/auth/servidor';
+import { exigirOuBancada } from '@/modules/auth/servidor';
 import { buscarDevolucoes } from '@/modules/devolucoes/busca';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { filtrosParaQuery, lerFiltros, POR_PAGINA_DEVOLUCOES } from '@/modules/devolucoes/filtros';
@@ -23,7 +23,7 @@ const ABA = 'flex min-h-11 items-center justify-center rounded-full border px-4 
 
 /** Etapa 4 do PDF (spec §6.4): abas Estoque Bom e Estoque Problema, ambas com as devoluções em AGUARDANDO_NF. */
 export async function PaginaEstoque({ aba, searchParams }: { aba: DestinoEstoque; searchParams: Promise<ParametrosBusca> }) {
-  const usuario = await exigirPermissao('ver_listas');
+  const usuario = await exigirOuBancada('acompanhar'); // (E29) o Operador vai para a Bancada
   const parametros = await searchParams;
   const filtros = lerFiltros(parametros);
   const pagina = lerPagina(parametros);

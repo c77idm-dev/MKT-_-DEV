@@ -6,9 +6,9 @@ import { lerPeriodo, NOME_ABA, nomeArquivoVolta, planilhaVolta } from '@/modules
 
 export const dynamic = 'force-dynamic';
 
-/** Melhoria 4: planilha "Volta ao armazém" do período (?de=&ate=, padrão hoje). Todos os perfis (ver_listas). */
+/** Melhoria 4: planilha "Volta ao armazém" do período (?de=&ate=, padrão hoje). Fiscal e Gestor (acompanhar, E29). */
 export async function GET(request: Request) {
-  await exigirPermissao('ver_listas');
+  await exigirPermissao('acompanhar');
   const url = new URL(request.url);
   const periodo = lerPeriodo({ de: url.searchParams.get('de') ?? undefined, ate: url.searchParams.get('ate') ?? undefined });
   if (!periodo.valido) {

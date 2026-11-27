@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache';
 import { notFound, redirect } from 'next/navigation';
 import { obterDb } from '@/db';
-import { exigirPermissao } from '@/modules/auth/servidor';
 import { obterDefinicao } from '@/modules/importacao/definicoes';
 import { MENSAGEM_PLANILHA_GRANDE, TAMANHO_MAXIMO_BYTES } from '@/modules/importacao/limites';
 import { ErroPlanilha, lerPlanilha } from '@/modules/importacao/planilha';
@@ -14,6 +13,7 @@ import {
   obterImportacao,
   registrarUpload,
 } from '@/modules/importacao/servico';
+import { exigirDaImportacao } from './permissao';
 
 // `erros` (lista) para reaproveitar useEnvioFormulario: foco e rolagem até a mensagem, e os campos não são limpos.
 export type EstadoUpload = { erros: string[] };
@@ -31,7 +31,7 @@ function mapeamentoDoFormulario(chaves: string[], dados: FormData): Record<strin
 
 export async function enviarPlanilhaAcao(tipo: string, _anterior: EstadoUpload, dados: FormData): Promise<EstadoUpload> {
   const def = definicaoOu404(tipo);
-  const usuario = await exigirPermissao(def.acao);
+  const usuario = await exigirDaImportacao(def);
   const arquivo = dados.get('arquivo');
   if (!(arquivo instanceof File) || arquivo.size === 0) return { erros: ['Escolha a planilha.'] };
   // Retaguarda: o formulário já confere no cliente (acima de ~6 MB o Next recusa o corpo antes da ação). Antes de ler o arquivo: um arquivo grande não deve ocupar memória só para ser recusado.
@@ -49,7 +49,7 @@ export async function enviarPlanilhaAcao(tipo: string, _anterior: EstadoUpload, 
 
 export async function definirMapeamentoAcao(tipo: string, id: string, dados: FormData): Promise<void> {
   const def = definicaoOu404(tipo);
-  await exigirPermissao(def.acao);
+  await exigirDaImportacao(def);
   const db = obterDb();
   const imp = await obterImportacao(db, id, def.tipo);
   if (!imp) notFound();
@@ -69,7 +69,7 @@ export async function confirmarImportacaoAcao(
   dados: FormData,
 ): Promise<EstadoConfirmacao> {
   const def = definicaoOu404(tipo);
-  const usuario = await exigirPermissao(def.acao);
+  const usuario = await exigirDaImportacao(def);
   const db = obterDb();
   const imp = await obterImportacao(db, id, def.tipo);
   if (!imp) notFound();

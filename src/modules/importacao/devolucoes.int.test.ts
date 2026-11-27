@@ -46,8 +46,8 @@ afterAll(async () => {
 });
 
 describe('importação de devoluções', () => {
-  it('é feita por quem opera devoluções e volta para a etapa 1', () => {
-    expect(definicao()).toMatchObject({ acao: 'operar_devolucoes', voltarPara: '/fluxo/etapa/1',
+  it('é feita só pelo Gestor (cadastrar_devolucoes, E29) e volta para a etapa 1', () => {
+    expect(definicao()).toMatchObject({ acao: 'cadastrar_devolucoes', voltarPara: '/fluxo/etapa/1',
       rotuloVoltar: 'Pedidos Pendentes de Chegada',
       rotuloAtualizados: null,
     });

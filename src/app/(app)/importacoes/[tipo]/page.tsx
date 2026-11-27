@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CARTAO, LINK_VOLTAR } from '@/components/estilos';
-import { exigirPermissao } from '@/modules/auth/servidor';
 import { obterDefinicao } from '@/modules/importacao/definicoes';
 import { enviarPlanilhaAcao } from './acoes';
 import { FormularioUpload } from './FormularioUpload';
+import { exigirDaImportacao } from './permissao';
 
 export const metadata: Metadata = { title: 'Importar planilha · Gestão de Devoluções' };
 
@@ -13,7 +13,7 @@ export default async function PaginaImportar({ params }: { params: Promise<{ tip
   const { tipo } = await params;
   const def = obterDefinicao(tipo);
   if (!def) notFound();
-  await exigirPermissao(def.acao);
+  await exigirDaImportacao(def);
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
       <Link href={def.voltarPara} className={LINK_VOLTAR}>
