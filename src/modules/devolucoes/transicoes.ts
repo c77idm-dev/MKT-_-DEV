@@ -10,6 +10,10 @@ type Regra = { de: StatusDevolucao | null; para: StatusDevolucao; atores: readon
 /** Onde a spec diz "Operador", o Gestor também pode (spec §6.9). */
 const QUEM_OPERA: readonly Ator[] = ['OPERADOR', 'GESTOR'];
 
+/** (extra, E29) As etapas depois da chegada e antes da NF, onde o Gestor desfaz a chegada, cancela ou extravia. */
+const ANTES_DA_NF: readonly StatusDevolucao[] = ['AGUARDANDO_CONFERENCIA', 'EM_CONFERENCIA', 'AGUARDANDO_NF'];
+const DESTINOS_DO_GESTOR: readonly StatusDevolucao[] = ['PENDENTE_CHEGADA', 'NO_CD_MARKETPLACE', 'CANCELADA', 'EXTRAVIADA'];
+
 /** Tabela da spec §5.2. Qualquer mudança fora dela é recusada no servidor. */
 export const REGRAS_TRANSICAO: readonly Regra[] = [
   { de: null, para: 'PENDENTE_CHEGADA', atores: ['SISTEMA', 'OPERADOR', 'GESTOR'] },
@@ -27,6 +31,12 @@ export const REGRAS_TRANSICAO: readonly Regra[] = [
   // (extra, emenda E25; decisão do usuário de 23/11) O ML manda de volta à loja o pacote que estava no armazém dele: a
   // leitura na recepção registra a chegada, como a de um pendente. Cancelada e Extraviada continuam sem esse caminho.
   { de: 'NO_CD_MARKETPLACE', para: 'AGUARDANDO_CONFERENCIA', atores: QUEM_OPERA },
+  // (extra, emenda E29) Corrigir (Gestor), só antes da NF autorizada (o serviço confere a NF):
+  // - reabrir a conferência (`reabrirConferencia`);
+  { de: 'AGUARDANDO_NF', para: 'AGUARDANDO_CONFERENCIA', atores: ['GESTOR'] },
+  // - desfazer a chegada (`desfazerChegada`): volta a esperar o pacote, ou à No CD quando a chegada veio de lá (E25);
+  // - cancelar ou marcar como extraviada em qualquer etapa antes da NF (`encerrarPendente`, que estende a E24).
+  ...ANTES_DA_NF.flatMap((de) => DESTINOS_DO_GESTOR.map((para): Regra => ({ de, para, atores: ['GESTOR'] }))),
 ];
 
 export function podeTransitar(p: PedidoTransicao): boolean {

@@ -21,6 +21,13 @@ const PERMITIDAS: [StatusDevolucao | null, StatusDevolucao, Ator[], boolean][] =
   ['NO_CD_MARKETPLACE', 'PENDENTE_CHEGADA', ['SISTEMA'], false],
   // (extra, emenda E25) O pacote que o ML mandou de volta do armazém chega na recepção.
   ['NO_CD_MARKETPLACE', 'AGUARDANDO_CONFERENCIA', ['OPERADOR', 'GESTOR'], false],
+  // (extra, emenda E29) Corrigir (Gestor): reabrir a conferência, desfazer a chegada e cancelar ou extraviar antes da NF.
+  ['AGUARDANDO_NF', 'AGUARDANDO_CONFERENCIA', ['GESTOR'], false],
+  ...(['AGUARDANDO_CONFERENCIA', 'EM_CONFERENCIA', 'AGUARDANDO_NF'] as const).flatMap((de) =>
+    (['PENDENTE_CHEGADA', 'NO_CD_MARKETPLACE', 'CANCELADA', 'EXTRAVIADA'] as const).map(
+      (para): [StatusDevolucao, StatusDevolucao, Ator[], boolean] => [de, para, ['GESTOR'], false],
+    ),
+  ),
 ];
 
 function esperado(de: StatusDevolucao | null, para: StatusDevolucao, ator: Ator, naoIdentificada: boolean): boolean {
@@ -61,6 +68,17 @@ describe('podeTransitar (spec §5.2)', () => {
     // Cancelada e Extraviada continuam sem caminho para a recepção.
     expect(podeTransitar({ de: 'CANCELADA', para: 'AGUARDANDO_CONFERENCIA', ator: 'GESTOR' })).toBe(false);
     expect(podeTransitar({ de: 'EXTRAVIADA', para: 'AGUARDANDO_CONFERENCIA', ator: 'GESTOR' })).toBe(false);
+  });
+
+  it('(extra, E29) só o Gestor reabre a conferência, desfaz a chegada e cancela antes da NF; depois da NF, ninguém', () => {
+    for (const ator of ['SISTEMA', 'OPERADOR', 'FISCAL'] as const) {
+      expect(podeTransitar({ de: 'AGUARDANDO_NF', para: 'AGUARDANDO_CONFERENCIA', ator })).toBe(false);
+      expect(podeTransitar({ de: 'EM_CONFERENCIA', para: 'PENDENTE_CHEGADA', ator })).toBe(false);
+      expect(podeTransitar({ de: 'AGUARDANDO_NF', para: 'CANCELADA', ator })).toBe(false);
+    }
+    expect(podeTransitar({ de: 'AGUARDANDO_CONFERENCIA', para: 'NO_CD_MARKETPLACE', ator: 'GESTOR' })).toBe(true);
+    expect(podeTransitar({ de: 'CONCLUIDA', para: 'CANCELADA', ator: 'GESTOR' })).toBe(false);
+    expect(podeTransitar({ de: 'CONCLUIDA', para: 'AGUARDANDO_CONFERENCIA', ator: 'GESTOR' })).toBe(false);
   });
 
   it('o Fiscal não recebe, não cria e não cancela', () => {

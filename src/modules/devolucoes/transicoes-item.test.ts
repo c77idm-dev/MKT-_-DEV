@@ -18,6 +18,14 @@ const PERMITIDAS: [StatusItem, StatusItem, Ator[]][] = [
   ['SEM_FORNECEDOR', 'AGUARDANDO_NF', ['SISTEMA']],
   ['EM_LOTE', 'ENVIADO', ['FISCAL', 'GESTOR']],
   ['ENVIADO', 'RESOLVIDO', ['FISCAL', 'GESTOR']],
+  // (extra, E29) Corrigir (Gestor): reabrir a conferência e desfazer a chegada devolvem a unidade à conferência.
+  ['AGUARDANDO_NF', 'PENDENTE', ['GESTOR']],
+  ['AUSENTE', 'PENDENTE', ['GESTOR']],
+  // (extra, E29) Trocar o estoque depois da NF: Bom → Problema entra no lote (ou fica sem fornecedor); Problema → Bom sai.
+  ['DISPONIVEL_VENDA', 'EM_LOTE', ['GESTOR']],
+  ['DISPONIVEL_VENDA', 'SEM_FORNECEDOR', ['GESTOR']],
+  ['EM_LOTE', 'DISPONIVEL_VENDA', ['GESTOR']],
+  ['SEM_FORNECEDOR', 'DISPONIVEL_VENDA', ['GESTOR']],
 ];
 
 describe('podeTransitarItem (contrato §4.6)', () => {
@@ -34,6 +42,17 @@ describe('podeTransitarItem (contrato §4.6)', () => {
 
   it('o Fiscal não conclui a conferência', () => {
     expect(podeTransitarItem({ de: 'PENDENTE', para: 'AGUARDANDO_NF', ator: 'FISCAL' })).toBe(false);
+  });
+
+  it('(extra, E29) só o Gestor devolve a unidade à conferência e troca o estoque depois da NF', () => {
+    for (const ator of ['SISTEMA', 'OPERADOR', 'FISCAL'] as const) {
+      expect(podeTransitarItem({ de: 'AGUARDANDO_NF', para: 'PENDENTE', ator })).toBe(false);
+      expect(podeTransitarItem({ de: 'DISPONIVEL_VENDA', para: 'EM_LOTE', ator })).toBe(false);
+      expect(podeTransitarItem({ de: 'EM_LOTE', para: 'DISPONIVEL_VENDA', ator })).toBe(false);
+    }
+    // O que já saiu do sistema não volta.
+    expect(podeTransitarItem({ de: 'ENVIADO', para: 'DISPONIVEL_VENDA', ator: 'GESTOR' })).toBe(false);
+    expect(podeTransitarItem({ de: 'RESOLVIDO', para: 'DISPONIVEL_VENDA', ator: 'GESTOR' })).toBe(false);
   });
 });
 

@@ -26,6 +26,15 @@ export const REGRAS_TRANSICAO_ITEM: readonly RegraItem[] = [
   { de: 'SEM_FORNECEDOR', para: 'AGUARDANDO_NF', atores: ['SISTEMA'] },
   { de: 'EM_LOTE', para: 'ENVIADO', atores: QUEM_GERE_LOTES },
   { de: 'ENVIADO', para: 'RESOLVIDO', atores: QUEM_GERE_LOTES },
+  // (extra, emenda E29) Corrigir (Gestor). Reabrir a conferência e desfazer a chegada devolvem a unidade à conferência:
+  { de: 'AGUARDANDO_NF', para: 'PENDENTE', atores: ['GESTOR'] },
+  { de: 'AUSENTE', para: 'PENDENTE', atores: ['GESTOR'] },
+  // Trocar o estoque depois da NF: Bom → Problema entra no lote Aberto (ou fica sem fornecedor), pela mesma regra da
+  // autorização da NF; Problema → Bom sai do lote Aberto. O que já foi enviado ou resolvido não volta.
+  { de: 'DISPONIVEL_VENDA', para: 'EM_LOTE', atores: ['GESTOR'] },
+  { de: 'DISPONIVEL_VENDA', para: 'SEM_FORNECEDOR', atores: ['GESTOR'] },
+  { de: 'EM_LOTE', para: 'DISPONIVEL_VENDA', atores: ['GESTOR'] },
+  { de: 'SEM_FORNECEDOR', para: 'DISPONIVEL_VENDA', atores: ['GESTOR'] },
 ];
 
 export function podeTransitarItem(p: PedidoTransicaoItem): boolean {
