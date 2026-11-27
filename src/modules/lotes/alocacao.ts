@@ -54,7 +54,8 @@ export type PedidoInclusao = {
   itemId: string;
   unidade: number;
   devolucaoId: string;
-  de: 'AGUARDANDO_NF' | 'SEM_FORNECEDOR';
+  /** (extra, E29) DISPONIVEL_VENDA: o Gestor troca Bom → Problema depois da NF (`trocarDestinoItem`). */
+  de: 'AGUARDANDO_NF' | 'SEM_FORNECEDOR' | 'DISPONIVEL_VENDA';
   fornecedorId: string;
   ator: Ator;
   usuarioId: string | null;
@@ -94,6 +95,50 @@ export async function incluirNoLote(tx: DbOuTx, p: PedidoInclusao): Promise<{ lo
   return { loteId: lote.id, loteCodigo: lote.codigo };
 }
 
+export type UnidadeParaAlocar = { id: string; unidade: number; produtoRecebidoId: string | null; fornecedorId: string | null };
+export type Alocacao = { status: 'EM_LOTE'; loteId: string; loteCodigo: string } | { status: 'SEM_FORNECEDOR' };
+
+/**
+ * Spec §5.3: a unidade PROBLEMA vai para o lote ABERTO do fornecedor do produto recebido (criando o lote se preciso); sem
+ * fornecedor, fica SEM_FORNECEDOR, pendência do Fiscal e do Gestor. É a regra da autorização da NF de devolução (de
+ * AGUARDANDO_NF, pelo sistema) e (extra, E29) da troca Bom → Problema pelo Gestor depois da NF (de DISPONIVEL_VENDA).
+ */
+export async function alocarUnidadeProblema(
+  tx: DbOuTx,
+  devolucaoId: string,
+  item: UnidadeParaAlocar,
+  p: { de: 'AGUARDANDO_NF' | 'DISPONIVEL_VENDA'; ator: Ator; usuarioId: string | null; agora: Date },
+): Promise<Alocacao> {
+  if (item.fornecedorId) {
+    const lote = await incluirNoLote(tx, {
+      itemId: item.id,
+      unidade: item.unidade,
+      devolucaoId,
+      de: p.de,
+      fornecedorId: item.fornecedorId,
+      ator: p.ator,
+      usuarioId: p.usuarioId,
+      agora: p.agora,
+    });
+    return { status: 'EM_LOTE', ...lote };
+  }
+  exigirTransicaoItem({ de: p.de, para: 'SEM_FORNECEDOR', ator: p.ator });
+  await tx.update(itensDevolucao).set({ status: 'SEM_FORNECEDOR' }).where(eq(itensDevolucao.id, item.id));
+  await registrarEvento(tx, {
+    entidade: 'item',
+    entidadeId: item.id,
+    acao: 'item_status',
+    de: p.de,
+    para: 'SEM_FORNECEDOR',
+    usuarioId: p.usuarioId,
+    em: p.agora,
+    dados: {
+      motivo: item.produtoRecebidoId ? 'Produto recebido sem fornecedor no cadastro' : 'Produto recebido desconhecido',
+    },
+  });
+  return { status: 'SEM_FORNECEDOR' };
+}
+
 /** Spec §5.3: na autorização da NF de devolução, cada unidade PROBLEMA vai para o lote do fornecedor do produto recebido. */
 export async function alocarItensProblema(tx: DbOuTx, devolucaoId: string, agora: Date): Promise<{ alocadas: number; semFornecedor: number }> {
   const pendentes = await tx
@@ -111,35 +156,9 @@ export async function alocarItensProblema(tx: DbOuTx, devolucaoId: string, agora
   let alocadas = 0;
   let semFornecedor = 0;
   for (const item of pendentes) {
-    if (item.fornecedorId) {
-      await incluirNoLote(tx, {
-        itemId: item.id,
-        unidade: item.unidade,
-        devolucaoId,
-        de: 'AGUARDANDO_NF',
-        fornecedorId: item.fornecedorId,
-        ator: 'SISTEMA',
-        usuarioId: null,
-        agora,
-      });
-      alocadas += 1;
-      continue;
-    }
-    exigirTransicaoItem({ de: 'AGUARDANDO_NF', para: 'SEM_FORNECEDOR', ator: 'SISTEMA' });
-    await tx.update(itensDevolucao).set({ status: 'SEM_FORNECEDOR' }).where(eq(itensDevolucao.id, item.id));
-    await registrarEvento(tx, {
-      entidade: 'item',
-      entidadeId: item.id,
-      acao: 'item_status',
-      de: 'AGUARDANDO_NF',
-      para: 'SEM_FORNECEDOR',
-      usuarioId: null,
-      em: agora,
-      dados: {
-        motivo: item.produtoRecebidoId ? 'Produto recebido sem fornecedor no cadastro' : 'Produto recebido desconhecido',
-      },
-    });
-    semFornecedor += 1;
+    const r = await alocarUnidadeProblema(tx, devolucaoId, item, { de: 'AGUARDANDO_NF', ator: 'SISTEMA', usuarioId: null, agora });
+    if (r.status === 'EM_LOTE') alocadas += 1;
+    else semFornecedor += 1;
   }
   return { alocadas, semFornecedor };
 }
