@@ -73,9 +73,13 @@ async function statusNoBanco(codigo: string): Promise<string | undefined> {
   });
 }
 
-/** Emenda E24: o cancelamento fica recolhido em "Mais ações do Gestor", fechado por padrão. */
+/**
+ * Emenda E24: o cancelamento fica recolhido, fechado por padrão. (extra, E29) O bloco passou a ser o "Corrigir (Gestor)
+ * (extra)", com o cancelamento por último.
+ */
+const NOME_BLOCO = 'Corrigir (Gestor) (extra)';
 function blocoMaisAcoes(page: Page): Locator {
-  return page.locator('details', { hasText: 'Mais ações do Gestor' });
+  return page.locator('details', { hasText: NOME_BLOCO });
 }
 
 function pergunta(codigo: string): string {
@@ -99,12 +103,12 @@ function contarEnvios(page: Page): () => number {
   return () => envios;
 }
 
-/** Gestor no detalhe, com "Mais ações do Gestor" aberto, "Cancelada" escolhida e o motivo escrito. */
+/** Gestor no detalhe, com o "Corrigir (Gestor) (extra)" aberto, "Cancelada" escolhida e o motivo escrito. */
 async function prepararCancelamento(page: Page, codigo: string): Promise<Locator> {
   await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto(`/fluxo/devolucoes/${codigo}`);
   const bloco = blocoMaisAcoes(page);
-  await bloco.getByText('Mais ações do Gestor').click();
+  await bloco.getByText(NOME_BLOCO).click();
   await aguardarHidratacao(bloco.getByRole('button', { name: 'Escolha uma opção' }));
   await page.getByRole('radio', { name: 'Cancelada' }).check();
   await page.getByLabel('Motivo').fill('Toque sem querer');
@@ -126,12 +130,12 @@ async function cobre(elemento: Locator, x: number, y: number): Promise<boolean> 
   return elemento.evaluate((el, [px, py]) => el.contains(document.elementFromPoint(px, py)), [x, y] as const);
 }
 
-test('gestor cancela uma devolução pendente em "Mais ações do Gestor", confirma, e o histórico mostra o motivo', async ({ page }) => {
+test('gestor cancela uma devolução pendente no "Corrigir (Gestor) (extra)", confirma, e o histórico mostra o motivo', async ({ page }) => {
   const codigo = await devolucaoPendente();
   await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto(`/fluxo/devolucoes/${codigo}`);
   const bloco = blocoMaisAcoes(page);
-  const resumo = bloco.getByText('Mais ações do Gestor');
+  const resumo = bloco.getByText(NOME_BLOCO);
 
   // Fechado por padrão: nada do cancelamento à vista, e o resumo é um alvo de toque de 44 px ou mais.
   await expect(resumo).toBeVisible();
@@ -177,7 +181,8 @@ test('gestor cancela uma devolução pendente em "Mais ações do Gestor", confi
   await expect(page.getByRole('link', { name: '← Fluxo' })).toBeVisible();
   await expect(page.getByText('Pendente de chegada → Cancelada')).toBeVisible();
   await expect(page.getByText('Motivo: Cliente desistiu da devolução')).toBeVisible();
-  await expect(page.getByText('Mais ações do Gestor')).toHaveCount(0);
+  // Cancelada, o bloco do cancelamento some (o Corrigir continua, com o que vale para a cancelada).
+  await expect(page.getByRole('heading', { name: 'Cancelar ou marcar como extraviada' })).toHaveCount(0);
   expect(await statusNoBanco(codigo)).toBe('CANCELADA');
 });
 
@@ -186,7 +191,7 @@ test('gestor marca como extraviada: "Voltar" não envia, e só o "Sim" muda o st
   await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto(`/fluxo/devolucoes/${codigo}`);
   const bloco = blocoMaisAcoes(page);
-  await bloco.getByText('Mais ações do Gestor').click();
+  await bloco.getByText(NOME_BLOCO).click();
   await aguardarHidratacao(bloco.getByRole('button', { name: 'Escolha uma opção' }));
   await page.getByRole('radio', { name: 'Extraviada' }).check();
   await page.getByLabel('Motivo').fill('Correios confirmaram o extravio');
@@ -274,13 +279,13 @@ test('computador: Enter numa opção, com a pergunta aberta, não cancela (o "Si
   await nadaEnviado(page, bloco, codigo, envios);
 });
 
-test('o Operador vê o detalhe da pendente sem "Mais ações do Gestor"', async ({ page }) => {
+test('o Operador vê o detalhe da pendente sem o "Corrigir (Gestor) (extra)"', async ({ page }) => {
   const codigo = await devolucaoPendente();
   await entrarComo(page, USUARIOS_E2E.operador);
   await page.goto(`/fluxo/devolucoes/${codigo}`);
   await expect(page.getByRole('heading', { level: 1, name: codigo })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Histórico' })).toBeVisible();
-  await expect(page.getByText('Mais ações do Gestor')).toHaveCount(0);
+  await expect(page.getByText(NOME_BLOCO)).toHaveCount(0);
   await expect(page.getByRole('radio', { name: 'Cancelada' })).toHaveCount(0);
 });
 
@@ -289,7 +294,7 @@ test('o Fiscal vê o detalhe, sem as ações do Gestor, e não cadastra devoluç
   await entrarComo(page, USUARIOS_E2E.fiscal);
   await page.goto(`/fluxo/devolucoes/${codigo}`);
   await expect(page.getByRole('heading', { level: 1, name: codigo })).toBeVisible();
-  await expect(page.getByText('Mais ações do Gestor')).toHaveCount(0);
+  await expect(page.getByText(NOME_BLOCO)).toHaveCount(0);
   await expect(page.getByRole('radio', { name: 'Cancelada' })).toHaveCount(0);
   await paginaNaoEncontrada(page, '/fluxo/devolucoes/nova');
 });
