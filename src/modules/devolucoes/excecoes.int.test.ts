@@ -57,11 +57,15 @@ describe('encerrarPendente (spec §5.2: Pendente de chegada → Cancelada ou Ext
     await expect(encerrarPendente(db, d.id, 'CANCELADA', ' a ', gestor)).rejects.toThrow('Explique o motivo (pelo menos 3 letras).');
   });
 
-  it('só encerra o que ainda está pendente de chegada', async () => {
+  it('só encerra antes da NF (E29 estendeu às etapas 2, 3 e 4; a concluída e a já encerrada ficam)', async () => {
     const d = await criarDevolucaoTeste(db, operador, { rastreio: 'BR900' });
     await receberPorRastreio(db, 'BR900', operador);
-    await expect(encerrarPendente(db, d.id, 'CANCELADA', 'Tarde demais', gestor)).rejects.toThrow(
-      new ErroDevolucao('Só dá para cancelar ou marcar como extraviada uma devolução Pendente de chegada.'),
+    await encerrarPendente(db, d.id, 'CANCELADA', 'Chegou, mas o cliente desistiu', gestor);
+    expect(await statusDe(d.id)).toBe('CANCELADA');
+    await expect(encerrarPendente(db, d.id, 'EXTRAVIADA', 'Tarde demais', gestor)).rejects.toThrow(
+      new ErroDevolucao(
+        'Só dá para cancelar ou marcar como extraviada uma devolução antes da NF (Pendente de chegada, Aguardando conferência, Em conferência ou Aguardando NF).',
+      ),
     );
   });
 

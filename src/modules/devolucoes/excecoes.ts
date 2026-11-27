@@ -1,6 +1,6 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
-import { devolucoes, itensDevolucao } from '@/db/schema';
+import { devolucoes, itensDevolucao, notasFiscais } from '@/db/schema';
 import { ehUuid } from '@/lib/uuid';
 import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { pode } from '@/modules/auth/permissoes';
@@ -17,13 +17,38 @@ import {
   validarNovaDevolucao,
   type EntradaNovaDevolucao,
 } from './criar';
-import { LIMITE_UNIDADES_DEVOLUCAO } from './dominio';
+import { LIMITE_UNIDADES_DEVOLUCAO, type StatusDevolucao } from './dominio';
 import { ErroDevolucao } from './erros';
 import { exigirTransicao } from './transicoes';
 
+const MENSAGEM_NOTA_ATIVA = {
+  PROCESSANDO: 'A NF de devolução está em processamento: espere o resultado antes de corrigir.',
+  AUTORIZADA: 'A devolução tem NF de devolução autorizada: o Fiscal cancela a NF antes.',
+} as const;
+
+/**
+ * (extra, emenda E29) O que já saiu do sistema não volta: as correções do Gestor que mexem na conferência ou no status
+ * recusam a devolução com NF de devolução autorizada (o Fiscal cancela antes) ou ainda em processamento (a autorização
+ * mudaria a devolução por baixo da correção). A rejeitada não conta: ela só sai de novo em Aguardando NF.
+ */
+export async function exigirSemNotaAtiva(tx: DbOuTx, devolucaoId: string): Promise<void> {
+  const [nota] = await tx
+    .select({ situacao: notasFiscais.situacao })
+    .from(notasFiscais)
+    .where(and(eq(notasFiscais.devolucaoId, devolucaoId), inArray(notasFiscais.situacao, ['PROCESSANDO', 'AUTORIZADA'])))
+    .limit(1);
+  if (nota) throw new ErroDevolucao(MENSAGEM_NOTA_ATIVA[nota.situacao as keyof typeof MENSAGEM_NOTA_ATIVA]);
+}
+
+/** Onde o Gestor cancela ou marca como extraviada: antes da chegada (spec §5.2) e, desde a E29 (extra), antes da NF. */
+const ENCERRAVEIS: readonly StatusDevolucao[] = ['PENDENTE_CHEGADA', 'AGUARDANDO_CONFERENCIA', 'EM_CONFERENCIA', 'AGUARDANDO_NF'];
+const MENSAGEM_SO_GESTOR = 'Só o Gestor cancela ou marca como extraviada uma devolução.';
+
 /**
  * Spec §5.2: Pendente de chegada → Cancelada ou Extraviada, por ação manual do Gestor, com motivo no histórico.
- * O UPDATE é condicional ao status: se dois Gestores agem ao mesmo tempo, só um vence e só um evento é gravado.
+ * (extra, emenda E29) Vale também em Aguardando conferência, Em conferência e Aguardando NF (sem NF em processamento ou
+ * autorizada), só para o Gestor, e solta a trava da conferência. O nome continua o da E24.
+ * A devolução é lida com trava (FOR UPDATE): se dois Gestores agem ao mesmo tempo, só um vence e só um evento é gravado.
  */
 export async function encerrarPendente(
   db: DbOuTx,
@@ -33,30 +58,42 @@ export async function encerrarPendente(
   usuario: UsuarioSessao,
   agora: Date = new Date(),
 ): Promise<void> {
-  exigirTransicao({ de: 'PENDENTE_CHEGADA', para, ator: usuario.perfil }, 'Só o Gestor cancela ou marca como extraviada uma devolução.');
+  exigirTransicao({ de: 'PENDENTE_CHEGADA', para, ator: usuario.perfil }, MENSAGEM_SO_GESTOR);
   const motivo = motivoBruto.trim();
   if (motivo.length < 3) throw new ErroDevolucao('Explique o motivo (pelo menos 3 letras).');
   if (motivo.length > 500) throw new ErroDevolucao('Motivo: no máximo 500 caracteres.');
   if (!ehUuid(id)) throw new ErroDevolucao('Devolução não encontrada.');
   await db.transaction(async (tx) => {
-    const [atualizada] = await tx
-      .update(devolucoes)
-      .set({ status: para, atualizadaEm: agora })
-      .where(and(eq(devolucoes.id, id), eq(devolucoes.status, 'PENDENTE_CHEGADA'), devolucaoVisivel))
-      .returning({ id: devolucoes.id });
-    if (!atualizada) {
-      const [existe] = await tx.select({ id: devolucoes.id }).from(devolucoes).where(and(eq(devolucoes.id, id), devolucaoVisivel)).limit(1);
-      if (!existe) throw new ErroDevolucao('Devolução não encontrada.');
-      throw new ErroDevolucao('Só dá para cancelar ou marcar como extraviada uma devolução Pendente de chegada.');
+    const [d] = await tx
+      .select({ status: devolucoes.status, conferenteId: devolucoes.conferenteId })
+      .from(devolucoes)
+      .where(and(eq(devolucoes.id, id), devolucaoVisivel))
+      .for('update');
+    if (!d) throw new ErroDevolucao('Devolução não encontrada.');
+    if (!ENCERRAVEIS.includes(d.status)) {
+      throw new ErroDevolucao(
+        'Só dá para cancelar ou marcar como extraviada uma devolução antes da NF (Pendente de chegada, Aguardando conferência, Em conferência ou Aguardando NF).',
+      );
     }
+    exigirTransicao({ de: d.status, para, ator: usuario.perfil }, MENSAGEM_SO_GESTOR);
+    if (d.status === 'AGUARDANDO_NF') await exigirSemNotaAtiva(tx, id);
+    const soltarTrava = d.status === 'EM_CONFERENCIA';
+    await tx
+      .update(devolucoes)
+      .set({ status: para, atualizadaEm: agora, ...(soltarTrava ? { conferenteId: null, conferenciaIniciadaEm: null } : {}) })
+      .where(eq(devolucoes.id, id));
     await registrarEvento(tx, {
       entidade: 'devolucao',
       entidadeId: id,
       acao: para === 'CANCELADA' ? 'cancelada' : 'extraviada',
-      de: 'PENDENTE_CHEGADA',
+      de: d.status,
       para,
       usuarioId: usuario.id,
-      dados: { motivo },
+      dados: {
+        motivo,
+        antes: { status: d.status, ...(soltarTrava ? { conferenteId: d.conferenteId } : {}) },
+        depois: { status: para, ...(soltarTrava ? { conferenteId: null } : {}) },
+      },
       em: agora,
     });
   });

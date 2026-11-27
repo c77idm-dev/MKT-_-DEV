@@ -1,6 +1,6 @@
-import { and, eq, ne } from 'drizzle-orm';
-import type { Db } from '@/db/client';
-import { devolucoes, evidencias, itensDevolucao } from '@/db/schema';
+import { and, count, eq, inArray, ne } from 'drizzle-orm';
+import type { Db, DbOuTx } from '@/db/client';
+import { devolucoes, eventosHistorico, evidencias, itensDevolucao } from '@/db/schema';
 import type { UsuarioSessao } from '@/modules/auth/usuarios';
 import { lerConfiguracao } from '@/modules/configuracoes/ler';
 import { exigirTransicao } from '@/modules/devolucoes/transicoes';
@@ -11,6 +11,21 @@ import { ErroConclusao, ErroConferencia } from './erros';
 import { unidadesDaDevolucao } from './itens';
 import { pendenciasDaConclusao } from './regras';
 import { exigirConferente } from './trava';
+
+/** (extra, E29) Quantas vezes o Gestor devolveu esta devolução à conferência (reabriu ou desfez a chegada). */
+async function rodadasDeCorrecao(tx: DbOuTx, devolucaoId: string): Promise<number> {
+  const [{ total }] = await tx
+    .select({ total: count() })
+    .from(eventosHistorico)
+    .where(
+      and(
+        eq(eventosHistorico.entidade, 'devolucao'),
+        eq(eventosHistorico.entidadeId, devolucaoId),
+        inArray(eventosHistorico.acao, ['conferencia_reaberta', 'chegada_desfeita']),
+      ),
+    );
+  return total;
+}
 
 /**
  * Fim da conferência (contrato §5.4). Numa transação: unidades PENDENTE → AGUARDANDO_NF (com destino) ou AUSENTE,
@@ -88,7 +103,10 @@ export async function concluirConferencia(
     }
 
     if (d.canal === 'MERCADO_LIVRE') {
-      await obterFila().enviar('ml.enviar-resultado', { devolucaoId }, { tx, chaveUnica: devolucaoId });
+      // (extra, E29) Depois de o Gestor reabrir a conferência ou desfazer a chegada, a nova conclusão manda o resultado de
+      // novo: a chave da fila ganha o número da rodada (a primeira continua com a chave antiga, o id da devolução).
+      const rodada = await rodadasDeCorrecao(tx, devolucaoId);
+      await obterFila().enviar('ml.enviar-resultado', { devolucaoId }, { tx, chaveUnica: rodada === 0 ? devolucaoId : `${devolucaoId}:${rodada}` });
     }
     return { status };
   });
