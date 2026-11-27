@@ -3,11 +3,19 @@ import type { DbOuTx } from '@/db/client';
 import { devolucoes } from '@/db/schema';
 import type { DestinoEstoque } from '@/modules/fiscal/dominio';
 import { resumoLotesQuadro, type CartaoLoteVista } from '@/modules/lotes/consultas';
-import { buscarDevolucoes, type ResumoDevolucao } from './busca';
+import { buscarDevolucoes, type OpcoesBusca, type ResumoDevolucao } from './busca';
 import { statusDaEtapa } from './dominio';
 import { ETAPAS } from './etapas';
 
 export const CARTOES_POR_COLUNA = 5;
+
+/**
+ * A ordem da lista de cada etapa: "recentes" (spec §5.2), menos a etapa 2, por quem chegou primeiro; nas etapas 2 e 3, as
+ * urgentes do ML primeiro (extra). A Bancada do Operador (E29) usa a da etapa 2.
+ */
+export function ordemDaEtapa(numero: number): Pick<OpcoesBusca, 'ordem' | 'urgentesPrimeiro'> {
+  return { ordem: numero === 2 ? 'chegada' : 'recentes', urgentesPrimeiro: numero === 2 || numero === 3 };
+}
 
 /** Nota da etapa 5 que a página /fluxo/etapa/[numero] (congelada) ainda importa. */
 export const NOTA_ETAPA_LOTES = 'Os lotes por fornecedor aparecem aqui quando a conferência estiver pronta.';
@@ -56,7 +64,7 @@ export async function montarQuadro(db: DbOuTx, agora: Date = new Date()): Promis
       const { devolucoes: cartoes, total } = await buscarDevolucoes(
         db,
         {},
-        { status, ordem: etapa.numero === 2 ? 'chegada' : 'recentes', porPagina: CARTOES_POR_COLUNA, agora, urgentesPrimeiro: etapa.numero === 2 || etapa.numero === 3 },
+        { status, ...ordemDaEtapa(etapa.numero), porPagina: CARTOES_POR_COLUNA, agora },
       );
       const coluna: ColunaQuadro = { numero: etapa.numero, titulo: etapa.titulo, total, cartoes, href };
       return etapa.numero === 4 ? { ...coluna, estoque: await contarEstoque(db) } : coluna;

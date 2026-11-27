@@ -13,7 +13,7 @@ import { buscarDevolucoes } from '@/modules/devolucoes/busca';
 import { statusDaEtapa } from '@/modules/devolucoes/dominio';
 import { ETAPAS } from '@/modules/devolucoes/etapas';
 import { lerFiltros } from '@/modules/devolucoes/filtros';
-import { NOTA_ETAPA_LOTES } from '@/modules/devolucoes/quadro';
+import { NOTA_ETAPA_LOTES, ordemDaEtapa } from '@/modules/devolucoes/quadro';
 
 type Props = { params: Promise<{ numero: string }>; searchParams: Promise<ParametrosBusca> };
 
@@ -86,9 +86,8 @@ export default async function PaginaEtapa({ params, searchParams }: Props) {
   const pagina = lerPagina(parametros);
   const { devolucoes, total } = await buscarDevolucoes(obterDb(), filtros, {
     status: statusDaEtapa(etapa.numero),
-    ordem: etapa.numero === 2 ? 'chegada' : 'recentes',
+    ...ordemDaEtapa(etapa.numero),
     pagina,
-    urgentesPrimeiro: etapa.numero === 2 || etapa.numero === 3,
   });
   return (
     <ListaDevolucoes
