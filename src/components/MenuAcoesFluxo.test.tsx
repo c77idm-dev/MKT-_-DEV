@@ -15,7 +15,7 @@ beforeAll(() => {
 });
 
 const TODAS: AcaoFluxo[] = [
-  { href: '/fluxo/recebimento', quando: 'Chegou um pacote na bancada', rotulo: 'Receber pacote', icone: 'pacote', destaque: true },
+  { href: '/bancada', quando: 'Chegou um pacote na bancada', rotulo: 'Receber pacote', icone: 'pacote', destaque: true },
   { href: '/fluxo/devolucoes/nova', quando: 'Vai chegar uma devolução', rotulo: 'Nova devolução', icone: 'mais' },
   { href: '/fluxo/retiradas-full', quando: 'Voltou do armazém do ML', rotulo: 'Retiradas do Full', icone: 'caminhao' },
   { href: '/fluxo/estoque-bom', quando: 'Ver o que volta para venda', rotulo: 'Planilha Volta ao armazém', icone: 'planilha' },

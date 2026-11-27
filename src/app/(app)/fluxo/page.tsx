@@ -23,20 +23,22 @@ export const metadata: Metadata = { title: 'Fluxo · Gestão de Devoluções' };
  * Opção C (decisão do usuário em 19/11/2026): o menu "O que você quer fazer?" substitui as 4 entradas soltas no topo
  * (Recebimento, Nova devolução, Retiradas do Full e Planilha Volta ao armazém). Cada perfil vê só o que pode usar;
  * o Fiscal chega às Retiradas do Full ((extra), melhoria 3) e à planilha por aqui.
+ * (E29) O Operador não vê o Fluxo (a Bancada é a tela dele); o "Receber pacote" do Gestor abre a Bancada, a Nova
+ * devolução é só do Gestor (cadastrar_devolucoes) e a planilha, de quem acompanha.
  */
 const ACOES_FLUXO: (AcaoFluxo & { permissao: Acao })[] = [
   {
     permissao: 'operar_devolucoes',
-    href: '/fluxo/recebimento',
+    href: '/bancada',
     quando: 'Chegou um pacote na bancada',
     rotulo: 'Receber pacote',
     icone: 'pacote',
     destaque: true,
   },
-  { permissao: 'operar_devolucoes', href: '/fluxo/devolucoes/nova', quando: 'Vai chegar uma devolução', rotulo: 'Nova devolução', icone: 'mais' },
+  { permissao: 'cadastrar_devolucoes', href: '/fluxo/devolucoes/nova', quando: 'Vai chegar uma devolução', rotulo: 'Nova devolução', icone: 'mais' },
   { permissao: 'ver_listas', href: '/fluxo/retiradas-full', quando: 'Voltou do armazém do ML', rotulo: 'Retiradas do Full', icone: 'caminhao' },
   {
-    permissao: 'ver_listas',
+    permissao: 'acompanhar',
     href: '/fluxo/estoque-bom',
     quando: 'Ver o que volta para venda',
     rotulo: 'Planilha Volta ao armazém',
