@@ -6,9 +6,9 @@ import type { EstadoRecebimento } from './acoes';
  *
  * (extra, E27) Também com a ficha (ou a lista) achada pelo número do pedido na tela: a câmera não manda nada, nem o
  * mesmo pedido nem outro código da mesma etiqueta (o número do envio novo do armazém, o rastreio novo ou o QR). Sem
- * isso, um código que o sistema não conhece trocaria a ficha por "Rastreio não encontrado" (e o caminho oferecido
- * criaria uma não identificada a mais), e um QR longo, por um erro, antes do toque. A pessoa toca em "Dar chegada" ou
- * digita outro código no campo, como no "Rastreio não encontrado".
+ * isso, um código que o sistema não conhece trocaria a ficha pelo "Rastreio não encontrado" (desde a E29, a pergunta
+ * "De onde veio este pacote?"), e o caminho oferecido criaria uma não identificada a mais; um QR longo, por um erro,
+ * antes do toque. A pessoa toca em "Dar chegada" ou digita outro código no campo, como na pergunta "De onde veio".
  */
 export function podeAceitarLeitura(pendente: boolean, estado: EstadoRecebimento): boolean {
   return !pendente && estado.tipo !== 'nao_encontrada' && estado.tipo !== 'escolher';
@@ -75,4 +75,16 @@ export function comAvisoDoPedido(anterior: EstadoRecebimento, aindaEsperam: read
   const semAviso = { ...cartao };
   delete semAviso.aindaEsperam;
   return semAviso;
+}
+
+/**
+ * (E29) "Próximo pacote" na Bancada tira o cartão verde da tela, mas não do estado da ação: a próxima leitura ainda é
+ * comparada com ele no servidor, e todas as proteções da câmera acima continuam valendo (a etiqueta pode estar diante
+ * da câmera ainda). Quando a câmera relê essa etiqueta e o servidor devolve o mesmo cartão, igual (um objeto novo a cada
+ * resposta: vale o conteúdo), ele continua fora da tela. Com o aviso das devoluções do pedido que ainda esperam o pacote
+ * (comAvisoDoPedido), o cartão volta: o aviso é novo. Qualquer outra resposta aparece.
+ */
+export function cartaoDescartado(descartado: EstadoRecebimento | null, estado: EstadoRecebimento): boolean {
+  if (!descartado || descartado.tipo !== 'sucesso' || estado.tipo !== 'sucesso') return false;
+  return descartado === estado || JSON.stringify(descartado) === JSON.stringify(estado);
 }

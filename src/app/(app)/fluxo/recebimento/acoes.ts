@@ -65,6 +65,7 @@ function estadoDaResposta(r: Exclude<ResultadoRecebimento, { tipo: 'escolher' }>
   switch (r.tipo) {
     case 'recebidas':
       revalidatePath('/fluxo');
+      revalidatePath('/bancada'); // (E29) a fila da Bancada
       return {
         tipo: 'sucesso',
         titulo: 'Chegada registrada',
@@ -112,6 +113,7 @@ export async function registrarChegadaAcao(anterior: EstadoRecebimento, dados: F
     if (intencao === 'criar_nao_identificada') {
       const criada = await criarNaoIdentificada(db, rastreio, usuario);
       revalidatePath('/fluxo');
+      revalidatePath('/bancada'); // (E29) a fila da Bancada
       return {
         tipo: 'sucesso',
         titulo: 'Pacote não identificado registrado',

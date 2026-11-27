@@ -323,3 +323,18 @@ describe('registrarChegadaAcao: o amarelo "Este pacote já chegou" diante do nú
     expect(mocks.fichas).not.toHaveBeenCalled();
   });
 });
+
+describe('registrarChegadaAcao na Bancada (E29)', () => {
+  it('a chegada registrada atualiza também a fila da Bancada', async () => {
+    mocks.receber.mockResolvedValue({ tipo: 'recebidas', codigos: ['DEV-000001'], em: new Date('2026-11-27T10:30:00-03:00') });
+    await registrarChegadaAcao(INICIAL, form({ intencao: 'receber', rastreio: 'BR1' }));
+    expect(mocks.revalidar).toHaveBeenCalledWith('/bancada');
+  });
+
+  it('a não identificada ("De cliente, sem cadastro") também', async () => {
+    const { criarNaoIdentificada } = await import('@/modules/devolucoes/recebimento');
+    vi.mocked(criarNaoIdentificada).mockResolvedValue({ id: 'n', codigo: 'DEV-000009' });
+    await registrarChegadaAcao(INICIAL, form({ intencao: 'criar_nao_identificada', rastreio: 'XYZ' }));
+    expect(mocks.revalidar).toHaveBeenCalledWith('/bancada');
+  });
+});

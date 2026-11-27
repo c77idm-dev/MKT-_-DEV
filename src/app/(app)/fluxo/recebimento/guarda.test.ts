@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EstadoRecebimento } from './acoes';
-import { comAvisoDoPedido, mesmaLeituraDaCamera, mesmoPedidoDaCamera, podeAceitarLeitura } from './guarda';
+import { cartaoDescartado, comAvisoDoPedido, mesmaLeituraDaCamera, mesmoPedidoDaCamera, podeAceitarLeitura } from './guarda';
 
 const INICIAL: EstadoRecebimento = { tipo: 'inicial' };
 
@@ -151,5 +151,29 @@ describe('comAvisoDoPedido (extra, E27)', () => {
     expect(comAviso).toEqual({ ...AMARELO_A, aindaEsperam: ['DEV-000002'] });
     expect(comAvisoDoPedido(comAviso, ['DEV-000002'])).toBe(comAviso);
     expect(comAvisoDoPedido(comAviso, [])).toEqual(AMARELO_A);
+  });
+});
+
+describe('cartaoDescartado (E29: "Próximo pacote" na Bancada)', () => {
+  it('o cartão verde tirado da tela continua fora quando a câmera relê a mesma etiqueta e o servidor o devolve igual', () => {
+    // O servidor devolve um objeto novo a cada resposta: vale o conteúdo, não a identidade.
+    expect(cartaoDescartado(VERDE_A, VERDE_A)).toBe(true);
+    expect(cartaoDescartado(VERDE_A, structuredClone(VERDE_A))).toBe(true);
+  });
+
+  it('o mesmo cartão com o aviso das que ainda esperam o pacote volta à tela (o aviso é novo)', () => {
+    expect(cartaoDescartado(VERDE_A, comAvisoDoPedido(VERDE_A, ['DEV-000002']))).toBe(false);
+  });
+
+  it('qualquer outra resposta aparece: outra chegada, o amarelo, a ficha, o "não encontrada"', () => {
+    expect(cartaoDescartado(VERDE_A, { ...VERDE_A, mensagem: 'DEV-000003 · 24/11/2026 10:31', codigos: ['DEV-000003'] })).toBe(false);
+    expect(cartaoDescartado(VERDE_A, AMARELO_A)).toBe(false);
+    expect(cartaoDescartado(VERDE_A, ESCOLHA)).toBe(false);
+    expect(cartaoDescartado(VERDE_A, { tipo: 'nao_encontrada', rastreio: 'X' })).toBe(false);
+  });
+
+  it('sem nada descartado, nada some', () => {
+    expect(cartaoDescartado(null, VERDE_A)).toBe(false);
+    expect(cartaoDescartado(null, INICIAL)).toBe(false);
   });
 });

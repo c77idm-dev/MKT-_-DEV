@@ -19,8 +19,9 @@ export default async function PaginaRetiradas({ searchParams }: { searchParams: 
   const podeOperar = pode(usuario.perfil, 'operar_devolucoes');
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-3">
-      <Link href={podeOperar ? '/fluxo/recebimento' : '/fluxo'} className={LINK_VOLTAR}>
-        ← {podeOperar ? 'Recebimento' : 'Fluxo'}
+      {/* (E29) Quem recebe pacotes volta para a Bancada. */}
+      <Link href={podeOperar ? '/bancada' : '/fluxo'} className={LINK_VOLTAR}>
+        ← {podeOperar ? 'Bancada' : 'Fluxo'}
       </Link>
       <div>
         <h1 className="text-xl font-bold">Retiradas do Full</h1>

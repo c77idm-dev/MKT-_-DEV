@@ -65,8 +65,9 @@ export default async function PaginaRetirada({ params }: Props) {
 
   const cabecalho = (
     <div className="flex flex-col gap-1">
-      <Link href={podeOperar && aberta ? '/fluxo/recebimento' : '/fluxo/retiradas-full'} className={LINK_VOLTAR}>
-        ← {podeOperar && aberta ? 'Recebimento' : 'Retiradas do Full'}
+      {/* (E29) Aberta, quem recebe pacotes volta para a Bancada. */}
+      <Link href={podeOperar && aberta ? '/bancada' : '/fluxo/retiradas-full'} className={LINK_VOLTAR}>
+        ← {podeOperar && aberta ? 'Bancada' : 'Retiradas do Full'}
       </Link>
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="font-mono text-xl font-bold">{r.codigo}</h1>

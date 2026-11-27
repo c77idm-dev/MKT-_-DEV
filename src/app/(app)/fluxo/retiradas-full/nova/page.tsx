@@ -10,8 +10,8 @@ export default async function PaginaNovaRetirada() {
   await exigirPermissao('operar_devolucoes');
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-3">
-      <Link href="/fluxo/recebimento" className={LINK_VOLTAR}>
-        ← Recebimento
+      <Link href="/bancada" className={LINK_VOLTAR}>
+        ← Bancada
       </Link>
       <div>
         <h1 className="text-xl font-bold">Retirada do Full</h1>
