@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DbOuTx } from '@/db/client';
 import { devolucoes, evidencias } from '@/db/schema';
+import { devolucaoVisivel } from '@/modules/apagadas/filtro';
 import { chaveEvidencia } from './chaves';
 import { DURACAO_LINK_SEGUNDOS, type TipoEvidencia } from './dominio';
 
@@ -29,7 +30,8 @@ export async function buscarProvaPublica(db: DbOuTx, evidenciaId: string): Promi
     })
     .from(evidencias)
     .innerJoin(devolucoes, eq(devolucoes.id, evidencias.devolucaoId))
-    .where(eq(evidencias.id, evidenciaId))
+    // (extra, E29) A prova da devolução apagada não abre pelo link do PDF; restaurada, volta a abrir.
+    .where(and(eq(evidencias.id, evidenciaId), devolucaoVisivel))
     .limit(1);
   if (!e || e.situacao !== 'PRONTA' || e.provedor !== 'disco' || !e.devolucaoId || !e.caminho) return null;
   const chave = chaveEvidencia(e.devolucaoId, evidenciaId, e.tipo === 'VIDEO_PROVA' ? 'mp4' : 'jpg');

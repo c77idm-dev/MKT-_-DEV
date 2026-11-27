@@ -24,6 +24,7 @@ import { contarAfetamReputacao } from '@/modules/devolucoes/reputacao';
 import { carregarDossie } from '@/modules/dossie/carregar';
 import { registrarEvento } from '@/modules/historico/eventos';
 import { listarSemFornecedor } from '@/modules/lotes/consultas';
+import { buscarProvaPublica } from '@/modules/midia/provas-publicas';
 import { contarContestacoes, listarContestacoes, obterContestacao } from '@/modules/mercado-livre/contestacoes';
 import { contarRespostasParaDarNoML, listarOkPendentes } from '@/modules/mercado-livre/respostas-manuais';
 import { listarRetiradas, obterRetirada } from '@/modules/retiradas/consultas';
@@ -33,6 +34,7 @@ import { criarDbTeste, limparTabelas } from '../../../tests/helpers/db';
 import { criarContestacaoTeste, criarNotaRejeitadaTeste } from '../../../tests/helpers/fabricas-acabamento';
 import { criarDevolucaoChegada } from '../../../tests/helpers/fabricas-conferencia';
 import { criarDevolucaoNoEstoqueTeste } from '../../../tests/helpers/fabricas-fiscal';
+import { fotoTeste } from '../../../tests/helpers/fabricas-ml';
 import { criarRetiradaTeste } from '../../../tests/helpers/fabricas-retiradas';
 import { criarDevolucaoTeste, criarUsuarioTeste } from '../../../tests/helpers/fabricas';
 
@@ -166,6 +168,14 @@ describe('conferência, detalhe, dossiê e ações sobre a apagada', () => {
     expect(await carregarDossie(db, d.codigo, { em: AGORA })).toBeNull();
     expect((await obterDetalhe(db, d.codigo, { incluirApagada: true }))?.apagadaEm).toEqual(AGORA);
     expect(await obterConferencia(db, { id: d.id }, { incluirApagada: true })).not.toBeNull();
+  });
+
+  it('o link público das provas do dossiê (E28) não abre a foto da apagada', async () => {
+    const d = await criarDevolucaoChegada(db, operador);
+    const foto = await fotoTeste(db, { devolucaoId: d.id, tipo: 'FOTO_1_ETIQUETA' });
+    expect(await buscarProvaPublica(db, foto.id)).not.toBeNull();
+    await esconder(d.id);
+    expect(await buscarProvaPublica(db, foto.id)).toBeNull();
   });
 
   it('iniciar a conferência, cancelar e identificar recusam a apagada', async () => {
