@@ -16,7 +16,12 @@ Atualizado em 27/11/2026 (desenho da E29 aprovado: Bancada do Operador, Corrigir
     - frente A (`bancada-operador`): worktree `reputacao`, porta 3108, banco `devolucoes_test_f8`;
     - frente B (`corrigir-gestor`, migração `0018`): worktree `dossie`, porta 3109, banco `devolucoes_test_f9`.
   - **Frente A pronta** (`5780486`): unidade 1122, integração 656, e2e 280, 0 falhas.
-  - **Frente B:** a primeira metade está pronta (`e94fa7f`: unidade 1099, integração 701). A segunda metade, com as telas, as Apagadas, o expurgo e o e2e, está na bateria final.
+  - **Frente B pronta** (`d8ad0b0`): unidade 1159, integração 711, e2e 276. As 2 falhas no celular (`integracao-fiscal.spec.ts:74`, `lotes-remessa.spec.ts:21`, esperando o worker da NF) passaram 10 de 10 quando rodadas sozinhas. São instáveis e já existiam.
+  - **Revisão em andamento (27/11), run `wf_5dca7467-42b`:**
+    - na branch `integracao-27-11` (worktree `bitbrain`, 3107, banco `devolucoes_test_f7`), a partir de `bancada-gestor` `6267b17`;
+    - as duas frentes juntas e os itens de junção (filtro das apagadas na fila da Bancada, links para `/bancada`, a tarefa de lotes ignora as apagadas, o Operador volta à Bancada ao concluir a conferência);
+    - 4 olhares (permissões; correções e dados; Bancada; aderência e testes), um cético por achado sério, as correções e a bateria completa.
+  - As branches `bancada-operador` e `corrigir-gestor` estão no GitHub. **Juntar `bancada-gestor` na integração antes do `main`:** este andamento só está nela.
   - **Decidido pelo usuário (27/11, "pode"):** os alertas "Prazo do ML vencendo" e "Entregue sem leitura" ficam só no painel do Gestor. O funcionário vê só o selo "Urgente" na fila da Bancada.
   - **Para a revisão:** ao concluir a conferência, o funcionário deve voltar à Bancada, não ao detalhe.
   - **Depois:** revisão independente de cada frente, correções, a integração na branch `integracao-27-11` (worktree `bitbrain`, 3107) com a bateria completa, e o deploy.
