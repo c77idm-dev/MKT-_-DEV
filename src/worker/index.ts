@@ -5,6 +5,7 @@ import { entradaDoJobMorto, registrarFalha } from '@/modules/acabamento/falhas';
 import { criarFilas, criarPgBoss, enviarPorPgBoss, FILA_FALHAS, type Fila } from '@/modules/fila/fila';
 import { CONFIG_TAREFAS, FUSO_AGENDAS, NOMES_TAREFAS, TAREFAS_NA_SUBIDA, type DadosTarefa, type NomeTarefa } from '@/modules/fila/tarefas';
 import { manipuladoresAcabamento } from './manipuladores/acabamento';
+import { manipuladoresApagadas } from './manipuladores/apagadas';
 import { manipuladoresFiscal } from './manipuladores/fiscal';
 import { manipuladoresLotes } from './manipuladores/lotes';
 import { manipuladoresMercadoLivre } from './manipuladores/mercado-livre';
@@ -18,6 +19,7 @@ export const MANIPULADORES: Manipuladores = {
   ...manipuladoresFiscal,
   ...manipuladoresLotes,
   ...manipuladoresAcabamento,
+  ...manipuladoresApagadas,
 };
 
 type Registro = (linha: Record<string, unknown>) => void;

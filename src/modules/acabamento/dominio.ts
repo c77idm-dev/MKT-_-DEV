@@ -25,6 +25,7 @@ export const ROTULO_TAREFA: Record<NomeTarefa, string> = {
   'nfe.consultar': 'Consultar NF-e',
   'lotes.alocar-pendentes': 'Alocar unidades pendentes nos lotes',
   'midia.retencao': 'Prazo de guarda das mídias',
+  'apagadas.expurgo': 'Apagar de vez o que está em Apagadas há 90 dias',
 };
 
 export function ehNomeTarefa(texto: string): texto is NomeTarefa {

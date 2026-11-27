@@ -12,6 +12,7 @@ export type DadosTarefa = {
   'nfe.consultar': { notaFiscalId: string; consulta: number }; // 4 (reagenda a si mesma com espera crescente)
   'lotes.alocar-pendentes': Record<string, never>; // 5 (uma vez, na subida do worker)
   'midia.retencao': Record<string, never>; // 6
+  'apagadas.expurgo': Record<string, never>; // E29 (extra): apaga de vez o que está em Apagadas há mais de 90 dias
 };
 export type NomeTarefa = keyof DadosTarefa;
 
@@ -34,6 +35,7 @@ export const CONFIG_TAREFAS: Record<NomeTarefa, ConfigTarefa> = {
   'nfe.consultar': PADRAO,
   'lotes.alocar-pendentes': PADRAO,
   'midia.retencao': { ...PADRAO, agenda: '0 3 * * *' },
+  'apagadas.expurgo': { ...PADRAO, agenda: '15 3 * * *' },
 };
 
 export const NOMES_TAREFAS = Object.keys(CONFIG_TAREFAS) as NomeTarefa[];

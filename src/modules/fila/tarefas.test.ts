@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CONFIG_TAREFAS, FUSO_AGENDAS, NOMES_TAREFAS, TAREFAS_NA_SUBIDA } from './tarefas';
 
 describe('tarefas de fundo (contrato §5.1)', () => {
-  it('as 12 tarefas do contrato, todas com 5 tentativas (spec §11)', () => {
+  it('as 13 tarefas do contrato (a 13ª é a apagadas.expurgo da E29), todas com 5 tentativas (spec §11)', () => {
     expect([...NOMES_TAREFAS].sort()).toEqual(
       [
         'midia.processar-foto',
@@ -17,6 +17,7 @@ describe('tarefas de fundo (contrato §5.1)', () => {
         'nfe.consultar',
         'lotes.alocar-pendentes',
         'midia.retencao',
+        'apagadas.expurgo',
       ].sort(),
     );
     for (const nome of NOMES_TAREFAS) expect(CONFIG_TAREFAS[nome].tentativas, nome).toBe(5);
@@ -36,6 +37,7 @@ describe('tarefas de fundo (contrato §5.1)', () => {
       'ml.varredura': '*/15 * * * *',
       'ml.renovar-token': '0 */5 * * *',
       'midia.retencao': '0 3 * * *',
+      'apagadas.expurgo': '15 3 * * *',
     });
   });
 
