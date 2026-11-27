@@ -805,7 +805,7 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
          - Some a chegada (quem e quando), e são descartadas as fotos do pacote, a conferência feita e a contestação ainda AGUARDANDO_GESTOR. A confirmação diz isso.
          - A trava da conferência é solta.
          - Não vale para a não identificada, que não tem para onde voltar: nela o caminho é apagar.
-      4. **Editar os dados preenchidos no sistema:** produto recebido, quantidades, motivo do item, observações e o rastreio das que não vieram do ML. O que vem do ML não é editável, porque a sincronização sobrescreveria.
+      4. **Editar os dados preenchidos no sistema:** produto recebido, observações e o rastreio das que não vieram do ML. O motivo do item muda pela troca de estoque (item 1). A quantidade se corrige reabrindo a conferência (item 2) e marcando a unidade como ausente, porque cada item é uma unidade. O que vem do ML não é editável, porque a sincronização sobrescreveria.
       5. **Cancelar ou marcar como extraviada em qualquer etapa antes da NF** (AGUARDANDO_CONFERENCIA, EM_CONFERENCIA e AGUARDANDO_NF → CANCELADA ou EXTRAVIADA; Gestor). Estende a E24, que só valia em PENDENTE_CHEGADA.
       6. **Apagar**, em qualquer status, desde que não haja NF de devolução autorizada (se houver, o Fiscal cancela a NF primeiro). A trava da conferência é solta. A contestação dela sai da lista junto; a que já foi enviada ao ML continua lá. Vale também para a do ML: a linha continua no banco, escondida, e a sincronização não cria outra.
     - **Na Retirada do Full:**
