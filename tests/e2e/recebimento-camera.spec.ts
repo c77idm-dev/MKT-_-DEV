@@ -2,7 +2,7 @@ import { expect, test, type Page, type Request } from '@playwright/test';
 import { eq } from 'drizzle-orm';
 import { devolucoes } from '../../src/db/schema';
 import { criarDevolucaoTeste } from '../helpers/fabricas';
-import { comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { abrirReceberPacote, comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { devolucoesDoPedido, pedidoML, statusDas } from './apoio-pedido-ml';
 import { USUARIOS_E2E } from './dados';
 
@@ -71,10 +71,7 @@ test('(extra, E25) pela câmera, outro código da mesma etiqueta do ML não troc
   });
   await instalarDetectorFalso(page);
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
-  await page.getByRole('button', { name: 'Ler com a câmera' }).click();
-  await expect(page.getByRole('button', { name: 'Fechar câmera' })).toBeVisible();
-  await expect(page.getByText('Abrindo a câmera…')).toHaveCount(0);
+  await abrirReceberPacote(page, { camera: true });
 
   const resultado = page.getByRole('status');
   await lerPelaCamera(page, rastreio);
@@ -104,10 +101,7 @@ test('(extra, E27) pela câmera, ler de novo o mesmo pedido não fecha a ficha; 
   const [a, b] = await devolucoesDoPedido(pedido, ['PENDENTE_CHEGADA', 'NO_CD_MARKETPLACE']);
   await instalarDetectorFalso(page);
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
-  await page.getByRole('button', { name: 'Ler com a câmera' }).click();
-  await expect(page.getByRole('button', { name: 'Fechar câmera' })).toBeVisible();
-  await expect(page.getByText('Abrindo a câmera…')).toHaveCount(0);
+  await abrirReceberPacote(page, { camera: true });
 
   await lerPelaCamera(page, pedido.slice(1));
   const escolha = page.getByRole('region', { name: 'Confira antes de dar a chegada' });
@@ -147,16 +141,13 @@ test('(extra, E27) pela câmera, ler de novo o mesmo pedido não fecha a ficha; 
 
 test('(extra, E27) pela câmera, outro código da mesma etiqueta que o sistema não conhece não troca a ficha do pedido', async ({ page }) => {
   // Caso real da E25: o pacote volta do armazém do ML num envio novo, e o número dele (11 dígitos) não está em nenhum
-  // rastreio. Com a ficha na tela, a câmera não manda nada: nem "Rastreio não encontrado", nem não identificada a mais.
+  // rastreio. Com a ficha na tela, a câmera não manda nada: nem "De onde veio este pacote?" (E29), nem não identificada a mais.
   const pedido = pedidoML();
   const [d] = await devolucoesDoPedido(pedido, ['NO_CD_MARKETPLACE']);
   const envioNovo = `${String(Date.now() % 1e9).padStart(9, '0')}${digitos(2)}`;
   await instalarDetectorFalso(page);
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
-  await page.getByRole('button', { name: 'Ler com a câmera' }).click();
-  await expect(page.getByRole('button', { name: 'Fechar câmera' })).toBeVisible();
-  await expect(page.getByText('Abrindo a câmera…')).toHaveCount(0);
+  await abrirReceberPacote(page, { camera: true });
 
   await lerPelaCamera(page, pedido.slice(1));
   const escolha = page.getByRole('region', { name: 'Confira antes de dar a chegada' });
@@ -165,7 +156,7 @@ test('(extra, E27) pela câmera, outro código da mesma etiqueta que o sistema n
 
   await lerPelaCameraSemEnviar(page, envioNovo);
   await expect(escolha).toHaveAttribute('data-marca-e2e', '1');
-  await expect(page.getByText('Rastreio não encontrado')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'De onde veio este pacote?' })).toHaveCount(0);
   expect(await statusDas([d.codigo])).toEqual(['NO_CD_MARKETPLACE']);
   const comEsseRastreio = await comBanco((db) => db.select({ id: devolucoes.id }).from(devolucoes).where(eq(devolucoes.rastreio, envioNovo)));
   expect(comEsseRastreio).toHaveLength(0);
@@ -188,10 +179,7 @@ test('(extra, E27) pela câmera, o cartão verde da chegada pelo rastreio fica d
   const [a, b] = await devolucoesDoPedido(pedido, ['PENDENTE_CHEGADA', 'NO_CD_MARKETPLACE'], [ra, rb]);
   await instalarDetectorFalso(page);
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
-  await page.getByRole('button', { name: 'Ler com a câmera' }).click();
-  await expect(page.getByRole('button', { name: 'Fechar câmera' })).toBeVisible();
-  await expect(page.getByText('Abrindo a câmera…')).toHaveCount(0);
+  await abrirReceberPacote(page, { camera: true });
 
   const resultado = page.getByRole('status');
   const escolha = page.getByRole('region', { name: 'Confira antes de dar a chegada' });
@@ -233,10 +221,7 @@ test('(extra, E27; 24/11) pela câmera, o amarelo "Este pacote já chegou" fica 
   const [a, b] = await devolucoesDoPedido(pedido, ['AGUARDANDO_CONFERENCIA', 'NO_CD_MARKETPLACE'], [ra, rb]);
   await instalarDetectorFalso(page);
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
-  await page.getByRole('button', { name: 'Ler com a câmera' }).click();
-  await expect(page.getByRole('button', { name: 'Fechar câmera' })).toBeVisible();
-  await expect(page.getByText('Abrindo a câmera…')).toHaveCount(0);
+  await abrirReceberPacote(page, { camera: true });
 
   const resultado = page.getByRole('status');
   const escolha = page.getByRole('region', { name: 'Confira antes de dar a chegada' });

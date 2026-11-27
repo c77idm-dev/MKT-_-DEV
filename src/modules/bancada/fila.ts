@@ -48,7 +48,7 @@ function cartao(d: ResumoDevolucao): CartaoFila {
 /**
  * (E29) A fila da Bancada do Operador:
  * - `esperando`: AGUARDANDO_CONFERENCIA, na ordem da etapa 2 do quadro (as urgentes do ML primeiro, depois quem chegou antes);
- * - `continuar`: EM_CONFERENCIA travadas com a pessoa (a do colega não aparece);
+ * - `continuar`: EM_CONFERENCIA travadas com a pessoa (a do colega não aparece), todas: são poucas, e nenhuma pode sumir;
  * - `retiradas`: as retiradas do Full ABERTAS, as mais antigas primeiro.
  */
 export async function listarFilaBancada(db: DbOuTx, usuarioId: string, agora: Date = new Date()): Promise<FilaBancada> {
@@ -58,7 +58,7 @@ export async function listarFilaBancada(db: DbOuTx, usuarioId: string, agora: Da
     .where(and(eq(devolucoes.status, 'EM_CONFERENCIA'), eq(devolucoes.conferenteId, usuarioId)));
   const [esperando, continuar, retiradas] = await Promise.all([
     buscarDevolucoes(db, {}, { status: ['AGUARDANDO_CONFERENCIA'], ...ordemDaEtapa(2), porPagina: LIMITE_ESPERANDO, agora }),
-    buscarDevolucoes(db, {}, { status: ['EM_CONFERENCIA'], ids: minhas.map((m) => m.id), ...ordemDaEtapa(2), porPagina: LIMITE_ESPERANDO, agora }),
+    buscarDevolucoes(db, {}, { status: ['EM_CONFERENCIA'], ids: minhas.map((m) => m.id), ...ordemDaEtapa(2), porPagina: Math.max(1, minhas.length), agora }),
     db
       .select({ id: retiradasFull.id, codigo: retiradasFull.codigo, codigoEtiqueta: retiradasFull.codigoEtiqueta, abertaEm: retiradasFull.recebidaEm })
       .from(retiradasFull)

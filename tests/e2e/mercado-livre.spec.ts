@@ -67,7 +67,8 @@ test('a devolução do ML falso mostra o motivo da reclamação no cartão e no 
   await avisarML(request, reclamacaoId);
   const codigo = await esperarDevolucaoDaReclamacao(reclamacaoId);
 
-  await entrarComo(page, USUARIOS_E2E.operador);
+  // (E29) A busca é de quem acompanha.
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto(`/fluxo/busca?reclamacao=${reclamacaoId}`);
   const cartao = page.getByRole('link', { name: new RegExp(codigo) });
   await expect(cartao).toContainText('Motivo: Comprador se arrependeu');
@@ -166,7 +167,8 @@ test('extras do ML (cenário 2): Urgente, Afeta reputação e Full no cartão; o
   await avisarML(request, reclamacaoId);
   const codigo = await esperarDevolucaoDaReclamacao(reclamacaoId);
 
-  await entrarComo(page, USUARIOS_E2E.operador);
+  // (E29) A busca é de quem acompanha.
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto(`/fluxo/busca?reclamacao=${reclamacaoId}`);
   const cartao = page.getByRole('link', { name: new RegExp(codigo) });
   await expect(cartao).toContainText('Urgente · até');
@@ -185,7 +187,7 @@ test('extras do ML (cenário 2): Urgente, Afeta reputação e Full no cartão; o
   await alvosDeToque44(secao);
 });
 
-test('nas etapas 2 e 3 as urgentes vêm primeiro (extra)', async ({ page }) => {
+test('nas etapas 2 e 3 e na Bancada (E29) as urgentes vêm primeiro (extra)', async ({ page }) => {
   const urgente = await comBanco(async (db) => {
     // Só esta fica urgente (o banco do e2e é o mesmo no computador e no celular).
     await db.update(reclamacoesMl).set({ urgente: false }).where(eq(reclamacoesMl.urgente, true));
@@ -197,11 +199,18 @@ test('nas etapas 2 e 3 as urgentes vêm primeiro (extra)', async ({ page }) => {
     await db.insert(reclamacoesMl).values({ claimId: codigoUnico('CLM'), devolucaoId: nova.id, urgente: true, sincronizadaEm: new Date() });
     return nova;
   });
-  await entrarComo(page, USUARIOS_E2E.operador);
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto('/fluxo/etapa/2');
   const primeiro = page.locator('main a[href^="/fluxo/devolucoes/DEV-"]').first();
   await expect(primeiro).toHaveAttribute('href', `/fluxo/devolucoes/${urgente.codigo}`);
   await expect(primeiro).toContainText('Urgente');
   await expect(page.getByText('Urgentes do ML primeiro (extra).')).toBeVisible();
   await semRolagemLateral(page);
+
+  // (E29) Na Bancada do Operador, a mesma ordem: a urgente é a primeira que espera conferência.
+  await page.context().clearCookies();
+  await entrarComo(page, USUARIOS_E2E.operador);
+  const esperando = page.getByRole('region', { name: /^Esperando conferência/ }).getByRole('listitem');
+  await expect(esperando.filter({ has: page.getByRole('button', { name: /^Conferir / }) }).first()).toContainText(urgente.codigo);
+  await expect(esperando.filter({ hasText: urgente.codigo })).toContainText('Urgente');
 });

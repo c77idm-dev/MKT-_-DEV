@@ -9,10 +9,11 @@ const ACOES = [
   { rotulo: 'Planilha Volta ao armazém', quando: 'Ver o que volta para venda' },
 ];
 
-test('Operador: "O que você quer fazer?" mostra as 4 ações, fecha com Esc e "Receber pacote" leva ao Recebimento (opção C)', async ({
+// (E29) O Operador não tem o Fluxo nem o menu (a Bancada é a tela dele): quem vê as 4 ações é o Gestor.
+test('Gestor: "O que você quer fazer?" mostra as 4 ações, fecha com Esc e "Receber pacote" leva à Bancada (opção C, E29)', async ({
   page,
 }, testInfo) => {
-  await entrarComo(page, USUARIOS_E2E.operador);
+  await entrarComo(page, USUARIOS_E2E.gestor);
   const gatilho = page.getByRole('button', { name: 'O que você quer fazer?' });
   expect((await gatilho.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   // As 4 entradas antigas não ficam mais soltas no topo.
@@ -55,6 +56,6 @@ test('Operador: "O que você quer fazer?" mostra as 4 ações, fecha com Esc e "
 
   await abrirMenuAcoes(page);
   await menu.getByRole('link', { name: 'Receber pacote' }).click();
-  await expect(page).toHaveURL(/\/fluxo\/recebimento$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Recebimento' })).toBeVisible();
+  await expect(page).toHaveURL(/\/bancada$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Bancada' })).toBeVisible();
 });

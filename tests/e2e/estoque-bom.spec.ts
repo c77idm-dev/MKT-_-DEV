@@ -33,7 +33,8 @@ async function prepararVolta() {
 
 test('Estoque Bom: abre pela etapa 4, filtra Hoje, mostra a unidade e o item da retirada e baixa a planilha (melhoria 4)', async ({ page }, testInfo) => {
   const dados = await prepararVolta();
-  await entrarComo(page, USUARIOS_E2E.operador);
+  // (E29) A planilha é de quem acompanha (Fiscal e Gestor).
+  await entrarComo(page, USUARIOS_E2E.fiscal);
   await page.goto('/fluxo/etapa/4');
   await page.getByRole('link', { name: 'Planilha Volta ao armazém' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Estoque Bom' })).toBeVisible();
@@ -97,8 +98,17 @@ test('Estoque Bom: período inválido mostra o alerta com o foco e não oferece 
   await semRolagemLateral(page);
 });
 
-test('Estoque Bom: o Painel leva à página e, sem sessão, a planilha não baixa', async ({ page, browser }) => {
+test('Estoque Bom: o Painel leva à página e, sem sessão ou com o Operador (E29), a planilha não baixa', async ({ page, browser }) => {
+  // (E29) O Operador não tem a planilha: a página leva à Bancada e o download responde "não encontrada".
   await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto('/fluxo/estoque-bom');
+  await expect(page).toHaveURL(/\/bancada$/);
+  const doOperador = await page.request.get('/api/estoque-bom/planilha', { maxRedirects: 0 });
+  expect(doOperador.status()).toBe(404);
+  expect(doOperador.headers()['content-disposition']).toBeUndefined();
+  await page.context().clearCookies();
+
+  await entrarComo(page, USUARIOS_E2E.gestor);
   const menu = await abrirMenuAcoes(page);
   await menu.getByRole('link', { name: 'Planilha Volta ao armazém' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Estoque Bom' })).toBeVisible();

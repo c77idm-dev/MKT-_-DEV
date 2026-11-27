@@ -11,7 +11,7 @@ import { interpretarXmlNotaVenda } from '../../src/modules/fiscal/xml-nota-venda
 import { criarDevolucaoTeste } from '../helpers/fabricas';
 import { criarDevolucaoNoEstoqueTeste, EMPRESA_TESTE } from '../helpers/fabricas-fiscal';
 import { xmlNotaVendaTeste } from '../helpers/xml-nfe';
-import { codigoUnico, comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { abrirReceberPacote, codigoUnico, comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { conferirDevolucao } from './apoio-conferencia';
 import { prepararFiscal } from './apoio-fiscal';
 import { emModoFalso, garantirContaFalsa } from './apoio-ml';
@@ -31,7 +31,7 @@ test('jornada entre as fases: recebimento → conferência → Estoque Bom e Est
 
   // Etapa 2 do PDF: o Operador registra a chegada pela tela de Recebimento.
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   const campo = page.getByLabel('Código de Rastreamento');
   await campo.fill(rastreio);
   await campo.press('Enter');

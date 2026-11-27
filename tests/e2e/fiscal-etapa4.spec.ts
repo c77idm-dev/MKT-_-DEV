@@ -7,7 +7,8 @@ test('a coluna 4 se divide em Estoque Bom e Estoque Problema; a devolução com 
   await prepararFiscal();
   const mista = await devolucaoNoEstoque({ destinos: ['BOM', 'PROBLEMA'] });
   const soProblema = await devolucaoNoEstoque({ destinos: ['PROBLEMA', 'AUSENTE'] });
-  await entrarComo(page, USUARIOS_E2E.operador);
+  // (E29) O quadro e as etapas são de quem acompanha; o Operador vai para a Bancada (fim do teste).
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto(ehCelular(testInfo) ? '/fluxo?etapa=4' : '/fluxo');
   await expect(page.getByRole('link', { name: /^Estoque Bom: \d+ devoluç/ })).toBeVisible();
   await semRolagemLateral(page);
@@ -30,10 +31,13 @@ test('a coluna 4 se divide em Estoque Bom e Estoque Problema; a devolução com 
   await expect(page).toHaveURL(/\/fluxo\/etapa\/4$/);
   await expect(page.getByRole('link', { name: new RegExp(mista.codigo) })).toContainText('Estoque Bom: 1');
   await expect(page.getByRole('link', { name: new RegExp(soProblema.codigo) })).toHaveCount(0);
-  // O Operador vê as listas, mas não emite NF (spec §6.9).
-  await expect(page.getByRole('checkbox', { name: /^Selecionar / })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Emitir NF/ })).toHaveCount(0);
   await semRolagemLateral(page);
+
+  // (E29) O Operador não vê as etapas: a etapa 4 leva à Bancada.
+  await page.context().clearCookies();
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto('/fluxo/etapa/4/problema');
+  await expect(page).toHaveURL(/\/bancada$/);
 });
 
 test('o Fiscal seleciona e emite a NF de devolução; o worker autoriza e a devolução sai da etapa 4', async ({ page }, testInfo) => {

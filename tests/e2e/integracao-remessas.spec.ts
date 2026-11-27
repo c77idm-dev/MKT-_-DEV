@@ -6,7 +6,7 @@ import { EMPRESA_TESTE } from '../helpers/fabricas-fiscal';
 import { criarFornecedorCompletoTeste, criarProdutoDoFornecedorTeste } from '../helpers/fabricas-lotes';
 import { paraArrayBuffer } from '../helpers/xlsx';
 import { xmlNotaVendaTeste } from '../helpers/xml-nfe';
-import { codigoUnico, comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { abrirReceberPacote, codigoUnico, comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { conferirDevolucao, EAN_TESTE } from './apoio-conferencia';
 import { prepararFiscal } from './apoio-fiscal';
 import { USUARIOS_E2E } from './dados';
@@ -27,7 +27,7 @@ test('spec §12: recebimento → conferência → NF de devolução → lote →
 
   // Etapa 2: chegada pela tela de Recebimento.
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   const campo = page.getByLabel('Código de Rastreamento');
   await campo.fill(rastreio);
   await campo.press('Enter');

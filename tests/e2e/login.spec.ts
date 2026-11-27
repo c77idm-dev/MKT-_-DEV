@@ -41,9 +41,9 @@ test('gestor entra, vê as 5 etapas do PDF e todas as abas, e sai', async ({ pag
   await expect(page).toHaveURL(/\/login$/);
 });
 
-test('operador vê só a aba Fluxo e não acessa Configurações', async ({ page }) => {
+test('operador vê só a aba Bancada (E29) e não acessa Configurações', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.operador);
-  await expect(page.getByRole('navigation', { name: 'Seções' }).getByRole('link')).toHaveText(['Fluxo']);
+  await expect(page.getByRole('navigation', { name: 'Seções' }).getByRole('link')).toHaveText(['Bancada']);
 
   await paginaNaoEncontrada(page, '/configuracoes');
   await expect(page.getByRole('heading', { name: 'Página não encontrada' })).toBeVisible();

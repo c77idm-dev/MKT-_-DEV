@@ -23,10 +23,11 @@ async function devolucaoPendente(): Promise<string> {
   });
 }
 
-test('operador cadastra uma devolução à mão e acha pela Busca Avançada', async ({ page }) => {
+// (E29) Criar devolução e a Busca Avançada são do Gestor; o Operador só recebe e confere (bancada.spec.ts).
+test('Gestor cadastra uma devolução à mão e acha pela Busca Avançada', async ({ page }) => {
   const pedido = codigoUnico('PED');
   const rastreio = codigoUnico('BR');
-  await entrarComo(page, USUARIOS_E2E.operador);
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto('/fluxo/etapa/1');
   await expect(page.getByRole('heading', { level: 1, name: 'Pedidos Pendentes de Chegada' })).toBeVisible();
   await semRolagemLateral(page);
@@ -305,7 +306,7 @@ test.describe('mobile-first (celular)', () => {
       const operador = await usuarioPorEmail(db, USUARIOS_E2E.operador.email);
       await criarDevolucaoTeste(db, operador, { rastreio });
     });
-    await entrarComo(page, USUARIOS_E2E.operador);
+    await entrarComo(page, USUARIOS_E2E.gestor);
     await page.goto('/fluxo/etapa/1');
 
     const filtros = page.getByRole('button', { name: /^Filtros/ });
@@ -332,7 +333,7 @@ test.describe('mobile-first (celular)', () => {
   });
 
   test('nova devolução: uma coluna, botão no rodapé fixo à vista e erro com foco', async ({ page }) => {
-    await entrarComo(page, USUARIOS_E2E.operador);
+    await entrarComo(page, USUARIOS_E2E.gestor);
     await page.goto('/fluxo/devolucoes/nova');
     const enviar = page.getByRole('button', { name: 'Cadastrar devolução' });
     await naFrente(enviar);
@@ -359,7 +360,7 @@ test.describe('mobile-first (celular)', () => {
 });
 
 test('a etapa 6 não existe (HTTP 404) e a etapa 5 mostra a lista de lotes', async ({ page }) => {
-  await entrarComo(page, USUARIOS_E2E.operador);
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await paginaNaoEncontrada(page, '/fluxo/etapa/6');
   await page.goto('/fluxo/etapa/5');
   await expect(page.getByRole('heading', { name: 'Agrupamento por Fornecedor (Remessas)', level: 1 })).toBeVisible();

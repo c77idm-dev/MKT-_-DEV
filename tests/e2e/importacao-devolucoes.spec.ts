@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 import { codigoUnico, entrarComo, semRolagemLateral } from './apoio';
 import { USUARIOS_E2E } from './dados';
 
-test('operador importa devoluções por planilha: uma por pedido, uma linha por unidade', async ({ page }) => {
+// (E29) Importar devoluções é só do Gestor (cadastrar_devolucoes); o Operador vai para a Bancada.
+test('Gestor importa devoluções por planilha: uma por pedido, uma linha por unidade', async ({ page }) => {
   // Códigos únicos por execução: o banco é o mesmo para o computador e o celular.
   const [p1, p2, r1, r2, r3] = [codigoUnico('SHP'), codigoUnico('AMZ'), codigoUnico('IM'), codigoUnico('IM'), codigoUnico('IM')];
   const csv = [
@@ -13,7 +14,7 @@ test('operador importa devoluções por planilha: uma por pedido, uma linha por 
     `Magalu;;;${r3};Correios;FONE-01;1;;`,
   ].join('\r\n');
 
-  await entrarComo(page, USUARIOS_E2E.operador);
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto('/fluxo/etapa/1');
   await page.getByRole('link', { name: 'Importar planilha' }).click();
   await page.getByLabel('Planilha').setInputFiles({ name: 'devolucoes.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });

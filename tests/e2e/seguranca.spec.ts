@@ -17,7 +17,7 @@ test('cabeçalhos de segurança e sem X-Powered-By (decisão 15)', async ({ requ
 test('as telas principais abrem sem violar a CSP', async ({ page }) => {
   const violacoes = await vigiarCsp(page);
   await entrarComo(page, USUARIOS_E2E.gestor);
-  for (const rota of ['/fluxo', '/fluxo/alertas', '/fluxo/devolucoes/nova', '/lotes', '/cadastros', '/contestacoes', '/configuracoes', '/configuracoes/falhas', '/configuracoes/fiscal']) {
+  for (const rota of ['/fluxo', '/bancada', '/fluxo/alertas', '/fluxo/devolucoes/nova', '/lotes', '/cadastros', '/contestacoes', '/configuracoes', '/configuracoes/falhas', '/configuracoes/fiscal']) {
     await page.goto(rota, { waitUntil: 'networkidle' });
   }
   expect(violacoes).toEqual([]);

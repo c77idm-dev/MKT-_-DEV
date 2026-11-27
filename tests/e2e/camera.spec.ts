@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ehCelular, entrarComo } from './apoio';
+import { abrirReceberPacote, ehCelular, entrarComo } from './apoio';
 import { USUARIOS_E2E } from './dados';
 
 test.use({ permissions: ['camera'], launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } });
@@ -17,7 +17,7 @@ test('abre a câmera em tela cheia e "Fechar câmera" desliga todas as trilhas',
     };
   });
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   await page.getByRole('button', { name: 'Ler com a câmera' }).click();
   const fechar = page.getByRole('button', { name: 'Fechar câmera' });
   await expect(fechar).toBeVisible();

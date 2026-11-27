@@ -4,12 +4,17 @@ import { prepararFalha, prepararNotaRejeitada, prepararPrazoVencendo } from './a
 import { prepararSemFornecedor } from './apoio-lotes';
 import { USUARIOS_E2E } from './dados';
 
-test('Operador vê "Prazo do ML vencendo" no painel e abre a lista do alerta', async ({ page }) => {
+test('Gestor vê "Prazo do ML vencendo" no painel e abre a lista do alerta; o Operador não tem o painel (E29)', async ({ page }) => {
   const { codigo } = await prepararPrazoVencendo();
+  // (E29) O painel fica no Fluxo, que não é do Operador: a lista dos alertas leva à Bancada.
   await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto('/fluxo/alertas');
+  await expect(page).toHaveURL(/\/bancada$/);
+  await page.context().clearCookies();
+
+  await entrarComo(page, USUARIOS_E2E.gestor);
   const alertas = page.getByRole('region', { name: 'Alertas' });
   await expect(alertas.getByRole('link', { name: /^Prazo do ML vencendo/ })).toBeVisible();
-  await expect(alertas.getByRole('link', { name: /^NF rejeitada/ })).toHaveCount(0);
   await semRolagemLateral(page);
   await alertas.getByRole('link', { name: /^Prazo do ML vencendo/ }).click();
   await expect(page).toHaveURL(/\/fluxo\/alertas#prazo_ml$/);

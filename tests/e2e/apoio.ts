@@ -3,6 +3,8 @@ import { eq } from 'drizzle-orm';
 import type { Db } from '../../src/db/client';
 import { usuarios } from '../../src/db/schema';
 import { criarDbTeste } from '../helpers/db';
+import type { Perfil } from '../../src/modules/auth/perfis';
+import { paginaInicial } from '../../src/modules/auth/permissoes';
 import type { UsuarioSessao } from '../../src/modules/auth/usuarios';
 
 /** Espera a hidratação (o login é client component) e repete se o dev server recarregar a página. */
@@ -61,10 +63,39 @@ export async function aguardarHidratacao(elemento: Locator) {
   await elemento.page().evaluate(() => new Promise<void>((ok) => setTimeout(ok, 100)));
 }
 
-/** Entra e espera o login terminar (redirecionamento para /fluxo), para o teste poder navegar em seguida. */
-export async function entrarComo(page: Page, usuario: { email: string; senha: string }) {
+/**
+ * Entra e espera o login terminar (redirecionamento para a página inicial do perfil: a Bancada do Operador, E29, ou o
+ * Fluxo), para o teste poder navegar em seguida.
+ */
+export async function entrarComo(page: Page, usuario: { email: string; senha: string; perfil?: Perfil }) {
   await entrar(page, usuario);
-  await expect(page).toHaveURL(/\/fluxo$/);
+  await expect(page).toHaveURL(usuario.perfil ? new RegExp(`${paginaInicial(usuario.perfil)}$`) : /\/(fluxo|bancada)$/);
+}
+
+/**
+ * (E29) Abre o Receber pacote na Bancada: toca em "Chegou um pacote" e espera o campo. No celular o toque abre a câmera;
+ * sem câmera (o padrão do e2e) ela fecha logo, com o aviso, e o campo fica. Com `camera`, deixa a câmera aberta e lendo
+ * (no computador, pelo "Ler com a câmera"); sem, fecha a câmera que tenha aberto.
+ */
+export async function abrirReceberPacote(page: Page, opcoes: { camera?: boolean } = {}) {
+  if (!/\/bancada$/.test(page.url())) await page.goto('/bancada');
+  const chegou = page.getByRole('button', { name: 'Chegou um pacote' });
+  await aguardarHidratacao(chegou);
+  await chegou.click();
+  await expect(page.getByLabel('Código de Rastreamento')).toBeVisible();
+  const ler = page.getByRole('button', { name: 'Ler com a câmera' });
+  const fechar = page.getByRole('button', { name: 'Fechar câmera' });
+  await expect(ler.or(fechar)).toBeVisible();
+  if (opcoes.camera) {
+    if (await ler.isVisible()) await ler.click();
+    await expect(fechar).toBeVisible();
+    await expect(page.getByText('Abrindo a câmera…')).toHaveCount(0);
+    return;
+  }
+  await expect(async () => {
+    if (await fechar.isVisible()) await fechar.click();
+    await expect(ler).toBeVisible({ timeout: 1_000 });
+  }).toPass();
 }
 
 /** Abre uma conexão com o banco de testes (o mesmo do servidor do e2e) só para preparar dados com as fábricas. */

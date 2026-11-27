@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { devolucoes } from '../../src/db/schema';
 import { criarDevolucaoTeste } from '../helpers/fabricas';
 import {
+  abrirReceberPacote,
   aguardarHidratacao,
   codigoUnico,
   comBanco,
@@ -48,10 +49,10 @@ function envioML(): string {
 test('operador registra a chegada digitando o rastreio (como faz o leitor USB)', async ({ page }, testInfo) => {
   const rastreio = codigoUnico('RC');
   const codigo = await criarComRastreio(rastreio);
+  // (E29) O Operador entra na Bancada e abre o Receber pacote pelo "Chegou um pacote".
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/etapa/2');
-  await page.getByRole('link', { name: 'Recebimento' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Recebimento' })).toBeVisible();
+  await abrirReceberPacote(page);
+  await expect(page.getByRole('heading', { level: 1, name: 'Bancada' })).toBeVisible();
   const abrirCamera = page.getByRole('button', { name: 'Ler com a câmera' });
   await expect(abrirCamera).toBeVisible();
   expect((await abrirCamera.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -74,8 +75,7 @@ test('operador registra a chegada digitando o rastreio (como faz o leitor USB)',
   await expect(resultado).toContainText(`${codigo} já tinha chegado`);
   await semRolagemLateral(page);
 
-  await page.goto('/fluxo/etapa/2');
-  await page.getByRole('link', { name: new RegExp(codigo) }).click();
+  await page.getByTestId('cartao-resultado').getByRole('link', { name: codigo }).click();
   await expect(page.getByText('Chegada registrada')).toBeVisible();
 });
 
@@ -83,7 +83,7 @@ test('pacote de devolução cancelada mostra o cartão de bloqueada, com texto e
   const rastreio = codigoUnico('BL');
   const codigo = await criarComRastreio(rastreio, 'CANCELADA');
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   await page.getByLabel('Código de Rastreamento').fill(rastreio);
   await page.getByRole('button', { name: 'Registrar chegada' }).click();
   const resultado = page.getByRole('status');
@@ -97,7 +97,7 @@ test('(extra, E25) pacote que voltou do armazém do ML (No CD do marketplace) va
   const rastreio = codigoUnico('CD');
   const codigo = await criarComRastreio(rastreio, 'NO_CD_MARKETPLACE');
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   await page.getByLabel('Código de Rastreamento').fill(rastreio);
   await page.getByRole('button', { name: 'Registrar chegada' }).click();
   const resultado = page.getByRole('status');
@@ -107,8 +107,7 @@ test('(extra, E25) pacote que voltou do armazém do ML (No CD do marketplace) va
   await expect(page.getByTestId('cartao-resultado')).toContainText(`${codigo} · voltou do armazém do ML (extra)`);
   await semRolagemLateral(page);
 
-  await page.goto('/fluxo/etapa/2');
-  await page.getByRole('link', { name: new RegExp(codigo) }).click();
+  await page.getByTestId('cartao-resultado').getByRole('link', { name: codigo }).click();
   const historico = page.getByRole('region', { name: 'Histórico' });
   await expect(historico).toContainText('Chegada registrada (voltou do armazém do ML)');
   await expect(historico).toContainText('No CD do marketplace → Aguardando conferência');
@@ -119,7 +118,7 @@ test('(extra, E25 e E27) recebe pelo número do pedido do ML, mesmo sem o "2" do
   const pedido = pedidoML();
   const codigo = await criarDoML({ pedido, rastreio: `MM${envioML()}BRSP06`, status: 'NO_CD_MARKETPLACE' });
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   await page.getByLabel('Código de Rastreamento').fill(pedido.slice(1));
   await page.getByRole('button', { name: 'Registrar chegada' }).click();
   // E27: pelo pedido a chegada não é registrada sozinha; a ficha da venda espera o toque (depois da trava de 0,7 s).
@@ -139,7 +138,7 @@ test('(extra, E25) recebe pelo número do envio do ML que está dentro do rastre
   const envio = envioML();
   const codigo = await criarDoML({ pedido: pedidoML(), rastreio: `MM${envio}BRSP02` });
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   const campo = page.getByLabel('Código de Rastreamento');
   await campo.fill(envio);
   await campo.press('Enter');
@@ -158,15 +157,16 @@ test('(extra, E25) recebe pelo número do envio do ML que está dentro do rastre
   await semRolagemLateral(page);
 });
 
-test('rastreio desconhecido vira pacote não identificado', async ({ page }) => {
+test('rastreio desconhecido: "De onde veio este pacote?" e "De cliente, sem cadastro" registra o pacote não identificado (E29)', async ({ page }) => {
   const rastreio = codigoUnico('NI');
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   await page.getByLabel('Código de Rastreamento').fill(rastreio);
   await page.getByRole('button', { name: 'Registrar chegada' }).click();
-  await expect(page.getByRole('status')).toContainText(`Nenhuma devolução com o rastreio ${rastreio}`);
+  await expect(page.getByRole('status')).toContainText(`De onde veio este pacote? Nenhuma devolução com o código ${rastreio}.`);
   await semRolagemLateral(page);
-  await page.getByRole('button', { name: 'Registrar pacote não identificado' }).click();
+  await page.waitForTimeout(800); // trava do toque duplo (0,7 s)
+  await page.getByRole('button', { name: 'De cliente, sem cadastro' }).click();
   await expect(page.getByRole('status')).toContainText('Pacote não identificado registrado');
   await page.getByTestId('cartao-resultado').getByRole('link').click();
   await expect(page.getByText('Não identificada').first()).toBeVisible();
@@ -174,7 +174,7 @@ test('rastreio desconhecido vira pacote não identificado', async ({ page }) => 
 
 test('em aparelho de toque o campo não rouba o foco (o teclado não cobre a câmera)', async ({ page }, testInfo) => {
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   const campo = page.getByLabel('Código de Rastreamento');
   await expect(campo).toBeVisible();
   const celular = ehCelular(testInfo);
@@ -185,7 +185,7 @@ test('em aparelho de toque o campo não rouba o foco (o teclado não cobre a câ
   else await expect(campo).toBeFocused();
 });
 
-test('o Fiscal não abre o Recebimento (HTTP 404)', async ({ page }) => {
+test('o Fiscal não abre o Recebimento, que mora na Bancada (HTTP 404)', async ({ page }) => {
   await entrarComo(page, USUARIOS_E2E.fiscal);
   await paginaNaoEncontrada(page, '/fluxo/recebimento');
 });

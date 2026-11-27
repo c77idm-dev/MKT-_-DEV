@@ -40,7 +40,8 @@ test('(extra) "Afetam a reputação · N" ao lado de Filtros: conta as não ence
     const concluida = await devolucaoML('CONCLUIDA', 'AFETA');
     const naoAfeta = await devolucaoML('PENDENTE_CHEGADA', 'NAO_AFETA');
 
-    await entrarComo(page, USUARIOS_E2E.operador);
+    // (E29) O "Afetam a reputação" fica no quadro, que é de quem acompanha.
+    await entrarComo(page, USUARIOS_E2E.gestor);
     const atalho = page.getByRole('link', { name: 'Afetam a reputação · 3' });
     await expect(atalho).toBeVisible();
     expect((await atalho.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);

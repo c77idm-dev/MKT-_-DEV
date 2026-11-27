@@ -30,14 +30,20 @@ test('Fiscal vê os lotes, filtra por status, busca e associa o produto de uma u
   await semRolagemLateral(page);
 });
 
-test('Operador vê a etapa 5 (só leitura) e não abre a aba Lotes e Remessas', async ({ page }) => {
+test('a etapa 5 mostra os lotes (só leitura, sem a pendência "Sem fornecedor"); o Operador não a abre nem a aba Lotes e Remessas', async ({ page }) => {
   const lote = await prepararLote();
-  await entrarComo(page, USUARIOS_E2E.operador);
+  await entrarComo(page, USUARIOS_E2E.fiscal);
   await page.goto('/fluxo/etapa/5');
   await expect(page.getByRole('heading', { name: 'Agrupamento por Fornecedor (Remessas)', level: 1 })).toBeVisible();
   await expect(page.getByRole('link', { name: new RegExp(`^${lote.codigo}`) })).toBeVisible();
   await expect(page.getByRole('region', { name: /^Sem fornecedor/ })).toHaveCount(0);
   await semRolagemLateral(page);
+
+  // (E29) As etapas são de quem acompanha: o Operador vai para a Bancada.
+  await page.context().clearCookies();
+  await entrarComo(page, USUARIOS_E2E.operador);
+  await page.goto('/fluxo/etapa/5');
+  await expect(page).toHaveURL(/\/bancada$/);
   await paginaNaoEncontrada(page, '/lotes');
   await paginaNaoEncontrada(page, '/lotes/sem-fornecedor');
 });

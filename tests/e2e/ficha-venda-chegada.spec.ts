@@ -6,7 +6,7 @@
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { criarRetiradaTeste } from '../helpers/fabricas-retiradas';
-import { comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { abrirReceberPacote, comBanco, entrarComo, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { esperarEnviada, fotoDeTeste } from './apoio-conferencia';
 import { alvosDeToque44 } from './apoio-ml';
 import { devolucoesDoPedido, gravarVenda, pedidoML, statusDas } from './apoio-pedido-ml';
@@ -28,7 +28,7 @@ test.describe('Receber pacote pelo número do pedido do ML', () => {
     const [d] = await devolucoesDoPedido(pedido, ['NO_CD_MARKETPLACE']);
     await gravarVenda(pedido, { titulo: 'Fone Bluetooth da venda', sku: 'SKU-VENDA-E27', valor: 129.9 });
     await entrarComo(page, USUARIOS_E2E.operador);
-    await page.goto('/fluxo/recebimento');
+    await abrirReceberPacote(page);
     // A etiqueta corta o "2" do começo do pedido.
     await page.getByLabel('Código de Rastreamento').fill(pedido.slice(1));
     await page.getByRole('button', { name: 'Registrar chegada' }).click();
@@ -71,7 +71,7 @@ test.describe('Receber pacote pelo número do pedido do ML', () => {
     const pedido = pedidoML();
     const [a, b, c] = await devolucoesDoPedido(pedido, ['PENDENTE_CHEGADA', 'NO_CD_MARKETPLACE', 'CONCLUIDA']);
     await entrarComo(page, USUARIOS_E2E.operador);
-    await page.goto('/fluxo/recebimento');
+    await abrirReceberPacote(page);
     const campo = page.getByLabel('Código de Rastreamento');
     await campo.fill(pedido);
     await campo.press('Enter');

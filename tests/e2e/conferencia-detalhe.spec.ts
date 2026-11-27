@@ -15,9 +15,10 @@ test('do detalhe da devolução: "Iniciar conferência" abre a bancada', async (
   await expect(page.getByRole('heading', { level: 1, name: 'Conferência' })).toBeVisible();
 });
 
+// (E29) As etapas são de quem acompanha: o Gestor, que também confere, chega ao "Conferir pacote" pela etapa 2.
 test('"Conferir pacote" na etapa 2: lê (ou digita) o rastreio e abre a bancada', async ({ page }) => {
   const d = await prepararConferencia();
-  await entrarComo(page, USUARIOS_E2E.operador);
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto('/fluxo/etapa/2');
   await page.getByRole('link', { name: 'Conferir pacote' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Conferir pacote' })).toBeVisible();

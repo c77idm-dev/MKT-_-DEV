@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { itensRetiradaFull, retiradasFull } from '../../src/db/schema';
 import { criarRetirada } from '../../src/modules/retiradas/retiradas';
 import { criarProdutoTeste } from '../helpers/fabricas';
-import { abrirMenuAcoes, codigoUnico, comBanco, entrarComo, paginaNaoEncontrada, semRolagemLateral, usuarioPorEmail } from './apoio';
+import { abrirMenuAcoes, abrirReceberPacote, codigoUnico, comBanco, entrarComo, paginaNaoEncontrada, semRolagemLateral, usuarioPorEmail } from './apoio';
 import { esperarEnviada, fotoDeTeste } from './apoio-conferencia';
 import { USUARIOS_E2E } from './dados';
 
@@ -20,7 +20,7 @@ async function bipar(page: Page, ean: string) {
   await page.getByRole('button', { name: 'Somar', exact: true }).click();
 }
 
-test('retirada do Full: do "Rastreio não encontrado" até Conferida (melhoria 3)', async ({ page }) => {
+test('retirada do Full: do "De onde veio este pacote?" (E29) até Conferida (melhoria 3)', async ({ page }) => {
   const etiqueta = codigoUnico('FULL');
   const eanFone = eanUnico('781');
   const eanCarregador = eanUnico('782');
@@ -31,14 +31,15 @@ test('retirada do Full: do "Rastreio não encontrado" até Conferida (melhoria 3
   });
 
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  await abrirReceberPacote(page);
   await page.getByLabel('Código de Rastreamento').fill(etiqueta);
   await page.getByRole('button', { name: 'Registrar chegada' }).click();
-  const botaoFull = page.getByRole('button', { name: 'É retirada do Full (não é devolução)' });
+  const botaoFull = page.getByRole('button', { name: 'Do armazém do ML (Full)' });
   await expect(botaoFull).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Registrar pacote não identificado' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'De cliente, sem cadastro' })).toBeVisible();
   expect((await botaoFull.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await semRolagemLateral(page);
+  await page.waitForTimeout(800); // trava do toque duplo (0,7 s)
   await botaoFull.click();
 
   await expect(page).toHaveURL(/\/fluxo\/retiradas-full\/RF-\d{6,}$/);
@@ -111,7 +112,8 @@ test('a retirada aparece na lista "Retiradas do Full" e não nas devoluções', 
   const etiqueta = codigoUnico('FULLL');
   const { codigo } = await comBanco(async (db) => criarRetirada(db, etiqueta, await usuarioPorEmail(db, USUARIOS_E2E.operador.email)));
   await entrarComo(page, USUARIOS_E2E.operador);
-  await page.goto('/fluxo/recebimento');
+  // (E29) Na Bancada, a retirada aberta aparece com "Continuar", e o link leva à lista.
+  await expect(page.getByRole('region', { name: 'Retirada do Full aberta' }).getByRole('link', { name: `Continuar ${codigo}` })).toBeVisible();
   await page.getByRole('link', { name: 'Ver retiradas do Full' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Retiradas do Full' })).toBeVisible();
   const cartao = page.getByRole('link', { name: new RegExp(`^${codigo}`) });
@@ -120,6 +122,9 @@ test('a retirada aparece na lista "Retiradas do Full" e não nas devoluções', 
   await expect(cartao).toContainText(`Recebida por ${USUARIOS_E2E.operador.nome}`);
   await semRolagemLateral(page);
 
+  // A busca e o quadro são de quem acompanha (E29).
+  await page.context().clearCookies();
+  await entrarComo(page, USUARIOS_E2E.gestor);
   await page.goto(`/fluxo/busca?rastreio=${etiqueta}`);
   await expect(page.getByText('Nenhuma devolução encontrada.')).toBeVisible();
   await page.goto('/fluxo');
