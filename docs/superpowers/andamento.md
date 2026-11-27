@@ -1,8 +1,17 @@
 # Andamento e como continuar (para qualquer sessão, em qualquer computador)
 
-Atualizado em 25/11/2026 (ficha da venda, E27, e dossiê mais enxuto, E28, no `main` em `01499ff` e no ar na VPS). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
+Atualizado em 27/11/2026 (desenho da E29 aprovado: Bancada do Operador, Corrigir do Gestor e Apagadas; no ar continua a `01499ff`, com E27 e E28). Retomado depois da queda da sessão de 19/11 (os fluxos pararam no limite de 5 horas). A integração pelo Bitbrain e a opção C estão no ar na VPS. Em paralelo: produtos do ML com foto, filtro de reputação, dossiê de provas em PDF e catálogo inteiro (esperando o Bitbrain). Mantenha este arquivo em dia ao fechar cada etapa e envie-o ao GitHub.
 
 ## Onde paramos
+- **E29: Bancada do Operador, Corrigir (Gestor) e Apagadas (27/11, extra). O desenho foi aprovado pelo usuário ("isso", "isso", "top") e está escrito na emenda E29, na branch `bancada-gestor`.**
+  - **Pedido do usuário:** um funcionário só vai receber e conferir o dia todo, e os gestores acompanham. A tela dele precisa ser simples. A devolução e a volta do Full se misturavam. O Gestor precisa poder apagar e corrigir tudo, por exemplo trocar Bom por Problema.
+  - **Decisões:**
+    - o que o Gestor apaga some das telas e fica na lista "Apagadas", com "Restaurar", por 90 dias;
+    - o funcionário só recebe e confere; a Nova devolução e a planilha ficam só com o Gestor;
+    - a tela do funcionário é a opção A, com um botão só ("Chegou um pacote"). Código desconhecido leva à pergunta "De onde veio?".
+  - **Teste na VPS em 27/11 (só leitura):** `/shipments/{id}` pela rota do Bitbrain deu 404 do ML, nas 5 contas, para os envios das retiradas `48609944489` e `48515208229`. Por isso o sistema não descobre sozinho que é Full e pergunta.
+  - **O caso que levou ao pedido (26/11):** um saco do armazém do ML ("Ret. ID 1356164800-3", envio `48609944489`) não era achado no Receber pacote. Era retirada do Full, não devolução.
+  - **Próximo:** plano de execução e duas frentes em paralelo: A (`bancada-operador`) e B (`corrigir-gestor`, migração `0018`).
 - **Integração de 24/11: E27 e E28 juntas no `main` em `01499ff` (branch `integracao-24-11`, worktree `bitbrain`, porta 3107, banco `devolucoes_test_f7`) e no ar.**
   - **Conferido de fora em 25/11:**
     - `/api/saude` ok (banco e fila);

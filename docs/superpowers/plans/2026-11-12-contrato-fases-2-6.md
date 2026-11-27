@@ -769,3 +769,54 @@ Regra usada: a **Parte A do plano da Fase 2 manda** nos nomes compartilhados. O 
     - mantém os mesmos cabeçalhos de segurança do `/api/arquivos` (`nosniff`, CSP `sandbox`), exceto o que o player do vídeo precisar;
     - os links usam o endereço público do sistema (https, atrás do nginx), tirado do pedido que gera o PDF.
   - **Motivo:** o conteúdo do dossiê e o carimbo (spec §9, decisão 6) foram fixados antes. A rota pública de arquivos é nova.
+- **E29. Bancada do Operador, Corrigir (Gestor) e Apagadas (27/11, extra; o usuário aprovou as três partes com "isso", "isso" e "top"):** desenho na branch `bancada-gestor`. A frente A fica na branch `bancada-operador` e a frente B na `corrigir-gestor`.
+  - **Por quê:** um funcionário só vai receber e conferir o dia todo, e os gestores vão acompanhar. Hoje a tela dele mostra o quadro inteiro, a devolução e a volta do Full se misturam no Receber pacote, e nada feito por engano pode ser apagado ou corrigido, nem pelo Gestor.
+  - **Parte 1: Bancada do Operador (frente A).**
+    - **Rota `/bancada`.** É a tela inicial do OPERADOR, depois do login e ao abrir `/fluxo`. A barra de baixo dele tem só a aba "Bancada".
+    - **O Operador não tem** o quadro, a busca, as etapas, o "Afetam a reputação", o menu "O que você quer fazer?", a Nova devolução, a importação de devoluções nem a planilha Volta ao armazém. Esses endereços levam à Bancada.
+    - **Muda a spec §6.9:** o Operador só recebe e confere. Criar e importar devolução passa a ser só do Gestor. Sugestão de nomes para a matriz: `cadastrar_devolucoes` (Gestor) e `acompanhar` (Fiscal e Gestor: quadro, busca, etapas e planilha). O Fiscal não muda.
+    - **No topo:** o botão grande **"Chegou um pacote"**, com câmera, leitor USB ou digitação. Reaproveita o Receber pacote de hoje, com as proteções da câmera da E27.
+    - **Embaixo:**
+      - **"Esperando conferência (N)":** as devoluções AGUARDANDO_CONFERENCIA, na ordem da etapa 2 (urgentes do ML primeiro), com "Conferir". As EM_CONFERENCIA travadas com o próprio usuário aparecem com "Continuar";
+      - **"Retirada do Full aberta":** as retiradas ABERTA, com "Continuar".
+    - **Depois da leitura:**
+      - **pelo rastreio:** a chegada é registrada na hora (cartão verde de hoje). Aparecem **"Conferir agora"**, que abre a conferência dessa devolução travada com quem tocou, e **"Próximo pacote"**, que limpa e volta ao campo. Se a chegada registrou mais de uma devolução, cada código tem o seu "Conferir";
+      - **pelo número do pedido:** a ficha da venda com "Dar chegada" (E27). Depois do toque, os mesmos dois botões;
+      - **código desconhecido:** a pergunta **"De onde veio este pacote?"**, com dois botões do mesmo tamanho:
+        - **"Do armazém do ML (Full)"**, com a dica "remetente MELI e 'Ret. ID' na etiqueta". Abre a Retirada do Full com esse código (`criarRetirada`);
+        - **"De cliente, sem cadastro"**, com a dica "vira não identificada e o Gestor liga depois". Registra a não identificada, como hoje;
+      - **pacote que já chegou:** o aviso amarelo de hoje.
+    - **Por que perguntar e não descobrir sozinho:** o teste de 27/11 na VPS (`/shipments/{id}` pela rota do Bitbrain, nas 5 contas) deu 404 do próprio ML para os envios das retiradas `48609944489` e `48515208229`. O envio da retirada não é das contas do vendedor, e o código de barras tem o mesmo formato de um envio de devolução. Toda devolução do ML está no sistema e é achada, então código desconhecido quase sempre é Full.
+    - **Gestor:** continua com o quadro e o menu. No menu dele, "Receber pacote" abre a Bancada.
+  - **Parte 2: Corrigir (Gestor) (frente B).** No detalhe da devolução e da retirada aparece a seção **"Corrigir (Gestor)"**, só para o Gestor.
+    - **Regras de todas as correções:**
+      - cada correção grava um evento no histórico com quem, quando e o valor antes e depois;
+      - apagar e desfazer pedem um passo de confirmação, com botão vermelho e a trava do toque duplo, como na E24;
+      - o servidor recusa o que a regra não deixa, com a mensagem do motivo;
+      - o que já saiu do sistema não volta: NF autorizada, lote enviado ao fornecedor e o que já foi mandado ao ML.
+    - **Na devolução:**
+      1. **Trocar o estoque do item (Bom ↔ Problema).** Ir para Problema pede o motivo, como na conferência (CHECK `itens_destino_motivo`).
+         - Antes da NF, só troca.
+         - Depois da NF, BOM (DISPONIVEL_VENDA) → PROBLEMA entra no lote ABERTO do fornecedor do `produto_recebido`, pela mesma regra da autorização da NF (§5.3 da spec). PROBLEMA (EM_LOTE em lote ABERTO) → BOM sai do lote e vai para DISPONIVEL_VENDA. É recusado o item já ENVIADO ou RESOLVIDO, ou num lote que não está mais ABERTO.
+         - Ao ir para Problema, abre a contestação AGUARDANDO_GESTOR, como o fim da conferência faria. Ao voltar para Bom, a contestação ainda AGUARDANDO_GESTOR é descartada; a já enviada fica, e a tela avisa.
+         - A planilha Volta ao armazém acompanha, porque é calculada.
+      2. **Reabrir a conferência** (AGUARDANDO_NF → AGUARDANDO_CONFERENCIA, Gestor). Tudo o que foi preenchido fica, e quem abrir a conferência (Operador ou Gestor) continua de onde estava. A contestação ainda AGUARDANDO_GESTOR é descartada e volta a ser criada no fim da nova conferência.
+      3. **Desfazer a chegada** (AGUARDANDO_CONFERENCIA, EM_CONFERENCIA ou AGUARDANDO_NF → PENDENTE_CHEGADA, ou NO_CD_MARKETPLACE se a chegada veio de lá pela E25; Gestor).
+         - Some a chegada (quem e quando), e são descartadas as fotos do pacote, a conferência feita e a contestação ainda AGUARDANDO_GESTOR. A confirmação diz isso.
+         - A trava da conferência é solta.
+         - Não vale para a não identificada, que não tem para onde voltar: nela o caminho é apagar.
+      4. **Editar os dados preenchidos no sistema:** produto recebido, quantidades, motivo do item, observações e o rastreio das que não vieram do ML. O que vem do ML não é editável, porque a sincronização sobrescreveria.
+      5. **Cancelar ou marcar como extraviada em qualquer etapa antes da NF** (AGUARDANDO_CONFERENCIA, EM_CONFERENCIA e AGUARDANDO_NF → CANCELADA ou EXTRAVIADA; Gestor). Estende a E24, que só valia em PENDENTE_CHEGADA.
+      6. **Apagar**, em qualquer status, desde que não haja NF de devolução autorizada (se houver, o Fiscal cancela a NF primeiro). A trava da conferência é solta. A contestação dela sai da lista junto; a que já foi enviada ao ML continua lá. Vale também para a do ML: a linha continua no banco, escondida, e a sincronização não cria outra.
+    - **Na Retirada do Full:**
+      7. **Reabrir uma retirada concluída** (CONFERIDA → ABERTA), para corrigir itens e quantidades.
+      8. **Apagar.** As devoluções que tiveram chegada pela etiqueta amarela dentro dela não mudam; se precisar, use o "Desfazer a chegada" nelas.
+    - Já existiam e continuam: "Liberar trava" e ligar a não identificada (`identificarDevolucao`).
+  - **Apagadas (frente B).**
+    - **Apagar esconde, não exclui:** migração `0018` com `apagada_em` e `apagada_por` em `devolucoes` e em `retiradas_full`.
+    - **Tudo ignora o que está apagado:** quadro, etapas, listas, busca, contagens, alertas, painel, Bancada, recebimento (a leitura não acha a apagada), planilha Volta ao armazém, contestações, lotes, dossiê e a sincronização do ML, que continua achando a linha e não a recria.
+    - **Lista "Apagadas"**, só do Gestor, pelo menu "O que você quer fazer?" ("Apagou algo por engano"): o que foi apagado, por quem e quando, com **"Restaurar"**, que limpa a marca e devolve exatamente para onde estava.
+    - **90 dias:** uma tarefa diária apaga de vez o que está há mais de 90 dias na lista, com as fotos e os vídeos. Na devolução do ML fica só a linha mínima com o vínculo da reclamação, escondida, para a sincronização não criar de novo.
+    - **Muda a spec:** §5.2 ganha as transições do Gestor dos itens 2, 3 e 5; o prazo de guarda (§9) ganha os 90 dias das apagadas.
+  - **Dono dos arquivos:** a frente A mexe na Bancada, no Receber pacote, na matriz de permissões, nas abas e no menu do Fluxo. A frente B mexe na migração `0018`, no detalhe da devolução e da retirada, nos serviços de correção, nas consultas (filtro das apagadas), na tarefa dos 90 dias e na lista Apagadas. Onde as duas tocam o mesmo arquivo (o menu do Fluxo para o link "Apagadas" e a consulta da Bancada, que precisa ignorar as apagadas), a integração junta.
+  - **Testes:** TDD. Unidade e integração em cada correção e nas regras de recusa. E2e no celular e no computador: o Operador recebe uma devolução pelo rastreio e confere com "Conferir agora", recebe um código desconhecido e abre a retirada pelo "Do armazém do ML (Full)"; o Gestor troca Bom → Problema depois da NF (o item entra no lote), desfaz uma chegada, apaga e restaura uma devolução e uma retirada.
