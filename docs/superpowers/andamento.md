@@ -11,7 +11,11 @@ Atualizado em 27/11/2026 (desenho da E29 aprovado: Bancada do Operador, Corrigir
     - a tela do funcionário é a opção A, com um botão só ("Chegou um pacote"). Código desconhecido leva à pergunta "De onde veio?".
   - **Teste na VPS em 27/11 (só leitura):** `/shipments/{id}` pela rota do Bitbrain deu 404 do ML, nas 5 contas, para os envios das retiradas `48609944489` e `48515208229`. Por isso o sistema não descobre sozinho que é Full e pergunta.
   - **O caso que levou ao pedido (26/11):** um saco do armazém do ML ("Ret. ID 1356164800-3", envio `48609944489`) não era achado no Receber pacote. Era retirada do Full, não devolução.
-  - **Próximo:** plano de execução e duas frentes em paralelo: A (`bancada-operador`) e B (`corrigir-gestor`, migração `0018`).
+  - **Plano:** [plans/2026-11-27-bancada-corrigir-gestor.md](plans/2026-11-27-bancada-corrigir-gestor.md).
+  - **Em construção desde 27/11, run `wf_6ffb47c1-390`:**
+    - frente A (`bancada-operador`): worktree `reputacao`, porta 3108, banco `devolucoes_test_f8`;
+    - frente B (`corrigir-gestor`, migração `0018`): worktree `dossie`, porta 3109, banco `devolucoes_test_f9`.
+  - **Depois:** revisão independente de cada frente, correções, a integração na branch `integracao-27-11` (worktree `bitbrain`, 3107) com a bateria completa, e o deploy.
 - **Integração de 24/11: E27 e E28 juntas no `main` em `01499ff` (branch `integracao-24-11`, worktree `bitbrain`, porta 3107, banco `devolucoes_test_f7`) e no ar.**
   - **Conferido de fora em 25/11:**
     - `/api/saude` ok (banco e fila);
